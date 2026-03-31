@@ -6,6 +6,9 @@
 <title>Gestión Logística Diaria</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚚</text></svg>"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{--bg:#f4f3f1;--border:#d6d2cc;}
@@ -506,6 +509,49 @@ header h1{font-size:1.05rem;font-weight:700;}
 .btn-pdf-copy:hover{background:#0e7490;}
 .btn-pdf-copy:disabled{opacity:.6;cursor:wait;}
 
+/* ===== ADMIN PANEL ===== */
+#admin-panel{display:none;position:fixed;inset:0;z-index:9998;background:#0f172a;overflow-y:auto;font-family:'Segoe UI',sans-serif;}
+#admin-panel.visible{display:block;}
+.adm-header{background:#1e293b;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1.5px solid #334155;position:sticky;top:0;z-index:10;}
+.adm-header h1{color:white;font-size:1.1rem;font-weight:800;}
+.adm-logout{background:#dc2626;color:white;border:none;padding:7px 16px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;}
+.adm-body{padding:24px 28px;max-width:1100px;margin:0 auto;}
+.adm-stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:28px;}
+.adm-stat{background:#1e293b;border-radius:14px;padding:18px 22px;flex:1;min-width:140px;border:1.5px solid #334155;}
+.adm-stat .val{font-size:2rem;font-weight:800;color:white;}
+.adm-stat .lbl{font-size:.72rem;color:#94a3b8;font-weight:600;margin-top:3px;}
+.adm-section-title{color:#94a3b8;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
+.adm-users-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:28px;}
+.adm-user-card{background:#1e293b;border-radius:14px;padding:18px;border:1.5px solid #334155;position:relative;}
+.adm-user-card.online{border-color:#16a34a;}
+.adm-user-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.adm-online-dot{width:10px;height:10px;border-radius:50%;background:#334155;flex-shrink:0;}
+.adm-online-dot.on{background:#16a34a;box-shadow:0 0 6px #16a34a;}
+.adm-user-name{color:white;font-weight:700;font-size:.9rem;}
+.adm-user-tienda{color:#64748b;font-size:.72rem;}
+.adm-user-stats{display:flex;gap:10px;flex-wrap:wrap;}
+.adm-user-stat{background:#0f172a;border-radius:8px;padding:8px 12px;flex:1;min-width:80px;text-align:center;}
+.adm-user-stat .v{color:white;font-size:1.1rem;font-weight:800;}
+.adm-user-stat .l{color:#64748b;font-size:.65rem;font-weight:600;margin-top:2px;}
+.adm-user-meta{font-size:.68rem;color:#475569;margin-top:10px;}
+.adm-del-btn{position:absolute;top:12px;right:12px;background:#7f1d1d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:.65rem;cursor:pointer;opacity:.7;}
+.adm-del-btn:hover{opacity:1;}
+.adm-add-btn{background:#1d4ed8;color:white;border:none;padding:10px 20px;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;}
+.adm-add-btn:hover{background:#2563eb;}
+.adm-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;align-items:center;justify-content:center;}
+.adm-modal-bg.open{display:flex;}
+.adm-modal{background:#1e293b;border-radius:16px;padding:28px;width:100%;max-width:380px;border:1.5px solid #334155;}
+.adm-modal h3{color:white;font-size:1rem;font-weight:800;margin-bottom:20px;}
+.adm-field{margin-bottom:14px;}
+.adm-field label{display:block;color:#94a3b8;font-size:.72rem;font-weight:600;margin-bottom:5px;}
+.adm-field input{width:100%;background:#0f172a;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;}
+.adm-field input:focus{outline:none;border-color:#3b82f6;}
+.adm-modal-btns{display:flex;gap:10px;margin-top:20px;}
+.adm-modal-btn{flex:1;padding:10px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:none;}
+.adm-modal-btn.primary{background:#1d4ed8;color:white;}
+.adm-modal-btn.cancel{background:#334155;color:#94a3b8;}
+.adm-empty{color:#475569;font-size:.85rem;text-align:center;padding:40px;}
+
 /* ===== LOGIN SCREEN ===== */
 #login-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;}
 #login-screen.hidden{display:none;}
@@ -547,6 +593,44 @@ header h1{font-size:1.05rem;font-weight:700;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
+
+<!-- ===== ADMIN PANEL ===== -->
+<div id="admin-panel">
+  <div class="adm-header">
+    <h1>🛡️ Panel de Administración</h1>
+    <button class="adm-logout" onclick="_admLogout()">Cerrar sesión</button>
+  </div>
+  <div class="adm-body">
+    <div class="adm-stats">
+      <div class="adm-stat"><div class="val" id="adm-stat-total">0</div><div class="lbl">Usuarios registrados</div></div>
+      <div class="adm-stat"><div class="val" id="adm-stat-online" style="color:#16a34a">0</div><div class="lbl">En línea ahora</div></div>
+      <div class="adm-stat"><div class="val" id="adm-stat-gest">0</div><div class="lbl">Gestiones hoy</div></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="adm-section-title">Usuarios</div>
+      <button class="adm-add-btn" onclick="_admAbrirAgregar()">+ Agregar usuario</button>
+    </div>
+    <div class="adm-users-grid" id="adm-users-grid">
+      <div class="adm-empty">Cargando usuarios...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal agregar usuario -->
+<div class="adm-modal-bg" id="adm-add-modal">
+  <div class="adm-modal">
+    <h3>➕ Nuevo usuario</h3>
+    <div class="adm-field"><label>Usuario</label><input type="text" id="adm-new-user" placeholder="ej: juan123" autocomplete="off"/></div>
+    <div class="adm-field"><label>Contraseña</label><input type="password" id="adm-new-pass" placeholder="Contraseña"/></div>
+    <div class="adm-field"><label>Nombre del asesor</label><input type="text" id="adm-new-asesor" placeholder="ej: Juan Pérez" autocomplete="off"/></div>
+    <div class="adm-field"><label>Tienda</label><input type="text" id="adm-new-tienda" placeholder="ej: Mi Tienda" autocomplete="off"/></div>
+    <div class="adm-modal-btns">
+      <button class="adm-modal-btn cancel" onclick="_admCerrarAgregar()">Cancelar</button>
+      <button class="adm-modal-btn primary" onclick="_admGuardarUsuario()">Guardar</button>
+    </div>
+    <div id="adm-add-error" style="color:#f87171;font-size:.75rem;margin-top:10px;display:none;"></div>
+  </div>
+</div>
 
 <!-- ===== LOGIN SCREEN ===== -->
 <div id="login-screen">
@@ -4665,19 +4749,68 @@ iniciarTimerInactividad();
 </script>
 
 <script>
+// ===== FIREBASE INIT =====
+const _fbApp = firebase.initializeApp({
+  apiKey: "AIzaSyA9Ae7Zt7TwKsg7h7TOD9PTfeEaYhkoLVE",
+  authDomain: "gestion-logistica-86fd7.firebaseapp.com",
+  databaseURL: "https://gestion-logistica-86fd7-default-rtdb.firebaseio.com",
+  projectId: "gestion-logistica-86fd7",
+  storageBucket: "gestion-logistica-86fd7.firebasestorage.app",
+  messagingSenderId: "950929138441",
+  appId: "1:950929138441:web:a6f3fc27e23fe355a6e9d8"
+});
+const _db = firebase.database();
+
 // ===== LOGIN =====
 (function(){
   const LOGIN_KEY = 'lgs_auth';
   const TIENDA_KEY = 'lgs_tienda';
   const ASESOR_KEY = 'lgs_asesor';
-  const USER = '3D Company';
-  const PASS = '3dcompany';
+  const USER_KEY = 'lgs_user';
+  const ADMIN_USER = 'admin';
+  const ADMIN_PASS = 'admin';
+  const FALLBACK_USER = '3D Company';
+  const FALLBACK_PASS = '3dcompany';
+
+  let _heartbeatInterval = null;
+  let _currentUsername = null;
 
   function _loginShow(){
     document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('admin-panel').classList.remove('visible');
   }
-  function _loginHide(){
-    document.getElementById('login-screen').classList.add('hidden');
+  function _loginHide(){ document.getElementById('login-screen').classList.add('hidden'); }
+  function _showAdmin(){ document.getElementById('admin-panel').classList.add('visible'); _loginHide(); }
+
+  // ── Presencia en Firebase ──
+  function _registrarPresencia(username, tienda, asesor){
+    _currentUsername = username;
+    const ref = _db.ref('presence/' + username);
+    ref.set({ online: true, lastSeen: Date.now(), loginTime: Date.now(), tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0 });
+    ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    _heartbeatInterval = setInterval(()=>{ ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
+  }
+
+  function _limpiarPresencia(){
+    if(_currentUsername) _db.ref('presence/'+_currentUsername).update({ online: false, lastSeen: Date.now() });
+    if(_heartbeatInterval){ clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+    _currentUsername = null;
+  }
+
+  window._fbIncrementarGestion = function(){
+    if(!_currentUsername) return;
+    _db.ref('presence/'+_currentUsername+'/sessionGestiones').transaction(v=>(v||0)+1);
+  };
+
+  function _entrarApp(username, tienda, asesor){
+    localStorage.setItem(LOGIN_KEY, '1');
+    localStorage.setItem(TIENDA_KEY, tienda);
+    localStorage.setItem(ASESOR_KEY, asesor);
+    localStorage.setItem(USER_KEY, username);
+    document.getElementById('login-error').classList.remove('show');
+    document.getElementById('login-error-campos').classList.remove('show');
+    _loginHide();
+    _registrarPresencia(username, tienda, asesor);
   }
 
   window._loginCheck = function(){
@@ -4688,68 +4821,141 @@ iniciarTimerInactividad();
     const err = document.getElementById('login-error');
     const errCampos = document.getElementById('login-error-campos');
 
-    if(u !== USER || p !== PASS){
-      err.classList.add('show');
-      errCampos.classList.remove('show');
-      document.getElementById('login-pass').value = '';
-      document.getElementById('login-pass').focus();
-      return;
-    }
-    if(!tienda || !asesor){
-      err.classList.remove('show');
-      errCampos.classList.add('show');
-      if(!tienda) document.getElementById('login-tienda').focus();
-      else document.getElementById('login-asesor').focus();
-      return;
+    // Admin
+    if(u === ADMIN_USER && p === ADMIN_PASS){
+      localStorage.setItem(LOGIN_KEY, 'admin');
+      err.classList.remove('show'); errCampos.classList.remove('show');
+      _showAdmin(); _admCargarDashboard(); return;
     }
 
-    localStorage.setItem(LOGIN_KEY, '1');
-    localStorage.setItem(TIENDA_KEY, tienda);
-    localStorage.setItem(ASESOR_KEY, asesor);
-    err.classList.remove('show');
-    errCampos.classList.remove('show');
-    _loginHide();
+    // Buscar en Firebase
+    _db.ref('users').orderByChild('username').equalTo(u).once('value', snap => {
+      let found = false;
+      snap.forEach(child => {
+        found = true;
+        const d = child.val();
+        if(d.password !== p){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
+        const t = d.tienda || tienda;
+        const a = d.asesor || asesor;
+        if(!t || !a){ errCampos.classList.add('show'); if(!t) document.getElementById('login-tienda').focus(); else document.getElementById('login-asesor').focus(); return; }
+        _entrarApp(u, t, a);
+      });
+      if(!found){
+        // Fallback hardcodeado
+        if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
+        if(!tienda || !asesor){ errCampos.classList.add('show'); if(!tienda) document.getElementById('login-tienda').focus(); else document.getElementById('login-asesor').focus(); return; }
+        _entrarApp(u, tienda, asesor);
+      }
+    });
   };
 
-  // Exponer datos de sesión para los informes
   window.getLoginTienda = function(){ return localStorage.getItem(TIENDA_KEY) || ''; };
   window.getLoginAsesor = function(){ return localStorage.getItem(ASESOR_KEY) || ''; };
 
-  // Cerrar sesión
-  window._cerrarSesion = function(){
-    document.getElementById('logout-modal').classList.add('open');
-  };
-  window._logoutCancelar = function(){
-    document.getElementById('logout-modal').classList.remove('open');
-  };
+  window._cerrarSesion = function(){ document.getElementById('logout-modal').classList.add('open'); };
+  window._logoutCancelar = function(){ document.getElementById('logout-modal').classList.remove('open'); };
   window._logoutConfirmar = function(){
     document.getElementById('logout-modal').classList.remove('open');
+    _limpiarPresencia();
+    [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY].forEach(k=>localStorage.removeItem(k));
+    ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>document.getElementById(id).value='');
+    _loginShow(); document.getElementById('login-user').focus();
+  };
+  window._admLogout = function(){
     localStorage.removeItem(LOGIN_KEY);
-    localStorage.removeItem(TIENDA_KEY);
-    localStorage.removeItem(ASESOR_KEY);
-    document.getElementById('login-user').value = '';
-    document.getElementById('login-pass').value = '';
-    document.getElementById('login-tienda').value = '';
-    document.getElementById('login-asesor').value = '';
-    _loginShow();
-    document.getElementById('login-user').focus();
+    document.getElementById('admin-panel').classList.remove('visible');
+    ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>document.getElementById(id).value='');
+    _loginShow(); document.getElementById('login-user').focus();
   };
 
-  // Permitir Enter en los campos
   ['login-user','login-pass','login-tienda','login-asesor'].forEach(function(id){
-    document.getElementById(id).addEventListener('keydown', function(e){
-      if(e.key === 'Enter') window._loginCheck();
-    });
+    document.getElementById(id).addEventListener('keydown', function(e){ if(e.key==='Enter') window._loginCheck(); });
   });
 
-  // Verificar sesión al cargar
-  if(localStorage.getItem(LOGIN_KEY) !== '1'){
-    _loginShow();
-    document.getElementById('login-user').focus();
-  } else {
+  const savedSession = localStorage.getItem(LOGIN_KEY);
+  if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); }
+  else if(savedSession === 'admin'){ _showAdmin(); _admCargarDashboard(); }
+  else {
     _loginHide();
+    const u = localStorage.getItem(USER_KEY);
+    const t = localStorage.getItem(TIENDA_KEY);
+    const a = localStorage.getItem(ASESOR_KEY);
+    if(u) _registrarPresencia(u, t, a);
   }
 })();
+
+// ===== ADMIN DASHBOARD =====
+function _admCargarDashboard(){
+  const grid = document.getElementById('adm-users-grid');
+  _db.ref('presence').on('value', snapPresence => {
+    _db.ref('users').once('value', snapUsers => {
+      const presencia = snapPresence.val() || {};
+      const usuarios = Object.values(snapUsers.val() || {});
+      if(!usuarios.find(u=>u.username==='3D Company'))
+        usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
+
+      const online = Object.values(presencia).filter(p=>p.online).length;
+      const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
+      document.getElementById('adm-stat-total').textContent = usuarios.length;
+      document.getElementById('adm-stat-online').textContent = online;
+      document.getElementById('adm-stat-gest').textContent = totalGest;
+
+      grid.innerHTML = '';
+      if(!usuarios.length){ grid.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
+
+      usuarios.forEach(u => {
+        const p = presencia[u.username] || {};
+        const isOnline = !!p.online;
+        const card = document.createElement('div');
+        card.className = 'adm-user-card'+(isOnline?' online':'');
+        card.innerHTML =
+          '<div class="adm-user-top">'+
+            '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
+            '<div><div class="adm-user-name">'+(u.asesor||u.username)+'</div>'+
+            '<div class="adm-user-tienda">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div></div>'+
+          '</div>'+
+          '<div class="adm-user-stats">'+
+            '<div class="adm-user-stat"><div class="v">'+(isOnline?'🟢':'⚫')+'</div><div class="l">'+(isOnline?'En línea':'Fuera')+'</div></div>'+
+            '<div class="adm-user-stat"><div class="v">'+(p.sessionGestiones||0)+'</div><div class="l">Gestiones hoy</div></div>'+
+            '<div class="adm-user-stat"><div class="v">'+(isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):'—')+'</div><div class="l">Tiempo activo</div></div>'+
+          '</div>'+
+          '<div class="adm-user-meta">'+(isOnline?'🕐 Conectado desde: '+_fmtTiempo(p.loginTime):'🕐 Última vez: '+(p.lastSeen?_fmtTiempo(p.lastSeen):'—'))+'</div>'+
+          (u.username!=='3D Company'?'<button class="adm-del-btn" onclick="_admEliminarUsuario(\''+u.username+'\')">✕ Eliminar</button>':'');
+        grid.appendChild(card);
+      });
+    });
+  });
+}
+
+function _fmtTiempo(ts){ if(!ts)return'—'; const d=new Date(ts); return d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}); }
+function _fmtDuracion(ms){ const m=Math.floor(ms/60000); if(m<1)return'<1m'; if(m<60)return m+'m'; return Math.floor(m/60)+'h '+(m%60)+'m'; }
+
+function _admAbrirAgregar(){
+  ['adm-new-user','adm-new-pass','adm-new-asesor','adm-new-tienda'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('adm-add-error').style.display='none';
+  document.getElementById('adm-add-modal').classList.add('open');
+}
+function _admCerrarAgregar(){ document.getElementById('adm-add-modal').classList.remove('open'); }
+
+function _admGuardarUsuario(){
+  const u=document.getElementById('adm-new-user').value.trim();
+  const p=document.getElementById('adm-new-pass').value.trim();
+  const a=document.getElementById('adm-new-asesor').value.trim();
+  const t=document.getElementById('adm-new-tienda').value.trim();
+  const err=document.getElementById('adm-add-error');
+  if(!u||!p){ err.textContent='Usuario y contraseña son obligatorios'; err.style.display='block'; return; }
+  _db.ref('users').orderByChild('username').equalTo(u).once('value', snap=>{
+    if(snap.exists()){ err.textContent='Ese usuario ya existe'; err.style.display='block'; return; }
+    _db.ref('users').push().set({username:u,password:p,asesor:a||u,tienda:t||'',createdAt:Date.now()});
+    _admCerrarAgregar();
+  });
+}
+
+function _admEliminarUsuario(username){
+  if(!confirm('¿Eliminar usuario "'+username+'"?')) return;
+  _db.ref('users').orderByChild('username').equalTo(username).once('value', snap=>{ snap.forEach(c=>c.ref.remove()); });
+  _db.ref('presence/'+username).remove();
+}
 </script>
 
 </body>
