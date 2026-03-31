@@ -616,6 +616,22 @@ header h1{font-size:1.05rem;font-weight:700;}
   </div>
 </div>
 
+<!-- Modal editar usuario -->
+<div class="adm-modal-bg" id="adm-edit-modal">
+  <div class="adm-modal">
+    <h3>✏️ Editar usuario</h3>
+    <div class="adm-field"><label>Usuario</label><input type="text" id="adm-edit-user" disabled style="opacity:.5;cursor:not-allowed;"/></div>
+    <div class="adm-field"><label>Nueva contraseña <span style="color:#64748b;font-weight:400">(dejar vacío para no cambiar)</span></label><input type="password" id="adm-edit-pass" placeholder="Nueva contraseña"/></div>
+    <div class="adm-field"><label>Nombre del asesor</label><input type="text" id="adm-edit-asesor" autocomplete="off"/></div>
+    <div class="adm-field"><label>Tienda</label><input type="text" id="adm-edit-tienda" autocomplete="off"/></div>
+    <div class="adm-modal-btns">
+      <button class="adm-modal-btn cancel" onclick="_admCerrarEditar()">Cancelar</button>
+      <button class="adm-modal-btn primary" onclick="_admGuardarEdicion()">Guardar cambios</button>
+    </div>
+    <div id="adm-edit-error" style="color:#f87171;font-size:.75rem;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
 <!-- Modal agregar usuario -->
 <div class="adm-modal-bg" id="adm-add-modal">
   <div class="adm-modal">
@@ -4945,7 +4961,11 @@ function _admCargarDashboard(){
             '<div class="adm-user-stat"><div class="v">'+(isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):'—')+'</div><div class="l">Tiempo activo</div></div>'+
           '</div>'+
           '<div class="adm-user-meta">'+(isOnline?'🕐 Conectado desde: '+_fmtTiempo(p.loginTime):'🕐 Última vez: '+(p.lastSeen?_fmtTiempo(p.lastSeen):'—'))+'</div>'+
-          (u.username!=='3D Company'?'<button class="adm-del-btn" onclick="_admEliminarUsuario(\''+u.username+'\')">✕ Eliminar</button>':'');
+          (u.username!=='3D Company'?
+            '<div style="display:flex;gap:6px;margin-top:10px;">'+
+              '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;" onclick="_admAbrirEditar(\''+u.username+'\',\''+( u.asesor||'')+'\',\''+( u.tienda||'')+'\')">✏️ Editar</button>'+
+              '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;background:#7f1d1d;" onclick="_admEliminarUsuario(\''+u.username+'\')">✕ Eliminar</button>'+
+            '</div>':'');
         grid.appendChild(card);
       });
     });
@@ -4973,6 +4993,35 @@ function _admGuardarUsuario(){
     if(snap.exists()){ err.textContent='Ese usuario ya existe'; err.style.display='block'; return; }
     _db.ref('users').push().set({username:u,password:p,asesor:a||u,tienda:t||'',createdAt:Date.now()});
     _admCerrarAgregar();
+  });
+}
+
+function _admAbrirEditar(username, asesor, tienda){
+  document.getElementById('adm-edit-user').value = username;
+  document.getElementById('adm-edit-pass').value = '';
+  document.getElementById('adm-edit-asesor').value = asesor;
+  document.getElementById('adm-edit-tienda').value = tienda;
+  document.getElementById('adm-edit-error').style.display = 'none';
+  document.getElementById('adm-edit-modal').classList.add('open');
+  document.getElementById('adm-edit-asesor').focus();
+}
+function _admCerrarEditar(){ document.getElementById('adm-edit-modal').classList.remove('open'); }
+
+function _admGuardarEdicion(){
+  const username = document.getElementById('adm-edit-user').value;
+  const newPass  = document.getElementById('adm-edit-pass').value.trim();
+  const asesor   = document.getElementById('adm-edit-asesor').value.trim();
+  const tienda   = document.getElementById('adm-edit-tienda').value.trim();
+  const err      = document.getElementById('adm-edit-error');
+  if(!asesor || !tienda){ err.textContent='Asesor y tienda son obligatorios'; err.style.display='block'; return; }
+  _db.ref('users').orderByChild('username').equalTo(username).once('value', snap=>{
+    if(!snap.exists()){ err.textContent='Usuario no encontrado'; err.style.display='block'; return; }
+    snap.forEach(child=>{
+      const updates = { asesor, tienda };
+      if(newPass) updates.password = newPass;
+      child.ref.update(updates);
+    });
+    _admCerrarEditar();
   });
 }
 
