@@ -621,7 +621,7 @@ header h1{font-size:1.05rem;font-weight:700;}
   <div class="adm-modal">
     <h3>✏️ Editar usuario</h3>
     <div class="adm-field"><label>Usuario</label><input type="text" id="adm-edit-user" disabled style="opacity:.5;cursor:not-allowed;"/></div>
-    <div class="adm-field"><label>Nueva contraseña <span style="color:#64748b;font-weight:400">(dejar vacío para no cambiar)</span></label><input type="password" id="adm-edit-pass" placeholder="Nueva contraseña"/></div>
+    <div class="adm-field"><label>Nueva contraseña <span style="color:#64748b;font-weight:400">(dejar vacío para no cambiar)</span></label><div style="position:relative;"><input type="password" id="adm-edit-pass" placeholder="Nueva contraseña" style="width:100%;padding-right:38px;"/><span onclick="const i=document.getElementById('adm-edit-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁️':'🙈';" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁️</span></div></div>
     <div class="adm-field"><label>Nombre del asesor</label><input type="text" id="adm-edit-asesor" autocomplete="off"/></div>
     <div class="adm-field"><label>Tienda</label><input type="text" id="adm-edit-tienda" autocomplete="off"/></div>
     <div class="adm-modal-btns">
@@ -637,9 +637,9 @@ header h1{font-size:1.05rem;font-weight:700;}
   <div class="adm-modal">
     <h3>➕ Nuevo usuario</h3>
     <div class="adm-field"><label>Usuario</label><input type="text" id="adm-new-user" placeholder="ej: juan123" autocomplete="off"/></div>
-    <div class="adm-field"><label>Contraseña</label><input type="password" id="adm-new-pass" placeholder="Contraseña"/></div>
-    <div class="adm-field"><label>Nombre del asesor</label><input type="text" id="adm-new-asesor" placeholder="ej: Juan Pérez" autocomplete="off"/></div>
-    <div class="adm-field"><label>Tienda</label><input type="text" id="adm-new-tienda" placeholder="ej: Mi Tienda" autocomplete="off"/></div>
+    <div class="adm-field"><label>Contraseña</label><div style="position:relative;"><input type="password" id="adm-new-pass" placeholder="Contraseña" style="width:100%;padding-right:38px;"/><span onclick="const i=document.getElementById('adm-new-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁️':'🙈';" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁️</span></div></div>
+    <input type="hidden" id="adm-new-asesor"/>
+    <input type="hidden" id="adm-new-tienda"/>
     <div class="adm-modal-btns">
       <button class="adm-modal-btn cancel" onclick="_admCerrarAgregar()">Cancelar</button>
       <button class="adm-modal-btn primary" onclick="_admGuardarUsuario()">Guardar</button>
@@ -660,7 +660,10 @@ header h1{font-size:1.05rem;font-weight:700;}
     </div>
     <div class="login-field">
       <label>Contraseña</label>
-      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" />
+      <div style="position:relative;">
+        <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" style="padding-right:38px;width:100%;"/>
+        <span onclick="const i=document.getElementById('login-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁️':'🙈';" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁️</span>
+      </div>
     </div>
     <!-- campos ocultos, solo se usan si el sistema los necesita -->
     <input type="hidden" id="login-tienda" />
@@ -679,6 +682,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     <div class="adm-field"><label>Nombre del asesor</label><input type="text" id="ls2-asesor" placeholder="Ej: Juan Pérez" autocomplete="off"/></div>
     <div class="adm-field"><label>Tienda</label><input type="text" id="ls2-tienda" placeholder="Ej: Mi Tienda" autocomplete="off"/></div>
     <div class="adm-modal-btns">
+      <button class="adm-modal-btn cancel" onclick="document.getElementById('login-step2-modal').classList.remove('open')">Cancelar</button>
       <button class="adm-modal-btn primary" onclick="_loginStep2Confirmar()">Continuar</button>
     </div>
     <div id="ls2-error" style="color:#f87171;font-size:.75rem;margin-top:10px;display:none;">Completa todos los campos</div>
@@ -2863,10 +2867,13 @@ function crearCard(p,est,esGest){
             '</div></div>';
         }
         html+=notaWidgetHtml(p.id);
+        if(est.key==='oficina'&&!g.gestion_final){
+          html+='<div style="font-size:.72rem;color:#f59e0b;margin-top:4px;padding:4px 6px;background:#1c1400;border-radius:4px;">📝 Obligatorio: registra lo que dijo el cliente antes de finalizar</div>';
+        }
         if(!g.mensajes_listos&&!g.gestion_final){
           html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#374151;color:white;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
         }
-        html+='<button class="btn-finalizar" onclick="marcarFinalizado('+p.id+')" style="margin-top:4px">'+
+        html+='<button class="btn-finalizar" onclick="'+(est.key==='oficina'?'marcarFinalizadoOficina':'marcarFinalizado')+'('+p.id+')" style="margin-top:4px">'+
           (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
       }
       if(g.llamada==='no_contestó'){
@@ -2881,7 +2888,7 @@ function crearCard(p,est,esGest){
         if(!g.mensajes_listos&&!g.gestion_final){
           html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#374151;color:white;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
         }
-        html+='<button class="btn-finalizar" onclick="marcarFinalizado('+p.id+')" style="margin-top:4px">'+
+        html+='<button class="btn-finalizar" onclick="'+(est.key==='oficina'?'marcarFinalizadoOficina':'marcarFinalizado')+'('+p.id+')" style="margin-top:4px">'+
           (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
       }
       // Sin estado de llamada: mostrar nota siempre
@@ -3350,6 +3357,28 @@ function marcarFinalizadoNov(id){
   marcarFinalizado(id);
 }
 
+function marcarFinalizadoOficina(id){
+  ultimaGestion=Date.now();
+  const g=gestiones[id]||{};
+  if(g.gestion_final){marcarFinalizado(id);return;}
+  const notas=g.notas||(g.nota?[{texto:g.nota}]:[]);
+  if(!notas.length){
+    const ta=document.getElementById('nota-inp-'+id);
+    if(ta){
+      ta.classList.remove('nota-req-shake');
+      void ta.offsetWidth;
+      ta.classList.add('nota-req-shake');
+      ta.focus();
+      const origPlaceholder=ta.placeholder;
+      ta.placeholder='⚠️ ¿Qué dijo el cliente? Escribe una nota antes de finalizar...';
+      setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=origPlaceholder;},1400);
+    }
+    toast('📝 En oficina es obligatorio registrar lo que dijo el cliente antes de finalizar');
+    return;
+  }
+  marcarFinalizado(id);
+}
+
 function setNota(id, texto){
   ultimaGestion=Date.now();
   texto=(texto||'').trim();
@@ -3367,6 +3396,13 @@ function setNota(id, texto){
   if(ult&&ult.texto===texto&&ult.fecha===hoy){guardar();return;}
   gestiones[id].notas.push({texto,fecha:hoy,ts:Date.now()});
   guardar();
+  // Guardar también en Firebase
+  if(typeof _db!=='undefined'&&typeof _currentUsername!=='undefined'&&_currentUsername){
+    const pedido=pedidos.find(p=>String(p._id)===String(id));
+    const noteData={texto,fecha:hoy,ts:Date.now(),guia:pedido&&pedido.guia||'',nombre:pedido&&pedido.nombre||'',pedidoId:id};
+    _db.ref('notes/'+_currentUsername+'/lastNote').set(noteData);
+    _db.ref('notes/'+_currentUsername+'/history').push(noteData);
+  }
   // Refrescar solo el widget de notas en la card sin re-renderizar todo
   const wrap=document.querySelector('#card-'+id+' .notas-wrap');
   if(wrap)wrap.outerHTML=notaWidgetHtml(id);
@@ -3973,6 +4009,10 @@ function queSigueBanner(p, estKey){
   // Reparto / Telemercadeo / Oficina
   if(!g.llamada)return'<div class="que-sigue qs-call">📞 Llamar al cliente</div>';
   if(g.llamada==='contestó'){
+    if(estKey==='oficina'){
+      const notas=g.notas||(g.nota?[g.nota]:[]);
+      if(!notas.length)return'<div class="que-sigue qs-nota">📝 ¿Qué dijo el cliente? Escribe una nota — es obligatoria</div>';
+    }
     if(!g.gestion_final)return'<div class="que-sigue qs-fin">☑️ Marcar gestión finalizada</div>';
   }
   if(g.llamada==='no_contestó'){
@@ -4930,43 +4970,54 @@ function _admCargarDashboard(){
   const grid = document.getElementById('adm-users-grid');
   _db.ref('presence').on('value', snapPresence => {
     _db.ref('users').once('value', snapUsers => {
-      const presencia = snapPresence.val() || {};
-      const usuarios = Object.values(snapUsers.val() || {});
-      if(!usuarios.find(u=>u.username==='3D Company'))
-        usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
+      _db.ref('notes').once('value', snapNotes => {
+        const presencia = snapPresence.val() || {};
+        const usuarios = Object.values(snapUsers.val() || {});
+        const notas = snapNotes.val() || {};
+        if(!usuarios.find(u=>u.username==='3D Company'))
+          usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
 
-      const online = Object.values(presencia).filter(p=>p.online).length;
-      const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
-      document.getElementById('adm-stat-total').textContent = usuarios.length;
-      document.getElementById('adm-stat-online').textContent = online;
-      document.getElementById('adm-stat-gest').textContent = totalGest;
+        const online = Object.values(presencia).filter(p=>p.online).length;
+        const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
+        document.getElementById('adm-stat-total').textContent = usuarios.length;
+        document.getElementById('adm-stat-online').textContent = online;
+        document.getElementById('adm-stat-gest').textContent = totalGest;
 
-      grid.innerHTML = '';
-      if(!usuarios.length){ grid.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
+        grid.innerHTML = '';
+        if(!usuarios.length){ grid.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
 
-      usuarios.forEach(u => {
-        const p = presencia[u.username] || {};
-        const isOnline = !!p.online;
-        const card = document.createElement('div');
-        card.className = 'adm-user-card'+(isOnline?' online':'');
-        card.innerHTML =
-          '<div class="adm-user-top">'+
-            '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
-            '<div><div class="adm-user-name">'+(u.asesor||u.username)+'</div>'+
-            '<div class="adm-user-tienda">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div></div>'+
-          '</div>'+
-          '<div class="adm-user-stats">'+
-            '<div class="adm-user-stat"><div class="v">'+(isOnline?'🟢':'⚫')+'</div><div class="l">'+(isOnline?'En línea':'Fuera')+'</div></div>'+
-            '<div class="adm-user-stat"><div class="v">'+(p.sessionGestiones||0)+'</div><div class="l">Gestiones hoy</div></div>'+
-            '<div class="adm-user-stat"><div class="v">'+(isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):'—')+'</div><div class="l">Tiempo activo</div></div>'+
-          '</div>'+
-          '<div class="adm-user-meta">'+(isOnline?'🕐 Conectado desde: '+_fmtTiempo(p.loginTime):'🕐 Última vez: '+(p.lastSeen?_fmtTiempo(p.lastSeen):'—'))+'</div>'+
-          (u.username!=='3D Company'?
-            '<div style="display:flex;gap:6px;margin-top:10px;">'+
-              '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;" onclick="_admAbrirEditar(\''+u.username+'\',\''+( u.asesor||'')+'\',\''+( u.tienda||'')+'\')">✏️ Editar</button>'+
-              '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;background:#7f1d1d;" onclick="_admEliminarUsuario(\''+u.username+'\')">✕ Eliminar</button>'+
-            '</div>':'');
-        grid.appendChild(card);
+        usuarios.forEach(u => {
+          const p = presencia[u.username] || {};
+          const isOnline = !!p.online;
+          const lastNote = (notas[u.username]||{}).lastNote || null;
+          const noteHtml = lastNote
+            ? '<div style="margin-top:8px;padding:7px 10px;background:#1e293b;border-left:3px solid #f59e0b;border-radius:4px;">'+
+                '<div style="font-size:.7rem;color:#94a3b8;margin-bottom:2px;">📝 Última nota · '+(lastNote.fecha||'')+(lastNote.guia?' · Guía: '+lastNote.guia:'')+'</div>'+
+                '<div style="font-size:.8rem;color:#e2e8f0;white-space:pre-wrap;word-break:break-word;">'+(lastNote.texto||'')+'</div>'+
+              '</div>'
+            : '';
+          const card = document.createElement('div');
+          card.className = 'adm-user-card'+(isOnline?' online':'');
+          card.innerHTML =
+            '<div class="adm-user-top">'+
+              '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
+              '<div><div class="adm-user-name">'+(u.asesor||u.username)+'</div>'+
+              '<div class="adm-user-tienda">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div></div>'+
+            '</div>'+
+            '<div class="adm-user-stats">'+
+              '<div class="adm-user-stat"><div class="v">'+(isOnline?'🟢':'⚫')+'</div><div class="l">'+(isOnline?'En línea':'Fuera')+'</div></div>'+
+              '<div class="adm-user-stat"><div class="v">'+(p.sessionGestiones||0)+'</div><div class="l">Gestiones hoy</div></div>'+
+              '<div class="adm-user-stat"><div class="v">'+(isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):'—')+'</div><div class="l">Tiempo activo</div></div>'+
+            '</div>'+
+            '<div class="adm-user-meta">'+(isOnline?'🕐 Conectado desde: '+_fmtTiempo(p.loginTime):'🕐 Última vez: '+(p.lastSeen?_fmtTiempo(p.lastSeen):'—'))+'</div>'+
+            noteHtml+
+            (u.username!=='3D Company'?
+              '<div style="display:flex;gap:6px;margin-top:10px;">'+
+                '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;" onclick="_admAbrirEditar(\''+u.username+'\',\''+( u.asesor||'')+'\',\''+( u.tienda||'')+'\')">✏️ Editar</button>'+
+                '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;background:#7f1d1d;" onclick="_admEliminarUsuario(\''+u.username+'\')">✕ Eliminar</button>'+
+              '</div>':'');
+          grid.appendChild(card);
+        });
       });
     });
   });
