@@ -1957,7 +1957,13 @@ function estaCompleta(p){
   if(g.gestion_final)return true; // compatibilidad con versiones anteriores
   const ll=g.llamada;
   if(!ll)return false;
-  if(ll==='contestó')return true;
+  if(ll==='contestó'){
+    if(p.estadoKey==='oficina'){
+      const notas=g.notas||(g.nota?[{texto:g.nota}]:[]);
+      return notas.length>0;
+    }
+    return true;
+  }
   return false;
 }
 
@@ -2786,6 +2792,17 @@ function crearCard(p,est,esGest){
     }
   }
 
+  if(esGest){
+    const _ultG=getUltimaNota(p.id);
+    if(_ultG){
+      html+='<div style="margin-top:8px;padding:6px 10px;background:#f8fafc;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;font-size:.73rem;">'+
+        '<span style="color:#818cf8;margin-right:4px;">📝</span>'+
+        '<span style="color:#94a3b8;">'+(_ultG.fecha||'')+'&nbsp;·&nbsp;</span>'+
+        '<span style="color:#374151;word-break:break-word;">'+_ultG.texto.replace(/</g,'&lt;')+'</span>'+
+      '</div>';
+    }
+  }
+
   if(!esGest){
     if(est.key!=='pendiente_sin_guia') html+=queSigueBanner(p,est.key);
     html+='<div class="acciones">';
@@ -3286,7 +3303,35 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
     if(p&&p.guia)histRegistrarContacto(p.guia,resultado);
     guardar();
     if(resultado==='contestó'){
-      animarCompletado(id,()=>renderAll(),'✅');
+      const p=pedidos.find(x=>x.id===id);
+      if(p&&p.estadoKey==='oficina'){
+        const gOf=gestiones[id]||{};
+        const notasOf=gOf.notas||(gOf.nota?[{texto:gOf.nota}]:[]);
+        if(notasOf.length){
+          // Ya tiene nota → gestionar normal con animación
+          animarCompletado(id,()=>renderAll(),'✅');
+        } else {
+          // Sin nota → quedarse en lugar y pedir nota
+          const est=ESTADOS.find(e=>e.key===p.estadoKey);
+          const oldCard=document.getElementById('card-'+id);
+          if(oldCard&&est) oldCard.replaceWith(crearCard(p,est,false));
+          setTimeout(()=>{
+            const ta=document.getElementById('nota-inp-'+id);
+            if(ta){
+              ta.classList.remove('nota-req-shake');
+              void ta.offsetWidth;
+              ta.classList.add('nota-req-shake');
+              ta.focus();
+              const orig=ta.placeholder;
+              ta.placeholder='✏️ ¿Qué dijo el cliente?';
+              setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=orig;},1400);
+            }
+            toast('📝 Escribe lo que dijo el cliente antes de finalizar');
+          },50);
+        }
+      } else {
+        animarCompletado(id,()=>renderAll(),'✅');
+      }
     } else {
       renderAll();
     }
@@ -3403,9 +3448,17 @@ function setNota(id, texto){
     _db.ref('notes/'+_currentUsername+'/lastNote').set(noteData);
     _db.ref('notes/'+_currentUsername+'/history').push(noteData);
   }
-  // Refrescar solo el widget de notas en la card sin re-renderizar todo
-  const wrap=document.querySelector('#card-'+id+' .notas-wrap');
-  if(wrap)wrap.outerHTML=notaWidgetHtml(id);
+  // Si es oficina y ya tiene llamada, refrescar la card entera en su lugar
+  const _pNota=pedidos.find(p=>p.id===id);
+  if(_pNota&&_pNota.estadoKey==='oficina'){
+    const _estNota=ESTADOS.find(e=>e.key==='oficina');
+    const _oldCard=document.getElementById('card-'+id);
+    if(_oldCard&&_estNota) _oldCard.replaceWith(crearCard(_pNota,_estNota,false));
+  } else {
+    // Para otras categorías, refrescar solo el widget de notas
+    const wrap=document.querySelector('#card-'+id+' .notas-wrap');
+    if(wrap)wrap.outerHTML=notaWidgetHtml(id);
+  }
   toast('📝 Nota guardada');
 }
 
