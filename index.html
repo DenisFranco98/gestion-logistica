@@ -3472,11 +3472,11 @@ function setNota(id, texto){
     }
   }catch(e){}
   // Guardar también en Firebase
-  if(typeof _db!=='undefined'&&typeof _currentUsername!=='undefined'&&_currentUsername){
+  if(typeof _db!=='undefined'&&window._currentUsername){
     const pedido=pedidos.find(p=>String(p._id)===String(id));
     const noteData={texto,fecha:hoy,ts:Date.now(),guia:pedido&&pedido.guia||'',nombre:pedido&&pedido.nombre||'',pedidoId:id};
-    _db.ref('notes/'+_currentUsername+'/lastNote').set(noteData);
-    _db.ref('notes/'+_currentUsername+'/history').push(noteData);
+    _db.ref('notes/'+window._currentUsername+'/lastNote').set(noteData);
+    _db.ref('notes/'+window._currentUsername+'/history').push(noteData);
   }
   // Si es oficina y ya tiene llamada, refrescar la card entera en su lugar
   const _pNota=pedidos.find(p=>p.id===id);
@@ -3957,7 +3957,7 @@ function _resetSinPDF(){
   limpiarApp();
 }
 function _guardarNubeDesdePDF(){
-  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername){
+  if(typeof _db==='undefined'||!window._currentUsername){
     toast('⚠️ Debes estar conectado para guardar en la nube');return;
   }
   let total=0;
@@ -3969,7 +3969,7 @@ function _guardarNubeDesdePDF(){
 }
 function _resetGuardarNube(){
   document.getElementById('reset-modal').style.display='none';
-  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername){
+  if(typeof _db==='undefined'||!window._currentUsername){
     toast('⚠️ Debes estar conectado para guardar en la nube');
     return;
   }
@@ -4973,6 +4973,7 @@ const _db = firebase.database();
   // ── Presencia en Firebase ──
   function _registrarPresencia(username, tienda, asesor){
     _currentUsername = username;
+    window._currentUsername = username;
     const ref = _db.ref('presence/' + username);
     ref.set({ online: true, lastSeen: Date.now(), loginTime: Date.now(), tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0 });
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
@@ -5093,18 +5094,18 @@ const _db = firebase.database();
 function _fbKey(k){ return String(k).replace(/[.#$\[\]\/]/g,'_'); }
 
 function _fbSyncGestion(id){
-  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername)return;
+  if(typeof _db==='undefined'||!window._currentUsername)return;
   const p=pedidos.find(x=>x.id===id);
   if(!p||!p.dropiId)return;
   const g=Object.assign({},gestiones[id]||{});
-  delete g.mensajes_listos; // solo de sesión, no sincronizar
+  delete g.mensajes_listos;
   g._ts=Date.now();
-  _db.ref('gestiones_sync/'+_currentUsername+'/'+_fbKey(p.dropiId)).set(g);
+  _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
 }
 
 function _fbRestaurarGestiones(){
-  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername)return;
-  _db.ref('gestiones_sync/'+_currentUsername).once('value',snap=>{
+  if(typeof _db==='undefined'||!window._currentUsername)return;
+  _db.ref('gestiones_sync/'+window._currentUsername).once('value',snap=>{
     const fb=snap.val()||{};
     if(!Object.keys(fb).length)return;
     let changed=false;
