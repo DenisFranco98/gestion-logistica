@@ -724,6 +724,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     <div class="logout-desc">¿Deseas guardar el informe PDF de la sesión actual antes de continuar?</div>
     <div class="logout-btns" style="flex-direction:column;gap:8px;">
       <button class="btn-logout-confirm" style="background:#1e293b" onclick="_resetConPDF()">📋 Guardar PDF y continuar</button>
+      <button class="btn-logout-confirm" style="background:#0f766e" onclick="_resetGuardarNube()">☁️ Guardar en la nube y continuar</button>
       <button class="btn-logout-confirm" style="background:#475569" onclick="_resetSinPDF()">Continuar sin guardar</button>
       <button class="btn-logout-cancel" onclick="_resetCancelar()">Cancelar</button>
     </div>
@@ -998,6 +999,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     <div class="pdf-btns">
       <button class="btn-pdf-close" onclick="cerrarPDF()">Cerrar</button>
       <button class="btn-pdf-copy" id="btn-copiar-pdf" onclick="copiarInformeFinalImagen()">📸 Copiar imagen</button>
+      <button class="btn-pdf-print" style="background:#0f766e" onclick="_guardarNubeDesdePDF()">☁️ Guardar en la nube</button>
       <button class="btn-pdf-print" onclick="window.print()">🖨️ Guardar PDF</button>
     </div>
   </div>
@@ -3953,6 +3955,34 @@ function _resetConPDF(){
 function _resetSinPDF(){
   document.getElementById('reset-modal').style.display='none';
   limpiarApp();
+}
+function _guardarNubeDesdePDF(){
+  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername){
+    toast('⚠️ Debes estar conectado para guardar en la nube');return;
+  }
+  let total=0;
+  pedidos.forEach(p=>{
+    if(gestiones[p.id]&&Object.keys(gestiones[p.id]).length){_fbSyncGestion(p.id);total++;}
+  });
+  toast('☁️ '+total+' gestiones guardadas — volviendo al inicio...');
+  setTimeout(()=>{ cerrarPDF(); limpiarApp(); }, 1500);
+}
+function _resetGuardarNube(){
+  document.getElementById('reset-modal').style.display='none';
+  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername){
+    toast('⚠️ Debes estar conectado para guardar en la nube');
+    return;
+  }
+  // Sincronizar todas las gestiones activas a Firebase
+  let total=0;
+  pedidos.forEach(p=>{
+    if(gestiones[p.id]&&Object.keys(gestiones[p.id]).length){
+      _fbSyncGestion(p.id);
+      total++;
+    }
+  });
+  toast('☁️ '+total+' gestiones guardadas en la nube');
+  setTimeout(()=>limpiarApp(), 1200);
 }
 
 function limpiarApp(){
