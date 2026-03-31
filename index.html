@@ -2064,9 +2064,15 @@ function _cargarArchivo(file){
         gestiones[p.id]=gestionesPrevias[p.dropiId];
       }
     });
-    // Limpiar mensajes_listos al cargar nuevo Excel — la cola se reinicia cada sesión
-    Object.values(gestiones).forEach(g=>{ delete g.mensajes_listos; });
-    const recuperadas=Object.keys(gestiones).length;
+    // Al cargar nuevo Excel: conservar solo el historial de notas, resetear la gestión activa
+    Object.values(gestiones).forEach(g=>{
+      delete g.llamada; delete g.llamada_fecha; delete g.llamada_ts;
+      delete g.wa_enviado; delete g.gestion_final; delete g.mensajes_listos;
+      delete g.chatepro; delete g.nueva_entrega; delete g.nov_solucionada;
+      delete g.intentos; delete g.wa_nov_enviado;
+      // g.notas y g.nota se conservan como historial
+    });
+    const recuperadas=Object.keys(gestiones).filter(k=>gestiones[k].notas&&gestiones[k].notas.length).length;
 
     waCounters=waCounters||{reparto:0,oficina:0,transito:0,novedad:0};
     if(!sesionInicio)sesionInicio=Date.now();
@@ -2076,7 +2082,7 @@ function _cargarArchivo(file){
     document.getElementById('right-panel').style.display='flex';
     guardar();renderAll();
     setTimeout(mostrarBienvenida,300);
-    toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · ✅ '+recuperadas+' gestiones conservadas':''));
+    toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · 📝 '+recuperadas+' con historial de notas':''));
     _fbRestaurarGestiones();
   };
   reader.readAsArrayBuffer(file);
@@ -2731,6 +2737,14 @@ function crearCard(p,est,esGest){
     if(partes.length){
       html+='<div style="font-size:.67rem;background:#f1f5f9;border-radius:6px;padding:4px 8px;margin-top:6px;color:#475569;display:flex;flex-wrap:wrap;gap:6px;">'+
         partes.map(p=>'<span>'+p+'</span>').join('<span style="opacity:.4">·</span>')+
+      '</div>';
+    }
+    const _ultHist=getUltimaNota(p.id);
+    if(_ultHist){
+      html+='<div style="margin-top:5px;padding:5px 9px;background:#f8fafc;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;font-size:.72rem;">'+
+        '<span style="color:#818cf8;margin-right:3px;">📝</span>'+
+        '<span style="color:#94a3b8;">'+(_ultHist.fecha||'')+'&nbsp;·&nbsp;</span>'+
+        '<span style="color:#374151;word-break:break-word;">'+_ultHist.texto.replace(/</g,'&lt;')+'</span>'+
       '</div>';
     }
   }
@@ -3535,19 +3549,10 @@ function llamadaRowHtml(id){
   const fechaLabel=fecha?(esMismoDia?'hoy':'el '+fecha):'';
   const labelC='✔ Contestó'+(g.llamada==='contestó'&&fechaLabel?' · '+fechaLabel:'');
   const labelNC='📵 No contestó'+(g.llamada==='no_contestó'&&fechaLabel?' · '+fechaLabel:'');
-  const ult=getUltimaNota(id);
-  const notaPreview=ult
-    ?'<div style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;padding:6px 8px;background:#1e293b;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;font-size:.73rem;">'+
-       '<span style="color:#818cf8;flex-shrink:0;">📝</span>'+
-       '<span style="color:#94a3b8;flex-shrink:0;white-space:nowrap;">'+(ult.fecha||'')+'&nbsp;·&nbsp;</span>'+
-       '<span style="color:#e2e8f0;word-break:break-word;">'+ult.texto.replace(/</g,'&lt;')+'</span>'+
-     '</div>'
-    :'';
   return '<div class="llamada-row">'+
     '<button class="btn-a ba-c'+(g.llamada==='contestó'?' sel':'')+'" onclick="setLlamada('+id+',\'contestó\')">'+labelC+'</button>'+
     '<button class="btn-a ba-nc'+(g.llamada==='no_contestó'?' sel':'')+'" onclick="setLlamada('+id+',\'no_contestó\')">'+labelNC+'</button>'+
-  '</div>'+
-  notaPreview;
+  '</div>';
 }
 
 function notaWidgetHtml(id){
@@ -5083,8 +5088,12 @@ function _fbRestaurarGestiones(){
       if(fbTs>localTs){
         const g=Object.assign({},fbG);
         delete g._ts;
-        gestiones[p.id]=g;
-        changed=true;
+        // Solo restaurar notas desde Firebase; la gestión activa se hace en la sesión actual
+        if(g.notas&&g.notas.length&&!(gestiones[p.id]&&gestiones[p.id].notas&&gestiones[p.id].notas.length)){
+          if(!gestiones[p.id])gestiones[p.id]={};
+          gestiones[p.id].notas=g.notas;
+          changed=true;
+        }
       }
     });
     if(changed){guardar();renderAll();toast('☁️ Gestiones sincronizadas desde la nube');}
