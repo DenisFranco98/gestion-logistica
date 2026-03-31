@@ -646,18 +646,26 @@ header h1{font-size:1.05rem;font-weight:700;}
       <label>Contraseña</label>
       <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" />
     </div>
-    <div style="border-top:1.5px solid #e2e8f0;margin:18px 0 14px;"></div>
-    <div class="login-field">
-      <label>Nombre de la tienda</label>
-      <input type="text" id="login-tienda" placeholder="Ej: Mi Tienda Online" autocomplete="off" />
-    </div>
-    <div class="login-field">
-      <label>Nombre del asesor</label>
-      <input type="text" id="login-asesor" placeholder="Ej: Juan Pérez" autocomplete="off" />
-    </div>
+    <!-- campos ocultos, solo se usan si el sistema los necesita -->
+    <input type="hidden" id="login-tienda" />
+    <input type="hidden" id="login-asesor" />
     <button class="login-btn" onclick="_loginCheck()">Ingresar</button>
     <div class="login-error" id="login-error">Usuario o contraseña incorrectos</div>
-    <div class="login-error" id="login-error-campos" style="margin-top:6px;">Completa el nombre de la tienda y del asesor</div>
+    <div class="login-error" id="login-error-campos" style="margin-top:6px;">Completa los campos requeridos</div>
+  </div>
+</div>
+
+<!-- ===== MODAL SEGUNDO PASO (tienda/asesor) ===== -->
+<div class="adm-modal-bg" id="login-step2-modal">
+  <div class="adm-modal">
+    <h3>👤 Completa tu perfil</h3>
+    <p style="color:#94a3b8;font-size:.78rem;margin-bottom:18px;">Primera vez que ingresas. Registra tu información.</p>
+    <div class="adm-field"><label>Nombre del asesor</label><input type="text" id="ls2-asesor" placeholder="Ej: Juan Pérez" autocomplete="off"/></div>
+    <div class="adm-field"><label>Tienda</label><input type="text" id="ls2-tienda" placeholder="Ej: Mi Tienda" autocomplete="off"/></div>
+    <div class="adm-modal-btns">
+      <button class="adm-modal-btn primary" onclick="_loginStep2Confirmar()">Continuar</button>
+    </div>
+    <div id="ls2-error" style="color:#f87171;font-size:.75rem;margin-top:10px;display:none;">Completa todos los campos</div>
   </div>
 </div>
 
@@ -4813,18 +4821,35 @@ const _db = firebase.database();
     _registrarPresencia(username, tienda, asesor);
   }
 
+  let _pendingUser = null, _pendingPass = null;
+
+  function _pedirPerfil(username){
+    _pendingUser = username;
+    document.getElementById('ls2-asesor').value = '';
+    document.getElementById('ls2-tienda').value = '';
+    document.getElementById('ls2-error').style.display = 'none';
+    document.getElementById('login-step2-modal').classList.add('open');
+    document.getElementById('ls2-asesor').focus();
+  }
+
+  window._loginStep2Confirmar = function(){
+    const a = document.getElementById('ls2-asesor').value.trim();
+    const t = document.getElementById('ls2-tienda').value.trim();
+    if(!a || !t){ document.getElementById('ls2-error').style.display='block'; return; }
+    document.getElementById('login-step2-modal').classList.remove('open');
+    _entrarApp(_pendingUser, t, a);
+    _pendingUser = null;
+  };
+
   window._loginCheck = function(){
     const u = document.getElementById('login-user').value.trim();
     const p = document.getElementById('login-pass').value;
-    const tienda = document.getElementById('login-tienda').value.trim();
-    const asesor = document.getElementById('login-asesor').value.trim();
     const err = document.getElementById('login-error');
-    const errCampos = document.getElementById('login-error-campos');
+    err.classList.remove('show');
 
     // Admin
     if(u === ADMIN_USER && p === ADMIN_PASS){
       localStorage.setItem(LOGIN_KEY, 'admin');
-      err.classList.remove('show'); errCampos.classList.remove('show');
       _showAdmin(); _admCargarDashboard(); return;
     }
 
@@ -4835,16 +4860,14 @@ const _db = firebase.database();
         found = true;
         const d = child.val();
         if(d.password !== p){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-        const t = d.tienda || tienda;
-        const a = d.asesor || asesor;
-        if(!t || !a){ errCampos.classList.add('show'); if(!t) document.getElementById('login-tienda').focus(); else document.getElementById('login-asesor').focus(); return; }
-        _entrarApp(u, t, a);
+        // Si tiene tienda y asesor guardados, entra directo
+        if(d.tienda && d.asesor){ _entrarApp(u, d.tienda, d.asesor); }
+        else { _pedirPerfil(u); }
       });
       if(!found){
         // Fallback hardcodeado
         if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-        if(!tienda || !asesor){ errCampos.classList.add('show'); if(!tienda) document.getElementById('login-tienda').focus(); else document.getElementById('login-asesor').focus(); return; }
-        _entrarApp(u, tienda, asesor);
+        _pedirPerfil(u);
       }
     });
   };
@@ -4868,9 +4891,11 @@ const _db = firebase.database();
     _loginShow(); document.getElementById('login-user').focus();
   };
 
-  ['login-user','login-pass','login-tienda','login-asesor'].forEach(function(id){
+  ['login-user','login-pass'].forEach(function(id){
     document.getElementById(id).addEventListener('keydown', function(e){ if(e.key==='Enter') window._loginCheck(); });
   });
+  document.getElementById('ls2-asesor').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('ls2-tienda').focus(); });
+  document.getElementById('ls2-tienda').addEventListener('keydown', function(e){ if(e.key==='Enter') window._loginStep2Confirmar(); });
 
   const savedSession = localStorage.getItem(LOGIN_KEY);
   if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); }
