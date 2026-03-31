@@ -1104,6 +1104,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 const LS_KEY='dropi_logv4';
 const LS_HIST='dropi_hist_wa';
 const LS_CFG='dropi_cfg_v1';
+const LS_NOTES='dropi_notas_v1'; // notas guardadas por guía (clave estable)
 let sesionInicio=null, tiemposPorSeccion={};
 let ultimaGestion=Date.now(), contadorAlertasInactividad=0;
 let _inactTimer=null;
@@ -1960,7 +1961,7 @@ function estaCompleta(p){
   if(ll==='contestó'){
     if(p.estadoKey==='oficina'){
       const notas=g.notas||(g.nota?[{texto:g.nota}]:[]);
-      return notas.length>0;
+      return notas.length>0||!!getUltimaNota(p.id);
     }
     return true;
   }
@@ -2004,6 +2005,7 @@ function restaurar(){
     document.getElementById('main').style.display='block';
     document.getElementById('right-panel').style.display='flex';
     renderAll();toast('✅ Sesión restaurada');
+    _fbRestaurarGestiones();
   }catch(e){alert('No se pudo restaurar.');}
 }
 
@@ -2075,6 +2077,7 @@ function _cargarArchivo(file){
     guardar();renderAll();
     setTimeout(mostrarBienvenida,300);
     toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · ✅ '+recuperadas+' gestiones conservadas':''));
+    _fbRestaurarGestiones();
   };
   reader.readAsArrayBuffer(file);
 }
@@ -3292,7 +3295,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
     delete gestiones[id].wa_enviado;delete gestiones[id].nueva_entrega;
     delete gestiones[id].chatepro;delete gestiones[id].gestion_final;
     delete gestiones[id].mensajes_listos;
-    guardar();renderAll();
+    guardar();_fbSyncGestion(id);renderAll();
   } else {
     gestiones[id].llamada=resultado;
     gestiones[id].llamada_fecha=new Date().toLocaleDateString('es-CO');
@@ -3301,13 +3304,13 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
     if(resultado==='no_contestó') delete gestiones[id].mensajes_listos;
     const p=pedidos.find(x=>x.id===id);
     if(p&&p.guia)histRegistrarContacto(p.guia,resultado);
-    guardar();
+    guardar();_fbSyncGestion(id);
     if(resultado==='contestó'){
       const p=pedidos.find(x=>x.id===id);
       if(p&&p.estadoKey==='oficina'){
         const gOf=gestiones[id]||{};
         const notasOf=gOf.notas||(gOf.nota?[{texto:gOf.nota}]:[]);
-        if(notasOf.length){
+        if(notasOf.length||!!getUltimaNota(id)){
           // Ya tiene nota → gestionar normal con animación
           animarCompletado(id,()=>renderAll(),'✅');
         } else {
@@ -3341,7 +3344,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
 function setCheck(id,campo,valor){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id][campo]=valor;
-  guardar();renderAll();
+  guardar();renderAll();_fbSyncGestion(id);
 }
 
 function marcarWA(id,estadoKey){ultimaGestion=Date.now();
@@ -3350,7 +3353,7 @@ function marcarWA(id,estadoKey){ultimaGestion=Date.now();
   waCounters[estadoKey]=(waCounters[estadoKey]||0)+1;
   const p=pedidos.find(x=>x.id===id);
   if(p&&p.guia)histRegistrar(p.guia);
-  guardar();
+  guardar();_fbSyncGestion(id);
   // En tránsito, enviar WA = gestión completa → animar
   if(estadoKey==='transito'){
     animarCompletado(id,()=>renderAll(),'\uD83D\uDCE8');
@@ -3371,10 +3374,10 @@ function marcarFinalizado(id){ultimaGestion=Date.now();
   if(gestiones[id].gestion_final){
     const p=pedidos.find(x=>x.id===id);
     if(p&&p.guia)histRegistrarFin(p.guia);
-    guardar();
+    guardar();_fbSyncGestion(id);
     animarCompletado(id,()=>renderAll(),'✅');
   } else {
-    guardar();renderAll();
+    guardar();_fbSyncGestion(id);renderAll();
   }
 }
 
@@ -3383,9 +3386,10 @@ function marcarFinalizadoNov(id){
   const g=gestiones[id]||{};
   // Si ya está finalizado, permitir desmarcar sin validar nota
   if(g.gestion_final){marcarFinalizado(id);return;}
-  // Validar que exista al menos una nota guardada
-  const notas=g.notas||(g.nota?[{texto:g.nota}]:[]);
-  if(!notas.length){
+  // Validar que exista al menos una nota guardada (incluyendo fallback estable)
+  const notas=g.notas||(g.nota?[{texto:g.nota}]:[])||[];
+  const tieneNota=notas.length>0||!!getUltimaNota(id);
+  if(!tieneNota){
     const ta=document.getElementById('nota-inp-'+id);
     if(ta){
       ta.classList.remove('nota-req-shake');
@@ -3440,7 +3444,17 @@ function setNota(id, texto){
   const ult=gestiones[id].notas[gestiones[id].notas.length-1];
   if(ult&&ult.texto===texto&&ult.fecha===hoy){guardar();return;}
   gestiones[id].notas.push({texto,fecha:hoy,ts:Date.now()});
-  guardar();
+  guardar();_fbSyncGestion(id);
+  // Guardar nota también en almacén estable por guía (sobrevive cambios de Excel)
+  try{
+    const _pN=pedidos.find(p=>p.id===id);
+    if(_pN&&_pN.guia){
+      const _lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
+      if(!_lsN[_pN.guia])_lsN[_pN.guia]=[];
+      _lsN[_pN.guia].push({texto,fecha:hoy,ts:Date.now()});
+      localStorage.setItem(LS_NOTES,JSON.stringify(_lsN));
+    }
+  }catch(e){}
   // Guardar también en Firebase
   if(typeof _db!=='undefined'&&typeof _currentUsername!=='undefined'&&_currentUsername){
     const pedido=pedidos.find(p=>String(p._id)===String(id));
@@ -3467,6 +3481,19 @@ function getUltimaNota(id){
   // compatibilidad con nota antigua
   if(g.nota)return{texto:g.nota,fecha:''};
   if(g.notas&&g.notas.length)return g.notas[g.notas.length-1];
+  // Fallback: buscar en almacén estable por guía
+  try{
+    const p=pedidos.find(x=>x.id===id);
+    if(p&&p.guia){
+      const lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
+      const arr=lsN[p.guia];
+      if(arr&&arr.length){
+        // Sincronizar de vuelta a gestiones para esta sesión
+        if(!g.notas)gestiones[id].notas=arr;
+        return arr[arr.length-1];
+      }
+    }
+  }catch(e){}
   return null;
 }
 
@@ -5026,6 +5053,43 @@ const _db = firebase.database();
     if(u) _registrarPresencia(u, t, a);
   }
 })();
+
+// ===== FIREBASE SYNC GESTIONES =====
+function _fbKey(k){ return String(k).replace(/[.#$\[\]\/]/g,'_'); }
+
+function _fbSyncGestion(id){
+  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername)return;
+  const p=pedidos.find(x=>x.id===id);
+  if(!p||!p.dropiId)return;
+  const g=Object.assign({},gestiones[id]||{});
+  delete g.mensajes_listos; // solo de sesión, no sincronizar
+  g._ts=Date.now();
+  _db.ref('gestiones_sync/'+_currentUsername+'/'+_fbKey(p.dropiId)).set(g);
+}
+
+function _fbRestaurarGestiones(){
+  if(typeof _db==='undefined'||typeof _currentUsername==='undefined'||!_currentUsername)return;
+  _db.ref('gestiones_sync/'+_currentUsername).once('value',snap=>{
+    const fb=snap.val()||{};
+    if(!Object.keys(fb).length)return;
+    let changed=false;
+    pedidos.forEach(p=>{
+      if(!p.dropiId)return;
+      const fbG=fb[_fbKey(p.dropiId)];
+      if(!fbG)return;
+      const localG=gestiones[p.id]||{};
+      const localTs=localG._ts||0;
+      const fbTs=fbG._ts||0;
+      if(fbTs>localTs){
+        const g=Object.assign({},fbG);
+        delete g._ts;
+        gestiones[p.id]=g;
+        changed=true;
+      }
+    });
+    if(changed){guardar();renderAll();toast('☁️ Gestiones sincronizadas desde la nube');}
+  });
+}
 
 // ===== ADMIN DASHBOARD =====
 function _admCargarDashboard(){
