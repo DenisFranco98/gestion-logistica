@@ -3455,10 +3455,19 @@ function llamadaRowHtml(id){
   const fechaLabel=fecha?(esMismoDia?'hoy':'el '+fecha):'';
   const labelC='✔ Contestó'+(g.llamada==='contestó'&&fechaLabel?' · '+fechaLabel:'');
   const labelNC='📵 No contestó'+(g.llamada==='no_contestó'&&fechaLabel?' · '+fechaLabel:'');
+  const ult=getUltimaNota(id);
+  const notaPreview=ult
+    ?'<div style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;padding:6px 8px;background:#1e293b;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;font-size:.73rem;">'+
+       '<span style="color:#818cf8;flex-shrink:0;">📝</span>'+
+       '<span style="color:#94a3b8;flex-shrink:0;white-space:nowrap;">'+(ult.fecha||'')+'&nbsp;·&nbsp;</span>'+
+       '<span style="color:#e2e8f0;word-break:break-word;">'+ult.texto.replace(/</g,'&lt;')+'</span>'+
+     '</div>'
+    :'';
   return '<div class="llamada-row">'+
     '<button class="btn-a ba-c'+(g.llamada==='contestó'?' sel':'')+'" onclick="setLlamada('+id+',\'contestó\')">'+labelC+'</button>'+
     '<button class="btn-a ba-nc'+(g.llamada==='no_contestó'?' sel':'')+'" onclick="setLlamada('+id+',\'no_contestó\')">'+labelNC+'</button>'+
-  '</div>';
+  '</div>'+
+  notaPreview;
 }
 
 function notaWidgetHtml(id){
