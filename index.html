@@ -5243,6 +5243,17 @@ function _fbSyncGestion(id){
   g._ts=Date.now();
   _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
   _fbActualizarHistorial();
+  // Actualizar contador de sesión visible en el admin
+  const arr=Object.values(gestiones);
+  const total=(arr.filter(x=>x.llamada||x.wa_enviado||x.gestion_final)).length;
+  _db.ref('presence/'+window._currentUsername).update({
+    sessionGestiones: total,
+    contestaron: arr.filter(x=>x.llamada==='contestó').length,
+    noContestaron: arr.filter(x=>x.llamada==='no_contestó').length,
+    waEnviados: arr.filter(x=>x.wa_enviado).length,
+    finalizados: arr.filter(x=>x.gestion_final).length,
+    devoluciones: arr.filter(x=>x.devolucion).length,
+  });
 }
 
 function _fbActualizarHistorial(){
@@ -5340,19 +5351,43 @@ function _admCargarDashboard(){
         const totalGestUser = p.sessionGestiones || 0;
         const tiempoActivo = isOnline&&p.loginTime ? _fmtDuracion(Date.now()-p.loginTime) : null;
 
+        const cont  = p.contestaron||0;
+        const noCont= p.noContestaron||0;
+        const wa    = p.waEnviados||0;
+        const fin   = p.finalizados||0;
+        const dev   = p.devoluciones||0;
+
+        const statsHtml = isOnline
+          ? '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">'+
+              (cont  ?'<span style="background:#1e40af33;color:#60a5fa;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">✅ '+cont+' cont.</span>':'')+
+              (noCont?'<span style="background:#7f1d1d33;color:#f87171;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">❌ '+noCont+' no cont.</span>':'')+
+              (wa    ?'<span style="background:#4c1d9533;color:#a78bfa;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">📱 '+wa+' WA</span>':'')+
+              (fin   ?'<span style="background:#14532d33;color:#4ade80;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">🏁 '+fin+' final.</span>':'')+
+              (dev   ?'<span style="background:#7c2d1233;color:#fb923c;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">↩️ '+dev+' dev.</span>':'')+
+              (!cont&&!noCont&&!wa&&!fin?'<span style="color:#475569;font-size:.65rem;">Sin gestiones aún</span>':'')+
+            '</div>'
+          : '';
+
         const row = document.createElement('div');
         row.className = 'adm-user-row' + (isOnline ? ' online' : '');
         row.innerHTML =
           '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
-          '<div class="adm-user-row-info">'+
-            '<div class="adm-user-row-name">'+(u.asesor||u.username)+'</div>'+
-            '<div class="adm-user-row-meta">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div>'+
-          '</div>'+
-          '<div class="adm-user-row-status" style="color:'+(isOnline?'#4ade80':'#475569')+';">'+
-            (isOnline
-              ? '🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:'')+(totalGestUser?' · '+totalGestUser+' gest.':'')
-              : (p.lastSeen ? '⚫ '+_fmtTiempo(p.lastSeen) : '⚫ Sin conexión')
-            )+
+          '<div class="adm-user-row-info" style="flex:1;">'+
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+              '<div>'+
+                '<div class="adm-user-row-name">'+(u.asesor||u.username)+'</div>'+
+                '<div class="adm-user-row-meta">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div>'+
+              '</div>'+
+              '<div style="text-align:right;flex-shrink:0;">'+
+                '<div style="color:'+(isOnline?'#4ade80':'#475569')+';font-size:.68rem;font-weight:600;">'+
+                  (isOnline
+                    ? '🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:'')
+                    : (p.lastSeen ? '⚫ '+_fmtTiempo(p.lastSeen) : '⚫ Sin conexión')
+                  )+
+                '</div>'+
+              '</div>'+
+            '</div>'+
+            statsHtml+
           '</div>'+
           '<div class="adm-user-row-actions">'+
             (isOnline ? '<button class="adm-row-btn" style="background:#78350f;color:#fcd34d;" onclick="_admForzarLogout(\''+u.username+'\')" title="Cerrar sesión">⏻</button>' : '')+
