@@ -702,6 +702,8 @@ header h1{font-size:1.05rem;font-weight:700;}
             <div>
               <div class="anl-filter-label" style="margin-bottom:4px;">Período</div>
               <select class="anl-select" id="anl-period-filter" onchange="_anlPeriodChange()">
+                <option value="today">Hoy</option>
+                <option value="yesterday">Ayer</option>
                 <option value="7">Últimos 7 días</option>
                 <option value="14" selected>Últimos 14 días</option>
                 <option value="30">Últimos 30 días</option>
@@ -5391,7 +5393,11 @@ function _anlPeriodChange(){
 function _anlGetFechas(){
   const period = document.getElementById('anl-period-filter').value;
   const fechas = [];
-  if(period==='custom'){
+  if(period==='today'){
+    fechas.push(new Date().toISOString().slice(0,10));
+  } else if(period==='yesterday'){
+    const d=new Date(); d.setDate(d.getDate()-1); fechas.push(d.toISOString().slice(0,10));
+  } else if(period==='custom'){
     const from = document.getElementById('anl-date-from').value;
     const to   = document.getElementById('anl-date-to').value;
     if(!from||!to) return [];
@@ -5412,11 +5418,11 @@ function _anlCargar(){
   if(!fechas.length) return;
 
   const userName = userFilter ? ((_admUsuariosCache.find(u=>u.username===userFilter)||{}).asesor||userFilter) : 'Todos los usuarios';
-  const periodLabel = period==='custom' ? 'Rango personalizado' : 'Últimos '+period+' días';
+  const periodLabel = period==='today'?'Hoy':period==='yesterday'?'Ayer':period==='custom'?'Rango personalizado':'Últimos '+period+' días';
   document.getElementById('anl-chart-title').textContent = userName + ' — ' + periodLabel;
 
   // Label de KPIs con el período
-  const kpiSuffix = period==='custom'?'':' ('+period+'d)';
+  const kpiSuffix = {today:' (hoy)',yesterday:' (ayer)',custom:''}[period]||' ('+period+'d)';
   document.getElementById('kpi-fin-lbl').textContent  = 'Finalizados'+kpiSuffix;
   document.getElementById('kpi-cont-lbl').textContent = 'Contestaron'+kpiSuffix;
   document.getElementById('kpi-wa-lbl').textContent   = 'WA enviados'+kpiSuffix;
