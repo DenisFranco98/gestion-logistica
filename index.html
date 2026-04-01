@@ -123,7 +123,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 .btn-vista.activo{background:white;color:#1e293b;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.1);}
 .card{background:white;border-radius:11px;padding:13px;border:1.5px solid var(--border);border-left:5px solid;box-shadow:0 1px 5px rgba(0,0,0,.07);transition:opacity .3s;}
 .card.nc-pend{border-left-style:dashed;}
-.card.gest{opacity:.42;border-left-color:#94a3b8!important;pointer-events:none;}
+.card.gest{opacity:.42;border-left-color:#94a3b8!important;}.card.gest *:not(.btn-dev){pointer-events:none;}.card.gest .btn-dev{pointer-events:auto;}
 .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
 .card-guia{font-size:.66rem;color:#94a3b8;font-weight:600;letter-spacing:.3px;}.card-guia.copiable{cursor:pointer;}.card-guia.copiable:hover{color:#374151;}
 .card-name{font-size:.92rem;font-weight:700;line-height:1.2;}
@@ -1956,6 +1956,7 @@ function alertaNivel(p){
 
 function estaCompleta(p){
   const g=gestiones[p.id]||{};
+  if(g.devolucion)return true;
   if(p.estadoKey==='transito'){return!!(g.wa_enviado);}
   if(g.gestion_final)return true; // compatibilidad con versiones anteriores
   const ll=g.llamada;
@@ -2066,13 +2067,13 @@ function _cargarArchivo(file){
         gestiones[p.id]=gestionesPrevias[p.dropiId];
       }
     });
-    // Al cargar nuevo Excel: conservar solo el historial de notas, resetear la gestión activa
+    // Al cargar nuevo Excel: conservar notas y devolución, resetear la gestión activa
     Object.values(gestiones).forEach(g=>{
       delete g.llamada; delete g.llamada_fecha; delete g.llamada_ts;
       delete g.wa_enviado; delete g.gestion_final; delete g.mensajes_listos;
       delete g.chatepro; delete g.nueva_entrega; delete g.nov_solucionada;
       delete g.intentos; delete g.wa_nov_enviado;
-      // g.notas y g.nota se conservan como historial
+      // g.notas, g.nota y g.devolucion se conservan
     });
     const recuperadas=Object.keys(gestiones).filter(k=>gestiones[k].notas&&gestiones[k].notas.length).length;
 
@@ -2704,7 +2705,7 @@ function crearCard(p,est,esGest){
         (telDisplay?'<div class="card-phone" onclick="copiarTel(\''+p.telefono+'\')">📞 '+telDisplay+'<span class="copy-hint">copiar</span></div>':'<div style="font-size:.78rem;color:#94a3b8">Sin teléfono</div>')+
       '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">'+
-        (esGest?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0f5f2;color:#2d5a3d">✅ Listo</span>':'')+
+        (g.devolucion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#fff1f2;color:#be123c">🔄 Devolución</span>':esGest?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0f5f2;color:#2d5a3d">✅ Listo</span>':'')+
         (ncPend&&intentos>0?'<span class="intentos-badge">📵 '+intentos+' intento'+(intentos>1?'s':'')+'</span>':'')+
       '</div>'+
     '</div>';
@@ -2739,14 +2740,6 @@ function crearCard(p,est,esGest){
     if(partes.length){
       html+='<div style="font-size:.67rem;background:#f1f5f9;border-radius:6px;padding:4px 8px;margin-top:6px;color:#475569;display:flex;flex-wrap:wrap;gap:6px;">'+
         partes.map(p=>'<span>'+p+'</span>').join('<span style="opacity:.4">·</span>')+
-      '</div>';
-    }
-    const _ultHist=getUltimaNota(p.id);
-    if(_ultHist){
-      html+='<div style="margin-top:5px;padding:5px 9px;background:#f8fafc;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;font-size:.72rem;">'+
-        '<span style="color:#818cf8;margin-right:3px;">📝</span>'+
-        '<span style="color:#94a3b8;">'+(_ultHist.fecha||'')+'&nbsp;·&nbsp;</span>'+
-        '<span style="color:#374151;word-break:break-word;">'+_ultHist.texto.replace(/</g,'&lt;')+'</span>'+
       '</div>';
     }
   }
@@ -2820,6 +2813,8 @@ function crearCard(p,est,esGest){
         '<span style="color:#374151;word-break:break-word;">'+_ultG.texto.replace(/</g,'&lt;')+'</span>'+
       '</div>';
     }
+    html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
+      (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
   }
 
   if(!esGest){
@@ -2932,6 +2927,9 @@ function crearCard(p,est,esGest){
         html+=notaWidgetHtml(p.id);
       }
     }
+    // Botón devolución — siempre visible al fondo de acciones
+    html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
+      (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     html+='</div>';
   }
   card.innerHTML=html;
@@ -3101,6 +3099,8 @@ function crearCardNovedad(p){
         '<label for="nov_sol_'+p.id+'">✅ Novedad solucionada en Dropi</label>'+
       '</div>'+
     '</div>';
+    html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
+      (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     html+='</div>';
   }
   card.innerHTML=html;
@@ -3395,6 +3395,41 @@ function marcarFinalizado(id){ultimaGestion=Date.now();
   } else {
     guardar();_fbSyncGestion(id);renderAll();
   }
+}
+
+function marcarDevolucion(id){
+  ultimaGestion=Date.now();
+  if(!gestiones[id])gestiones[id]={};
+  if(gestiones[id].devolucion){
+    // Ya está marcado → pedir confirmación para desmarcar
+    if(!confirm('¿Seguro que quieres quitar la marca de devolución para este pedido?'))return;
+    gestiones[id].devolucion=false;
+    delete gestiones[id].devolucion_razon;
+    guardar();_fbSyncGestion(id);renderAll();
+    toast('↩️ Devolución desmarcada');
+    return;
+  }
+  // Sin nota guardada → exigir que escriba en el textarea de la card
+  const notas=gestiones[id].notas||(gestiones[id].nota?[{texto:gestiones[id].nota}]:[]);
+  if(!notas.length){
+    const ta=document.getElementById('nota-inp-'+id);
+    if(ta){
+      ta.classList.remove('nota-req-shake');
+      void ta.offsetWidth;
+      ta.classList.add('nota-req-shake');
+      ta.focus();
+      const orig=ta.placeholder;
+      ta.placeholder='✏️ Escribe el motivo de la devolución...';
+      setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=orig;},1600);
+    }
+    toast('📝 Escribe el motivo de la devolución en la nota antes de marcar');
+    return;
+  }
+  // Tiene nota → marcar devolución usando la última nota como justificación
+  gestiones[id].devolucion=true;
+  gestiones[id].devolucion_razon=notas[notas.length-1].texto;
+  guardar();_fbSyncGestion(id);
+  animarCompletado(id,()=>renderAll(),'🔄');
 }
 
 function marcarFinalizadoNov(id){
