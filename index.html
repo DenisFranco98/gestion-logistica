@@ -544,7 +544,8 @@ header h1{font-size:1.05rem;font-weight:700;}
 .anl-select{background:#1e293b;color:#e2e8f0;border:1.5px solid #334155;border-radius:8px;padding:8px 12px;font-size:.78rem;cursor:pointer;outline:none;}
 .anl-select:focus{border-color:#3b82f6;}
 .anl-filter-label{color:#64748b;font-size:.72rem;font-weight:700;}
-.anl-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;}
+.anl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+@media(max-width:900px){.anl-grid{grid-template-columns:repeat(2,1fr);}}
 .anl-kpi{background:#1e293b;border-radius:12px;padding:16px;border:1.5px solid #334155;text-align:center;}
 .anl-kpi-val{font-size:1.6rem;font-weight:800;color:white;line-height:1;}
 .anl-kpi-lbl{color:#64748b;font-size:.65rem;font-weight:700;margin-top:5px;text-transform:uppercase;letter-spacing:.5px;}
@@ -729,10 +730,35 @@ header h1{font-size:1.05rem;font-weight:700;}
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-cont">—</div><div class="anl-kpi-lbl" id="kpi-cont-lbl">Contestaron</div></div>
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-wa">—</div><div class="anl-kpi-lbl" id="kpi-wa-lbl">WA enviados</div></div>
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-gpm" style="font-size:1.2rem;">—</div><div class="anl-kpi-lbl">Prom. Gest/min</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-tasa-contacto" style="font-size:1.2rem;">—</div><div class="anl-kpi-lbl">Tasa de contacto</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-tasa-cierre" style="font-size:1.2rem;">—</div><div class="anl-kpi-lbl">Tasa de cierre</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-dev-rate" style="font-size:1.2rem;">—</div><div class="anl-kpi-lbl">% Devoluciones</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-total">—</div><div class="anl-kpi-lbl">Total gestionados</div></div>
         </div>
 
-        <!-- Chart -->
-        <div class="anl-card" style="margin-top:16px;">
+        <!-- Fila: Donut contacto + % cierre por día -->
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-top:16px;">
+          <div class="anl-card" style="margin-bottom:0;">
+            <div class="anl-card-title">Distribución de contacto</div>
+            <div style="display:flex;justify-content:center;padding:10px 0;">
+              <canvas id="anl-donut" style="max-height:200px;max-width:200px;"></canvas>
+            </div>
+            <div id="anl-donut-legend" style="display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:.7rem;"></div>
+          </div>
+          <div class="anl-card" style="margin-bottom:0;">
+            <div class="anl-card-title" id="anl-cierre-title">% de cierre por día</div>
+            <canvas id="anl-cierre-chart" height="120"></canvas>
+          </div>
+        </div>
+
+        <!-- Barras comparativas por asesor -->
+        <div class="anl-card" style="margin-top:14px;" id="anl-comparativo-wrap">
+          <div class="anl-card-title">Comparativo de asesores — Tasa de contacto vs Tasa de cierre</div>
+          <canvas id="anl-comparativo-chart" height="80"></canvas>
+        </div>
+
+        <!-- Chart gestiones por día -->
+        <div class="anl-card">
           <div class="anl-card-title" id="anl-chart-title">Gestiones por día</div>
           <canvas id="anl-chart" height="90"></canvas>
         </div>
@@ -5307,7 +5333,7 @@ function _fbRestaurarGestiones(cb){
 }
 
 // ===== ADMIN DASHBOARD =====
-let _anlChart = null;
+let _anlChart = null, _anlDonut = null, _anlCierreChart = null, _anlCompChart = null;
 let _admUsuariosCache = [];
 
 function _admTab(tab){
@@ -5486,14 +5512,160 @@ function _anlCargar(){
     const tot = k => Object.values(byFecha).reduce((s,d)=>s+d[k],0);
 
     // KPIs
-    const totMin = tot('minutos');
-    const totFin = tot('finalizados');
+    const totMin   = tot('minutos');
+    const totFin   = tot('finalizados');
+    const totCont  = tot('contestaron');
+    const totNoCont= tot('noContestaron');
+    const totWA    = tot('waEnviados');
+    const totDev   = tot('devoluciones');
+    const totGest  = totCont + totNoCont + totWA; // total contactos únicos (aprox)
     const gpm = totMin>0 ? (totFin/totMin).toFixed(2) : '—';
+    const tasaContacto = totGest>0 ? Math.round(totCont/totGest*100) : null;
+    const tasaCierre   = totGest>0 ? Math.round(totFin/totGest*100) : null;
+    const tasaDev      = totFin>0  ? Math.round(totDev/totFin*100)  : null;
+
     document.getElementById('kpi-fin').textContent  = totFin;
-    document.getElementById('kpi-cont').textContent = tot('contestaron');
-    document.getElementById('kpi-wa').textContent   = tot('waEnviados');
+    document.getElementById('kpi-cont').textContent = totCont;
+    document.getElementById('kpi-wa').textContent   = totWA;
+    document.getElementById('kpi-total').textContent= totGest;
     document.getElementById('kpi-gpm').textContent  = gpm+(gpm!=='—'?'/min':'');
     document.getElementById('kpi-gpm').style.color  = gpm==='—'?'white':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
+
+    const tcEl = document.getElementById('kpi-tasa-contacto');
+    tcEl.textContent = tasaContacto!==null ? tasaContacto+'%' : '—';
+    tcEl.style.color = tasaContacto===null?'white':tasaContacto>=70?'#4ade80':tasaContacto>=50?'#fbbf24':'#f87171';
+
+    const tccEl = document.getElementById('kpi-tasa-cierre');
+    tccEl.textContent = tasaCierre!==null ? tasaCierre+'%' : '—';
+    tccEl.style.color = tasaCierre===null?'white':tasaCierre>=60?'#4ade80':tasaCierre>=40?'#fbbf24':'#f87171';
+
+    const devEl = document.getElementById('kpi-dev-rate');
+    devEl.textContent = tasaDev!==null ? tasaDev+'%' : '—';
+    devEl.style.color = tasaDev===null?'white':tasaDev<=5?'#4ade80':tasaDev<=15?'#fbbf24':'#f87171';
+
+    // ── DONUT: Distribución de contacto ──
+    const ctxD = document.getElementById('anl-donut').getContext('2d');
+    if(_anlDonut) _anlDonut.destroy();
+    const soloWA = Math.max(0, totWA - totCont); // WA sin llamada contestada
+    _anlDonut = new Chart(ctxD,{
+      type:'doughnut',
+      data:{
+        labels:['Contestaron','No contestaron','Solo WA'],
+        datasets:[{
+          data:[totCont, totNoCont, soloWA],
+          backgroundColor:['#4ade8066','#f8717166','#a78bfa66'],
+          borderColor:['#4ade80','#f87171','#a78bfa'],
+          borderWidth:2,
+        }]
+      },
+      options:{
+        responsive:true,cutout:'68%',
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>{
+            const total=ctx.dataset.data.reduce((a,b)=>a+b,0);
+            const pct=total>0?Math.round(ctx.parsed/total*100):0;
+            return ctx.label+': '+ctx.parsed+' ('+pct+'%)';
+          }}}
+        }
+      }
+    });
+    // leyenda manual
+    const legendEl = document.getElementById('anl-donut-legend');
+    const legendData=[['#4ade80','Contestaron',totCont],['#f87171','No contestaron',totNoCont],['#a78bfa','Solo WA',soloWA]];
+    const grandTotal = totCont+totNoCont+soloWA||1;
+    legendEl.innerHTML = legendData.map(([c,l,v])=>
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+        '<div style="display:flex;align-items:center;gap:6px;">'+
+          '<div style="width:10px;height:10px;border-radius:50%;background:'+c+'"></div>'+
+          '<span style="color:#94a3b8">'+l+'</span>'+
+        '</div>'+
+        '<span style="color:white;font-weight:700">'+v+' <span style="color:#64748b;font-weight:400">('+Math.round(v/grandTotal*100)+'%)</span></span>'+
+      '</div>'
+    ).join('');
+
+    // ── LÍNEA: % de cierre por día ──
+    document.getElementById('anl-cierre-title').textContent = '% de cierre diario — '+userName;
+    const ctxC = document.getElementById('anl-cierre-chart').getContext('2d');
+    if(_anlCierreChart) _anlCierreChart.destroy();
+    const cierrePorDia = fechas.map(f=>{
+      const d=byFecha[f];
+      const base=(d.contestaron||0)+(d.noContestaron||0)+(d.waEnviados||0);
+      return base>0 ? Math.round((d.finalizados||0)/base*100) : null;
+    });
+    _anlCierreChart = new Chart(ctxC,{
+      type:'line',
+      data:{
+        labels,
+        datasets:[{
+          label:'% Cierre',
+          data:cierrePorDia,
+          borderColor:'#4ade80',
+          backgroundColor:'#4ade8020',
+          borderWidth:2,
+          pointBackgroundColor:'#4ade80',
+          pointRadius:4,
+          fill:true,
+          tension:0.35,
+          spanGaps:true,
+        }]
+      },
+      options:{
+        responsive:true,
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>ctx.parsed.y!==null?ctx.parsed.y+'% de cierre':'Sin datos'}}
+        },
+        scales:{
+          x:{ticks:{color:'#64748b',font:{size:10},maxRotation:45},grid:{color:'#1e293b'}},
+          y:{ticks:{color:'#64748b',font:{size:11},callback:v=>v+'%'},grid:{color:'#334155'},beginAtZero:true,max:100}
+        }
+      }
+    });
+
+    // ── BARRAS COMPARATIVO POR ASESOR (solo si "todos los usuarios") ──
+    const compWrap = document.getElementById('anl-comparativo-wrap');
+    if(!userFilter && _admUsuariosCache.length>1){
+      compWrap.style.display='block';
+      // Para cada usuario calcular tasa de contacto y tasa de cierre en el período
+      const perUser = results.map(({u, data})=>{
+        let cont=0,noCont=0,wa=0,fin=0;
+        fechas.forEach(f=>{ const d=data[f]||{}; cont+=d.contestaron||0; noCont+=d.noContestaron||0; wa+=d.waEnviados||0; fin+=d.finalizados||0; });
+        const base=cont+noCont+wa||1;
+        return {
+          name:(_admUsuariosCache.find(x=>x.username===u)||{}).asesor||u,
+          tCont: Math.round(cont/base*100),
+          tCierre: Math.round(fin/base*100),
+        };
+      }).filter(x=>x.tCont>0||x.tCierre>0);
+
+      const ctxComp = document.getElementById('anl-comparativo-chart').getContext('2d');
+      if(_anlCompChart) _anlCompChart.destroy();
+      _anlCompChart = new Chart(ctxComp,{
+        type:'bar',
+        data:{
+          labels: perUser.map(x=>x.name),
+          datasets:[
+            {label:'Tasa de contacto %', data:perUser.map(x=>x.tCont),  backgroundColor:'#60a5fa55',borderColor:'#60a5fa',borderWidth:2,borderRadius:6},
+            {label:'Tasa de cierre %',   data:perUser.map(x=>x.tCierre),backgroundColor:'#4ade8055',borderColor:'#4ade80',borderWidth:2,borderRadius:6},
+          ]
+        },
+        options:{
+          responsive:true,
+          plugins:{
+            legend:{labels:{color:'#94a3b8',font:{size:11},boxWidth:12,padding:14}},
+            tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.parsed.y+'%'}}
+          },
+          scales:{
+            x:{ticks:{color:'#cbd5e1',font:{size:11}},grid:{color:'#1e293b'}},
+            y:{ticks:{color:'#64748b',font:{size:11},callback:v=>v+'%'},grid:{color:'#334155'},beginAtZero:true,max:100}
+          }
+        }
+      });
+    } else {
+      compWrap.style.display = userFilter ? 'none' : 'block';
+      if(!userFilter&&_admUsuariosCache.length<=1) document.getElementById('anl-comparativo-chart').parentElement.querySelector('.anl-card-title').textContent='Comparativo (agrega más asesores para ver)';
+    }
 
     // Chart — todas las gestiones como barras agrupadas
     const ctx = document.getElementById('anl-chart').getContext('2d');
