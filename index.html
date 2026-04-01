@@ -695,9 +695,15 @@ header h1{font-size:1.05rem;font-weight:700;}
           <div class="adm-section-title" style="margin-bottom:14px;">Rendimiento por asesor</div>
           <div class="anl-filters">
             <div>
-              <div class="anl-filter-label" style="margin-bottom:4px;">Usuario</div>
-              <select class="anl-select" id="anl-user-filter" onchange="_anlCargar()">
-                <option value="">Todos los usuarios</option>
+              <div class="anl-filter-label" style="margin-bottom:4px;">Tienda</div>
+              <select class="anl-select" id="anl-user-filter" onchange="_anlUserChange()">
+                <option value="">Todas las tiendas</option>
+              </select>
+            </div>
+            <div id="anl-asesor-wrap" style="display:none;">
+              <div class="anl-filter-label" style="margin-bottom:4px;">Asesor</div>
+              <select class="anl-select" id="anl-asesor-filter" onchange="_anlCargar()">
+                <option value="">Todos los asesores</option>
               </select>
             </div>
             <div>
@@ -5298,18 +5304,21 @@ function _fbActualizarHistorial(){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   const hoy=new Date().toISOString().slice(0,10);
   const user=window._currentUsername;
-  // Calcular totales del día desde gestiones actuales en memoria
+  // Normalizar nombre del asesor como clave
+  const asesorRaw=window.getLoginAsesor?window.getLoginAsesor():'';
+  const asesorKey=_fbKey((asesorRaw||user).trim().toLowerCase());
   const arr=Object.values(gestiones);
   const contestaron=arr.filter(g=>g.llamada==='contestó').length;
   const noContestaron=arr.filter(g=>g.llamada==='no_contestó').length;
   const waEnviados=arr.filter(g=>g.wa_enviado).length;
   const finalizados=arr.filter(g=>g.gestion_final).length;
   const devoluciones=arr.filter(g=>g.devolucion).length;
-  // Tiempo activo desde loginTime en presence
   _db.ref('presence/'+user+'/loginTime').once('value',snap=>{
     const loginTime=snap.val()||Date.now();
     const minutos=Math.max(1,Math.floor((Date.now()-loginTime)/60000));
-    _db.ref('historial_diario/'+user+'/'+hoy).set({
+    // Guardar bajo tienda/asesor/fecha
+    _db.ref('historial_diario/'+user+'/'+asesorKey+'/'+hoy).set({
+      asesorNombre: asesorRaw||user,
       contestaron,noContestaron,waEnviados,finalizados,devoluciones,minutos,_ts:Date.now()
     });
   });
@@ -5450,17 +5459,45 @@ function _admCargarDashboard(){
 // ===== ANALÍTICA =====
 function _anlInicializar(){
   const sel = document.getElementById('anl-user-filter');
-  // Poblar selector de usuarios
   const current = sel.value;
-  sel.innerHTML = '<option value="">Todos los usuarios</option>';
+  sel.innerHTML = '<option value="">Todas las tiendas</option>';
   _admUsuariosCache.forEach(u=>{
     const opt = document.createElement('option');
     opt.value = u.username;
-    opt.textContent = u.asesor || u.username;
+    opt.textContent = u.tienda || u.asesor || u.username;
     if(u.username===current) opt.selected = true;
     sel.appendChild(opt);
   });
   _anlCargar();
+}
+
+function _anlUserChange(){
+  const user = document.getElementById('anl-user-filter').value;
+  const wrap = document.getElementById('anl-asesor-wrap');
+  const asel = document.getElementById('anl-asesor-filter');
+  asel.innerHTML = '<option value="">Todos los asesores</option>';
+  if(!user){ wrap.style.display='none'; _anlCargar(); return; }
+  // Cargar asesores disponibles para esta tienda desde historial_diario
+  _db.ref('historial_diario/'+user).once('value', snap=>{
+    const data = snap.val()||{};
+    // Si la estructura es nueva (asesor/fecha), los keys son asesores
+    // Si es vieja (fecha directamente), no hay asesores
+    const keys = Object.keys(data);
+    const isNewStructure = keys.length>0 && !keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
+    if(isNewStructure){
+      wrap.style.display='block';
+      keys.forEach(asesorKey=>{
+        const nombre = data[asesorKey][Object.keys(data[asesorKey])[0]]?.asesorNombre || asesorKey;
+        const opt = document.createElement('option');
+        opt.value = asesorKey;
+        opt.textContent = nombre;
+        asel.appendChild(opt);
+      });
+    } else {
+      wrap.style.display='none';
+    }
+    _anlCargar();
+  });
 }
 
 function _anlPeriodChange(){
@@ -5497,11 +5534,12 @@ function _anlCargar(){
   const fechas     = _anlGetFechas();
   if(!fechas.length) return;
 
-  const userName = userFilter ? ((_admUsuariosCache.find(u=>u.username===userFilter)||{}).asesor||userFilter) : 'Todos los usuarios';
+  const asesorFilter = document.getElementById('anl-asesor-filter')?.value||'';
+  const tiendaName = userFilter ? ((_admUsuariosCache.find(u=>u.username===userFilter)||{}).tienda||userFilter) : 'Todas las tiendas';
+  const asesorName = asesorFilter ? document.getElementById('anl-asesor-filter').options[document.getElementById('anl-asesor-filter').selectedIndex]?.text : '';
   const periodLabel = period==='today'?'Hoy':period==='yesterday'?'Ayer':period==='custom'?'Rango personalizado':'Últimos '+period+' días';
-  document.getElementById('anl-chart-title').textContent = userName + ' — ' + periodLabel;
+  document.getElementById('anl-chart-title').textContent = (asesorName||tiendaName) + ' — ' + periodLabel;
 
-  // Label de KPIs con el período
   const kpiSuffix = {today:' (hoy)',yesterday:' (ayer)',custom:''}[period]||' ('+period+'d)';
   document.getElementById('kpi-fin-lbl').textContent  = 'Finalizados'+kpiSuffix;
   document.getElementById('kpi-cont-lbl').textContent = 'Contestaron'+kpiSuffix;
@@ -5509,13 +5547,29 @@ function _anlCargar(){
 
   const users = userFilter ? [userFilter] : _admUsuariosCache.map(u=>u.username);
   const limit = Math.max(fechas.length, 30);
-  const promises = users.map(u => _db.ref('historial_diario/'+u).orderByKey().limitToLast(limit).once('value').then(s=>({u,data:s.val()||{}})));
+  const promises = users.map(u => _db.ref('historial_diario/'+u).once('value').then(s=>({u,data:s.val()||{}})));
 
-  Promise.all(promises).then(results=>{
+  // Helper: aplanar estructura nueva (tienda/asesor/fecha) o vieja (tienda/fecha)
+  function _aplanarHistorial(data, soloAsesor){
     const byFecha = {};
     fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,minutos:0}; });
-
-    results.forEach(({data})=>{
+    // Detectar si es estructura nueva: primer key no es una fecha
+    const keys = Object.keys(data);
+    const isNew = keys.length>0 && !keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
+    if(isNew){
+      Object.entries(data).forEach(([asesorKey, fechasData])=>{
+        if(soloAsesor && asesorKey!==soloAsesor) return;
+        Object.entries(fechasData).forEach(([f,d])=>{
+          if(!byFecha[f]) return;
+          byFecha[f].finalizados   += d.finalizados||0;
+          byFecha[f].contestaron   += d.contestaron||0;
+          byFecha[f].noContestaron += d.noContestaron||0;
+          byFecha[f].waEnviados    += d.waEnviados||0;
+          byFecha[f].devoluciones  += d.devoluciones||0;
+          byFecha[f].minutos       += d.minutos||0;
+        });
+      });
+    } else {
       Object.entries(data).forEach(([f,d])=>{
         if(!byFecha[f]) return;
         byFecha[f].finalizados   += d.finalizados||0;
@@ -5524,6 +5578,37 @@ function _anlCargar(){
         byFecha[f].waEnviados    += d.waEnviados||0;
         byFecha[f].devoluciones  += d.devoluciones||0;
         byFecha[f].minutos       += d.minutos||0;
+      });
+    }
+    return byFecha;
+  }
+
+  // Helper: obtener lista de asesores con sus totales del período (para comparativo)
+  function _getAsesoresPorPeriodo(data){
+    const keys = Object.keys(data);
+    const isNew = keys.length>0 && !keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
+    if(!isNew) return [];
+    return Object.entries(data).map(([asesorKey, fechasData])=>{
+      let cont=0,noCont=0,wa=0,fin=0,dev=0,min=0;
+      const nombre = fechasData[Object.keys(fechasData)[0]]?.asesorNombre || asesorKey;
+      fechas.forEach(f=>{ const d=fechasData[f]||{}; cont+=d.contestaron||0; noCont+=d.noContestaron||0; wa+=d.waEnviados||0; fin+=d.finalizados||0; dev+=d.devoluciones||0; min+=d.minutos||0; });
+      return {asesorKey, nombre, cont, noCont, wa, fin, dev, min};
+    }).filter(x=>x.cont+x.noCont+x.wa+x.fin>0);
+  }
+
+  Promise.all(promises).then(results=>{
+    const byFecha = {};
+    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,minutos:0}; });
+
+    results.forEach(({data})=>{
+      const parcial = _aplanarHistorial(data, asesorFilter);
+      Object.entries(parcial).forEach(([f,d])=>{
+        byFecha[f].finalizados   += d.finalizados;
+        byFecha[f].contestaron   += d.contestaron;
+        byFecha[f].noContestaron += d.noContestaron;
+        byFecha[f].waEnviados    += d.waEnviados;
+        byFecha[f].devoluciones  += d.devoluciones;
+        byFecha[f].minutos       += d.minutos;
       });
     });
 
@@ -5642,31 +5727,48 @@ function _anlCargar(){
       }
     });
 
-    // ── BARRAS COMPARATIVO POR ASESOR (solo si "todos los usuarios") ──
+    // ── BARRAS COMPARATIVO ──
+    // Si hay tienda seleccionada → comparar asesores de esa tienda
+    // Si no hay tienda → comparar tiendas entre sí
     const compWrap = document.getElementById('anl-comparativo-wrap');
-    if(!userFilter && _admUsuariosCache.length>1){
-      compWrap.style.display='block';
-      // Para cada usuario calcular tasa de contacto y tasa de cierre en el período
-      const perUser = results.map(({u, data})=>{
+    const compTitle = compWrap.querySelector('.anl-card-title');
+    let perComp = [];
+
+    if(userFilter && !asesorFilter){
+      // Comparar asesores dentro de la tienda
+      const tiendaData = results[0]?.data||{};
+      perComp = _getAsesoresPorPeriodo(tiendaData).map(x=>({
+        name: x.nombre,
+        tCont: Math.round(x.cont/(x.cont+x.noCont+x.wa||1)*100),
+        tCierre: Math.round(x.fin/(x.cont+x.noCont+x.wa||1)*100),
+      }));
+      compTitle.textContent = 'Comparativo de asesores — '+tiendaName;
+    } else if(!userFilter){
+      // Comparar tiendas
+      perComp = results.map(({u, data})=>{
+        const tot = _aplanarHistorial(data,'');
         let cont=0,noCont=0,wa=0,fin=0;
-        fechas.forEach(f=>{ const d=data[f]||{}; cont+=d.contestaron||0; noCont+=d.noContestaron||0; wa+=d.waEnviados||0; fin+=d.finalizados||0; });
-        const base=cont+noCont+wa||1;
+        Object.values(tot).forEach(d=>{cont+=d.contestaron;noCont+=d.noContestaron;wa+=d.waEnviados;fin+=d.finalizados;});
         return {
-          name:(_admUsuariosCache.find(x=>x.username===u)||{}).asesor||u,
-          tCont: Math.round(cont/base*100),
-          tCierre: Math.round(fin/base*100),
+          name:(_admUsuariosCache.find(x=>x.username===u)||{}).tienda||u,
+          tCont:Math.round(cont/(cont+noCont+wa||1)*100),
+          tCierre:Math.round(fin/(cont+noCont+wa||1)*100),
         };
       }).filter(x=>x.tCont>0||x.tCierre>0);
+      compTitle.textContent = 'Comparativo de tiendas';
+    }
 
+    if(perComp.length>1){
+      compWrap.style.display='block';
       const ctxComp = document.getElementById('anl-comparativo-chart').getContext('2d');
       if(_anlCompChart) _anlCompChart.destroy();
       _anlCompChart = new Chart(ctxComp,{
         type:'bar',
         data:{
-          labels: perUser.map(x=>x.name),
+          labels: perComp.map(x=>x.name),
           datasets:[
-            {label:'Tasa de contacto %', data:perUser.map(x=>x.tCont),  backgroundColor:'#60a5fa55',borderColor:'#60a5fa',borderWidth:2,borderRadius:6},
-            {label:'Tasa de cierre %',   data:perUser.map(x=>x.tCierre),backgroundColor:'#4ade8055',borderColor:'#4ade80',borderWidth:2,borderRadius:6},
+            {label:'Tasa de contacto %', data:perComp.map(x=>x.tCont),  backgroundColor:'#60a5fa55',borderColor:'#60a5fa',borderWidth:2,borderRadius:6},
+            {label:'Tasa de cierre %',   data:perComp.map(x=>x.tCierre),backgroundColor:'#4ade8055',borderColor:'#4ade80',borderWidth:2,borderRadius:6},
           ]
         },
         options:{
@@ -5682,8 +5784,7 @@ function _anlCargar(){
         }
       });
     } else {
-      compWrap.style.display = userFilter ? 'none' : 'block';
-      if(!userFilter&&_admUsuariosCache.length<=1) document.getElementById('anl-comparativo-chart').parentElement.querySelector('.anl-card-title').textContent='Comparativo (agrega más asesores para ver)';
+      compWrap.style.display = 'none';
     }
 
     // Chart — todas las gestiones como barras agrupadas
@@ -5714,15 +5815,17 @@ function _anlCargar(){
       }
     });
 
-    // Tabla detalle (solo si hay un usuario seleccionado)
+    // Tabla detalle (solo si hay tienda o asesor seleccionado)
     if(!userFilter){
-      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Selecciona un usuario específico para ver el detalle día a día</div>';
+      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Selecciona una tienda para ver el detalle día a día</div>';
       return;
     }
-    const userHist = results[0]?.data || {};
-    const diasFiltrados = fechas.filter(f=>userHist[f]).reverse();
+    // Obtener datos aplanados del período ya filtrados
+    const userHistFlat = _aplanarHistorial(results[0]?.data||{}, asesorFilter);
+    const diasFiltrados = fechas.filter(f=>userHistFlat[f]&&(userHistFlat[f].contestaron||userHistFlat[f].finalizados||userHistFlat[f].waEnviados)).reverse();
+    const userHist = userHistFlat;
     if(!diasFiltrados.length){
-      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Sin historial en este período para este usuario</div>';
+      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Sin historial en este período'+(asesorFilter?' para este asesor':' para esta tienda')+'</div>';
       return;
     }
     let rows='';
