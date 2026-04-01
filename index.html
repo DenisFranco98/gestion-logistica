@@ -1187,15 +1187,6 @@ function cfgCheckPrimerUso(){
   document.querySelector('header h1').textContent='\uD83D\uDE9A '+(CFG.negocio||'Gestión Logística');
 }
 
-function cfgDetectarTiendas(){
-  // Si el config guardado es del formato viejo (sin mapeoAT), forzar re-configuración
-  const hayMapeoGuardado=CFG.mapeoAT&&Object.keys(CFG.mapeoAT).length>0;
-  const sinMapeo=_exccelTiendas.filter(v=>!Object.prototype.hasOwnProperty.call(CFG.mapeoAT||{},v));
-  const vaciaSinMapeo=_hayVaciasAT&&!Object.prototype.hasOwnProperty.call(CFG.mapeoAT||{},'__empty__');
-  const esPrimerUso=!localStorage.getItem(LS_CFG)||!hayMapeoGuardado;
-  if(!esPrimerUso&&!sinMapeo.length&&!vaciaSinMapeo)return;
-  abrirConfig('tiendas');
-}
 
 let _cfgOnboarding=false;
 let _cfgSeccionActual='menu';
@@ -1660,17 +1651,20 @@ function crearFilaNovedad(p){
 
 // ── HELPERS ────────────────────────────────────────────────────────────
 function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
-function toast(msg,dur=2200){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function toast(msg,dur=2200){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
 
-function copiarTexto(txt){
-  navigator.clipboard.writeText(txt).catch(()=>{const e=document.createElement('textarea');e.value=txt;document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e);});
-  toast('\uD83D\uDCCB Copiado: '+txt);
+function _copiar(txt,cb){
+  navigator.clipboard.writeText(txt).then(()=>{if(cb)cb();}).catch(()=>{
+    const e=document.createElement('textarea');e.value=txt;document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e);
+    if(cb)cb();
+  });
 }
+
+function copiarTexto(txt){ _copiar(txt,()=>toast('\uD83D\uDCCB Copiado: '+txt)); }
 
 function copiarTel(tel){
   const d=tel.replace(/^57/,'');
-  navigator.clipboard.writeText(d).catch(()=>{const e=document.createElement('textarea');e.value=d;document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e);});
-  toast('\uD83D\uDCCB Copiado: '+d);
+  _copiar(d,()=>toast('\uD83D\uDCCB Copiado: '+d));
 }
 
 function _fmtFecha(val){
@@ -2006,8 +2000,7 @@ function restaurar(){
     document.getElementById('upload-zone').style.display='none';
     document.getElementById('main').style.display='block';
     document.getElementById('right-panel').style.display='flex';
-    renderAll();toast('✅ Sesión restaurada');
-    _fbRestaurarGestiones();
+    _fbRestaurarGestiones(()=>{renderAll();toast('✅ Sesión restaurada');});
   }catch(e){alert('No se pudo restaurar.');}
 }
 
@@ -2082,10 +2075,12 @@ function _cargarArchivo(file){
     document.getElementById('upload-zone').style.display='none';
     document.getElementById('main').style.display='block';
     document.getElementById('right-panel').style.display='flex';
-    guardar();renderAll();
+    guardar();
     setTimeout(mostrarBienvenida,300);
-    toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · 📝 '+recuperadas+' con historial de notas':''));
-    _fbRestaurarGestiones();
+    _fbRestaurarGestiones(()=>{
+      renderAll();
+      toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · 📝 '+recuperadas+' con historial de notas':''));
+    });
   };
   reader.readAsArrayBuffer(file);
 }
@@ -2977,11 +2972,7 @@ function getNovSolucionTexto(p){
 
 function copiarSolucionNov(p, btnId){
   const texto=getNovSolucionTexto(p);
-  navigator.clipboard.writeText(texto).catch(()=>{
-    const e=document.createElement('textarea');e.value=texto;
-    document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e);
-  });
-  toast('📋 Texto de solución copiado — pégalo en Dropi', 3000);
+  _copiar(texto,()=>toast('📋 Texto de solución copiado — pégalo en Dropi', 3000));
   const btn=document.getElementById(btnId);
   if(btn){
     const orig=btn.innerHTML;
@@ -3109,9 +3100,7 @@ function crearCardNovedad(p){
 function copiarNotaNov(id){
   const g=gestiones[id]||{};
   if(!g.nota){toast('Sin nota para copiar');return;}
-  navigator.clipboard.writeText(g.nota).then(()=>toast('\uD83D\uDCCB Nota copiada')).catch(()=>{
-    const ta=document.createElement('textarea');ta.value=g.nota;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('\uD83D\uDCCB Nota copiada');
-  });
+  _copiar(g.nota,()=>toast('\uD83D\uDCCB Nota copiada'));
 }
 
 function marcarWANov(id){ultimaGestion=Date.now();
@@ -3343,7 +3332,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
               setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=orig;},1400);
             }
             toast('📝 Escribe lo que dijo el cliente antes de finalizar');
-          },50);
+          },150);
         }
       } else {
         animarCompletado(id,()=>renderAll(),'✅');
@@ -3533,11 +3522,7 @@ function btnLlamarHtml(id, telefono){
 function llamarIRIS(telefono, btnId){
   const btn=document.getElementById(btnId);
   const copiar=()=>{
-    navigator.clipboard.writeText(telefono).catch(()=>{
-      const e=document.createElement('textarea');e.value=telefono;
-      document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e);
-    });
-    toast('📋 Número copiado — ve a IRIS y realiza la llamada', 3500);
+    _copiar(telefono,()=>toast('📋 Número copiado — ve a IRIS y realiza la llamada', 3500));
     if(btn){
       btn.textContent='✅ Copiado';
       btn.style.background='#16a34a';
@@ -4330,10 +4315,7 @@ function CAS_SIN_MOVIMIENTO(){return CFG.casSinMovimiento||CAS_DEFAULT_SIN_MOVIM
 function CAS_NOVEDAD(){return CFG.casNovedad||CAS_DEFAULT_NOVEDAD;}
 
 function casCopiar(texto, btnId){
-  navigator.clipboard.writeText(texto).catch(()=>{
-    const e=document.createElement('textarea');e.value=texto;
-    document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e);
-  });
+  _copiar(texto);
   const btn=document.getElementById(btnId);
   if(btn){
     const orig=btn.innerHTML;
@@ -4986,6 +4968,7 @@ const _db = firebase.database();
     const ref = _db.ref('presence/' + username);
     ref.set({ online: true, lastSeen: Date.now(), loginTime: Date.now(), tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0 });
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
     _heartbeatInterval = setInterval(()=>{ ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
   }
 
@@ -5112,11 +5095,11 @@ function _fbSyncGestion(id){
   _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
 }
 
-function _fbRestaurarGestiones(){
-  if(typeof _db==='undefined'||!window._currentUsername)return;
+function _fbRestaurarGestiones(cb){
+  if(typeof _db==='undefined'||!window._currentUsername){if(cb)cb();return;}
   _db.ref('gestiones_sync/'+window._currentUsername).once('value',snap=>{
     const fb=snap.val()||{};
-    if(!Object.keys(fb).length)return;
+    if(!Object.keys(fb).length){if(cb)cb();return;}
     let changed=false;
     pedidos.forEach(p=>{
       if(!p.dropiId)return;
@@ -5136,7 +5119,8 @@ function _fbRestaurarGestiones(){
         }
       }
     });
-    if(changed){guardar();renderAll();toast('☁️ Gestiones sincronizadas desde la nube');}
+    if(changed){guardar();toast('☁️ Gestiones sincronizadas desde la nube');}
+    if(cb)cb(); else if(changed)renderAll();
   });
 }
 
