@@ -5343,13 +5343,13 @@ function _admCargarDashboard(){
               : (p.lastSeen ? '⚫ '+_fmtTiempo(p.lastSeen) : '⚫ Sin conexión')
             )+
           '</div>'+
-          (u.username!=='3D Company'
-            ? '<div class="adm-user-row-actions">'+
-                (isOnline ? '<button class="adm-row-btn" style="background:#78350f;color:#fcd34d;" onclick="_admForzarLogout(\''+u.username+'\')" title="Cerrar sesión">⏻</button>' : '')+
-                '<button class="adm-row-btn" onclick="_admAbrirEditar(\''+u.username+'\',\''+(u.asesor||'')+'\',\''+(u.tienda||'')+'\')" title="Editar">✏️</button>'+
-                '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+u.username+'\')" title="Eliminar">✕</button>'+
-              '</div>'
-            : '');
+          '<div class="adm-user-row-actions">'+
+            (isOnline ? '<button class="adm-row-btn" style="background:#78350f;color:#fcd34d;" onclick="_admForzarLogout(\''+u.username+'\')" title="Cerrar sesión">⏻</button>' : '')+
+            (u.username!=='3D Company'
+              ? '<button class="adm-row-btn" onclick="_admAbrirEditar(\''+u.username+'\',\''+(u.asesor||'')+'\',\''+(u.tienda||'')+'\')" title="Editar">✏️</button>'+
+                '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+u.username+'\')" title="Eliminar">✕</button>'
+              : '')+
+          '</div>'
         list.appendChild(row);
       });
     });
