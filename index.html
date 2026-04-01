@@ -1742,7 +1742,7 @@ function crearFila(p,est,esGest){
   }else if(est.key==='rechazado'&&p.dias!=null){
     diaVal='🚫 '+p.dias+' días';diaColor='#be123c';
   }else if(p.dias!=null&&p.dias>0){diaVal=p.dias+'d';}
-  const gestIco=g.guia_generada_hoy?'📦':g.transito_sin_gestion?'🚚':g.rechazado_gestionado?'✅':g.rechazado_sin_gestion?'🚫':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
+  const gestIco=g.guia_generada_hoy?'📦':g.transito_gestionado?'✅':g.transito_sin_gestion?'🚚':g.rechazado_gestionado?'✅':g.rechazado_sin_gestion?'🚫':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
   const row=document.createElement('div');
   row.className='card-fila';
   const _tcFila=p.tienda?getTiendaColor(p.tienda):null;
@@ -2138,7 +2138,7 @@ function estaCompleta(p){
   const g=gestiones[p.id]||{};
   if(g.devolucion)return true;
   if(p.estadoKey==='reparto'&&g.guia_generada_hoy)return true;
-  if(p.estadoKey==='transito'){return!!(g.wa_enviado)||!!(g.transito_sin_gestion);}
+  if(p.estadoKey==='transito'){return!!(g.wa_enviado)||!!(g.transito_sin_gestion)||!!(g.transito_gestionado);}
   if(p.estadoKey==='rechazado'){return!!(g.rechazado_gestionado)||!!(g.rechazado_sin_gestion);}
   if(g.gestion_final)return true; // compatibilidad con versiones anteriores
   const ll=g.llamada;
@@ -2897,7 +2897,7 @@ function crearCard(p,est,esGest){
         (telDisplay?'<div class="card-phone" onclick="copiarTel(\''+p.telefono+'\')">📞 '+telDisplay+'<span class="copy-hint">copiar</span></div>':'<div style="font-size:.78rem;color:#94a3b8">Sin teléfono</div>')+
       '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">'+
-        (g.devolucion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#fff1f2;color:#be123c">🔄 Devolución</span>':g.guia_generada_hoy?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#eff6ff;color:#1d4ed8">📦 Sin gestión</span>':g.transito_sin_gestion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#ecfeff;color:#0891b2">🚚 Sin novedad</span>':g.rechazado_gestionado?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0fdf4;color:#16a34a">✅ Gestionado</span>':g.rechazado_sin_gestion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#fff1f2;color:#be123c">🚫 Sin gestión</span>':esGest?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0f5f2;color:#2d5a3d">✅ Listo</span>':'')+
+        (g.devolucion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#fff1f2;color:#be123c">🔄 Devolución</span>':g.guia_generada_hoy?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#eff6ff;color:#1d4ed8">📦 Sin gestión</span>':g.transito_gestionado?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0fdf4;color:#16a34a">✅ Gestionado</span>':g.transito_sin_gestion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#ecfeff;color:#0891b2">🚚 Sin novedad</span>':g.rechazado_gestionado?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0fdf4;color:#16a34a">✅ Gestionado</span>':g.rechazado_sin_gestion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#fff1f2;color:#be123c">🚫 Sin gestión</span>':esGest?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0f5f2;color:#2d5a3d">✅ Listo</span>':'')+
         (ncPend&&intentos>0?'<span class="intentos-badge">📵 '+intentos+' intento'+(intentos>1?'s':'')+'</span>':'')+
       '</div>'+
     '</div>';
@@ -3075,7 +3075,10 @@ function crearCard(p,est,esGest){
       btnExp.onclick=exportarPendientes;
       sec.appendChild(btnExp);
     } else if(est.key==='transito'){
-      html+='<button id="btn-tsg-'+p.id+'" onclick="marcarTransitoSinGestion('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #0891b2;background:transparent;color:#0891b2;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;transition:all .25s;">🚚 En tránsito sin novedad</button>';
+      html+='<div style="display:flex;gap:8px;margin-bottom:8px;">'+
+        '<button id="btn-tg-'+p.id+'" onclick="marcarTransitoGestionado('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #16a34a;background:transparent;color:#16a34a;cursor:pointer;transition:all .25s;">✅ Gestionado</button>'+
+        '<button id="btn-tsg-'+p.id+'" onclick="marcarTransitoSinGestion('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #0891b2;background:transparent;color:#0891b2;cursor:pointer;transition:all .25s;">🚚 Sin novedad</button>'+
+      '</div>';
       const wi=getWAInfo(p,est.key);
       html+=waBoton(p,est.key,wi,g.wa_enviado);
       if(g.wa_enviado&&!g.mensajes_listos&&!g.gestion_final){
@@ -3613,6 +3616,17 @@ function marcarGuiaGeneradaHoy(id, btn){
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);renderAll();
   toast('📦 Guía generada hoy — no cuenta como gestionado');
+}
+
+function marcarTransitoGestionado(id, btn){
+  if(btn){ btn.disabled=true; btn.style.opacity='0.5'; }
+  ultimaGestion=Date.now();
+  if(!gestiones[id])gestiones[id]={};
+  gestiones[id].transito_gestionado=true;
+  delete gestiones[id].transito_sin_gestion;
+  gestiones[id]._ts=Date.now();
+  guardar();_fbSyncGestion(id);
+  animarCompletado(id,()=>renderAll(),'✅');
 }
 
 function marcarTransitoSinGestion(id, btn){
