@@ -5132,6 +5132,10 @@ const _db = firebase.database();
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
     if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
     _heartbeatInterval = setInterval(()=>{ ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
+    // Marcar offline si el usuario cierra o recarga la pestaña sin hacer logout
+    window.addEventListener('beforeunload', ()=>{
+      if(_currentUsername) _db.ref('presence/'+_currentUsername).update({ online: false, lastSeen: Date.now() });
+    });
     // Escuchar si el admin fuerza cierre de sesión
     ref.child('force_logout').on('value', snap=>{
       if(snap.val()===true){
@@ -5148,9 +5152,14 @@ const _db = firebase.database();
   }
 
   function _limpiarPresencia(){
-    if(_currentUsername) _db.ref('presence/'+_currentUsername).update({ online: false, lastSeen: Date.now() });
+    if(_currentUsername){
+      const ref = _db.ref('presence/'+_currentUsername);
+      ref.onDisconnect().cancel();
+      ref.update({ online: false, lastSeen: Date.now() });
+    }
     if(_heartbeatInterval){ clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
     _currentUsername = null;
+    window._currentUsername = null;
   }
 
   window._fbIncrementarGestion = function(){
