@@ -516,7 +516,48 @@ header h1{font-size:1.05rem;font-weight:700;}
 .adm-header h1{color:white;font-size:1.1rem;font-weight:800;}
 .adm-logout{background:#dc2626;color:white;border:none;padding:7px 16px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;}
 .adm-body{padding:24px 28px;max-width:1100px;margin:0 auto;}
-.adm-stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:28px;}
+/* ===== ADMIN LAYOUT CON SIDEBAR ===== */
+.adm-layout{display:flex;min-height:calc(100vh - 58px);}
+.adm-sidebar{width:190px;background:#080f1a;border-right:1.5px solid #1e293b;flex-shrink:0;padding:20px 10px;display:flex;flex-direction:column;gap:4px;}
+.adm-sidebar-label{color:#334155;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:6px 12px 2px;}
+.adm-nav-item{width:100%;background:none;border:none;color:#64748b;padding:10px 14px;border-radius:10px;font-size:.78rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:9px;text-align:left;transition:all .15s;border-left:3px solid transparent;}
+.adm-nav-item:hover{background:#1e293b;color:#cbd5e1;}
+.adm-nav-item.active{background:#1e293b;color:white;border-left-color:#3b82f6;}
+.adm-nav-icon{font-size:1rem;width:18px;text-align:center;}
+.adm-main{flex:1;padding:24px 28px;overflow-y:auto;background:#0d1623;}
+.adm-stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;}
+/* ===== USER LIST (tab usuarios) ===== */
+.adm-user-list{display:flex;flex-direction:column;gap:8px;}
+.adm-user-row{background:#1e293b;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid #334155;transition:border-color .15s;}
+.adm-user-row.online{border-color:#16a34a;}
+.adm-user-row-info{flex:1;min-width:0;}
+.adm-user-row-name{color:#f1f5f9;font-size:.85rem;font-weight:700;}
+.adm-user-row-meta{color:#64748b;font-size:.68rem;margin-top:2px;}
+.adm-user-row-status{font-size:.68rem;font-weight:600;white-space:nowrap;}
+.adm-user-row-actions{display:flex;gap:5px;flex-shrink:0;}
+.adm-row-btn{background:#334155;color:#94a3b8;border:none;border-radius:7px;padding:5px 10px;font-size:.7rem;font-weight:700;cursor:pointer;transition:all .15s;}
+.adm-row-btn:hover{background:#475569;color:white;}
+.adm-row-btn.danger{background:#7f1d1d;color:#fca5a5;}
+.adm-row-btn.danger:hover{background:#991b1b;color:white;}
+/* ===== ANALÍTICA ===== */
+.anl-filters{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;}
+.anl-select{background:#1e293b;color:#e2e8f0;border:1.5px solid #334155;border-radius:8px;padding:8px 12px;font-size:.78rem;cursor:pointer;outline:none;}
+.anl-select:focus{border-color:#3b82f6;}
+.anl-filter-label{color:#64748b;font-size:.72rem;font-weight:700;}
+.anl-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px;}
+.anl-kpi{background:#1e293b;border-radius:12px;padding:16px;border:1.5px solid #334155;text-align:center;}
+.anl-kpi-val{font-size:1.6rem;font-weight:800;color:white;line-height:1;}
+.anl-kpi-lbl{color:#64748b;font-size:.65rem;font-weight:700;margin-top:5px;text-transform:uppercase;letter-spacing:.5px;}
+.anl-card{background:#1e293b;border-radius:14px;padding:20px;border:1.5px solid #334155;margin-bottom:16px;}
+.anl-card-title{color:#94a3b8;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px;}
+.anl-table{width:100%;border-collapse:collapse;font-size:.76rem;}
+.anl-table th{color:#64748b;font-weight:700;padding:8px 10px;border-bottom:1px solid #334155;text-align:center;white-space:nowrap;}
+.anl-table th:first-child{text-align:left;}
+.anl-table td{padding:8px 10px;border-bottom:1px solid #0f172a;color:#cbd5e1;text-align:center;}
+.anl-table td:first-child{text-align:left;color:#94a3b8;font-weight:600;}
+.anl-table tr:last-child td{border-bottom:none;}
+.anl-table tr:hover td{background:#334155;}
+.anl-empty{color:#475569;font-size:.8rem;text-align:center;padding:28px;}
 .adm-stat{background:#1e293b;border-radius:14px;padding:18px 22px;flex:1;min-width:140px;border:1.5px solid #334155;}
 .adm-stat .val{font-size:2rem;font-weight:800;color:white;}
 .adm-stat .lbl{font-size:.72rem;color:#94a3b8;font-weight:600;margin-top:3px;}
@@ -603,6 +644,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 .inst-step p strong{color:#1e293b;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -612,20 +654,87 @@ header h1{font-size:1.05rem;font-weight:700;}
     <h1>🛡️ Panel de Administración</h1>
     <button class="adm-logout" onclick="_admLogout()">Cerrar sesión</button>
   </div>
-  <div class="adm-body">
-    <div class="adm-stats">
-      <div class="adm-stat"><div class="val" id="adm-stat-total">0</div><div class="lbl">Usuarios registrados</div></div>
-      <div class="adm-stat"><div class="val" id="adm-stat-online" style="color:#16a34a">0</div><div class="lbl">En línea ahora</div></div>
-      <div class="adm-stat"><div class="val" id="adm-stat-gest">0</div><div class="lbl">Gestiones hoy</div></div>
+  <div class="adm-layout">
+
+    <!-- Sidebar -->
+    <div class="adm-sidebar">
+      <div class="adm-sidebar-label">Menú</div>
+      <button class="adm-nav-item active" id="tab-btn-usuarios" onclick="_admTab('usuarios')">
+        <span class="adm-nav-icon">👥</span> Usuarios
+      </button>
+      <button class="adm-nav-item" id="tab-btn-analitica" onclick="_admTab('analitica')">
+        <span class="adm-nav-icon">📊</span> Analítica
+      </button>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <div class="adm-section-title">Usuarios</div>
-      <button class="adm-add-btn" onclick="_admAbrirAgregar()">+ Agregar usuario</button>
-    </div>
-    <div class="adm-users-grid" id="adm-users-grid">
-      <div class="adm-empty">Cargando usuarios...</div>
-    </div>
-  </div>
+
+    <!-- Main content -->
+    <div class="adm-main">
+
+      <!-- Stats siempre visibles -->
+      <div class="adm-stats">
+        <div class="adm-stat"><div class="val" id="adm-stat-total">0</div><div class="lbl">Usuarios registrados</div></div>
+        <div class="adm-stat"><div class="val" id="adm-stat-online" style="color:#16a34a">0</div><div class="lbl">En línea ahora</div></div>
+        <div class="adm-stat"><div class="val" id="adm-stat-gest">0</div><div class="lbl">Gestiones hoy</div></div>
+      </div>
+
+      <!-- TAB: USUARIOS -->
+      <div id="adm-tab-usuarios">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div class="adm-section-title">Usuarios registrados</div>
+          <button class="adm-add-btn" onclick="_admAbrirAgregar()">+ Agregar usuario</button>
+        </div>
+        <div class="adm-user-list" id="adm-users-list">
+          <div class="adm-empty">Cargando usuarios...</div>
+        </div>
+      </div>
+
+      <!-- TAB: ANALÍTICA -->
+      <div id="adm-tab-analitica" style="display:none;">
+        <div style="margin-bottom:20px;">
+          <div class="adm-section-title" style="margin-bottom:14px;">Rendimiento por asesor</div>
+          <div class="anl-filters">
+            <div>
+              <div class="anl-filter-label" style="margin-bottom:4px;">Usuario</div>
+              <select class="anl-select" id="anl-user-filter" onchange="_anlCargar()">
+                <option value="">Todos los usuarios</option>
+              </select>
+            </div>
+            <div>
+              <div class="anl-filter-label" style="margin-bottom:4px;">Métrica</div>
+              <select class="anl-select" id="anl-metric-filter" onchange="_anlCargar()">
+                <option value="finalizados">Finalizados</option>
+                <option value="contestaron">Contestaron</option>
+                <option value="noContestaron">No contestaron</option>
+                <option value="waEnviados">WA enviados</option>
+                <option value="devoluciones">Devoluciones</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="anl-grid" id="anl-kpis">
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-fin">—</div><div class="anl-kpi-lbl">Finalizados (14d)</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-cont">—</div><div class="anl-kpi-lbl">Contestaron (14d)</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-wa">—</div><div class="anl-kpi-lbl">WA enviados (14d)</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-gpm" style="font-size:1.2rem;">—</div><div class="anl-kpi-lbl">Prom. Gest/min</div></div>
+        </div>
+
+        <!-- Chart -->
+        <div class="anl-card">
+          <div class="anl-card-title" id="anl-chart-title">Selecciona un usuario para ver la gráfica</div>
+          <canvas id="anl-chart" height="90"></canvas>
+        </div>
+
+        <!-- Tabla historial -->
+        <div class="anl-card">
+          <div class="anl-card-title">Detalle día a día — últimos 14 días</div>
+          <div id="anl-table-wrap"><div class="anl-empty">Selecciona un usuario para ver el historial</div></div>
+        </div>
+      </div>
+
+    </div><!-- /adm-main -->
+  </div><!-- /adm-layout -->
 </div>
 
 <!-- Modal editar usuario -->
@@ -5163,95 +5272,205 @@ function _fbRestaurarGestiones(cb){
 }
 
 // ===== ADMIN DASHBOARD =====
+let _anlChart = null;
+let _admUsuariosCache = [];
+
+function _admTab(tab){
+  ['usuarios','analitica'].forEach(t=>{
+    document.getElementById('adm-tab-'+t).style.display = t===tab ? 'block' : 'none';
+    document.getElementById('tab-btn-'+t).classList.toggle('active', t===tab);
+  });
+  if(tab==='analitica') _anlInicializar();
+}
+
 function _admCargarDashboard(){
-  const grid = document.getElementById('adm-users-grid');
+  const list = document.getElementById('adm-users-list');
   _db.ref('presence').on('value', snapPresence => {
     _db.ref('users').once('value', snapUsers => {
-      _db.ref('gestiones_sync').once('value', snapGest => {
-        const presencia = snapPresence.val() || {};
-        const usuarios = Object.values(snapUsers.val() || {});
-        const gestSync = snapGest.val() || {};
-        if(!usuarios.find(u=>u.username==='3D Company'))
-          usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
+      const presencia = snapPresence.val() || {};
+      const usuarios = Object.values(snapUsers.val() || {});
+      if(!usuarios.find(u=>u.username==='3D Company'))
+        usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
 
-        const online = Object.values(presencia).filter(p=>p.online).length;
-        const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
-        document.getElementById('adm-stat-total').textContent = usuarios.length;
-        document.getElementById('adm-stat-online').textContent = online;
-        document.getElementById('adm-stat-gest').textContent = totalGest;
+      _admUsuariosCache = usuarios;
 
-        grid.innerHTML = '';
-        if(!usuarios.length){ grid.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
+      const online = Object.values(presencia).filter(p=>p.online).length;
+      const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
+      document.getElementById('adm-stat-total').textContent = usuarios.length;
+      document.getElementById('adm-stat-online').textContent = online;
+      document.getElementById('adm-stat-gest').textContent = totalGest;
 
-        usuarios.forEach(u => {
-          const p = presencia[u.username] || {};
-          const isOnline = !!p.online;
-          const gest = gestSync[u.username] || {};
-          const gestArr = Object.values(gest);
-          const totalGestUser = p.sessionGestiones || 0;
-          const contestaron = gestArr.filter(g=>g.llamada==='contestó').length;
-          const noContestaron = gestArr.filter(g=>g.llamada==='no_contestó').length;
-          const waEnv = gestArr.filter(g=>g.wa_enviado).length;
-          const finalizados = gestArr.filter(g=>g.gestion_final).length;
-          const devoluciones = gestArr.filter(g=>g.devolucion).length;
-          const minActivo = isOnline&&p.loginTime ? Math.max(1,Math.floor((Date.now()-p.loginTime)/60000)) : null;
-          const gpm = (minActivo&&totalGestUser) ? (totalGestUser/minActivo).toFixed(2) : null;
-          const rendColor = !gpm?'#64748b':gpm>=1?'#16a34a':gpm>=0.5?'#d97706':'#dc2626';
+      list.innerHTML = '';
+      if(!usuarios.length){ list.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
 
-          const resumenHtml =
-            '<div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;">'+
-              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
-                '<div style="font-size:.8rem;font-weight:700;color:#1e293b;">'+contestaron+'</div>'+
-                '<div style="font-size:.62rem;color:#64748b;">Contestaron</div>'+
-              '</div>'+
-              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
-                '<div style="font-size:.8rem;font-weight:700;color:#1e293b;">'+noContestaron+'</div>'+
-                '<div style="font-size:.62rem;color:#64748b;">No contest.</div>'+
-              '</div>'+
-              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
-                '<div style="font-size:.8rem;font-weight:700;color:#1e293b;">'+waEnv+'</div>'+
-                '<div style="font-size:.62rem;color:#64748b;">WA enviados</div>'+
-              '</div>'+
-              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
-                '<div style="font-size:.8rem;font-weight:700;color:#16a34a;">'+finalizados+'</div>'+
-                '<div style="font-size:.62rem;color:#64748b;">Finalizados</div>'+
-              '</div>'+
-              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
-                '<div style="font-size:.8rem;font-weight:700;color:#be123c;">'+devoluciones+'</div>'+
-                '<div style="font-size:.62rem;color:#64748b;">Devoluciones</div>'+
-              '</div>'+
-              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
-                '<div style="font-size:.8rem;font-weight:700;color:'+rendColor+';">'+(gpm?gpm+'/min':'—')+'</div>'+
-                '<div style="font-size:.62rem;color:#64748b;">Gest./min</div>'+
-              '</div>'+
-            '</div>';
+      // Ordenar: online primero
+      usuarios.sort((a,b)=>{
+        const ao = !!(presencia[a.username]||{}).online;
+        const bo = !!(presencia[b.username]||{}).online;
+        return bo - ao;
+      });
 
-          const card = document.createElement('div');
-          card.className = 'adm-user-card'+(isOnline?' online':'');
-          card.innerHTML =
-            '<div class="adm-user-top">'+
-              '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
-              '<div><div class="adm-user-name">'+(u.asesor||u.username)+'</div>'+
-              '<div class="adm-user-tienda">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div></div>'+
-            '</div>'+
-            '<div class="adm-user-stats">'+
-              '<div class="adm-user-stat"><div class="v">'+(isOnline?'🟢':'⚫')+'</div><div class="l">'+(isOnline?'En línea':'Fuera')+'</div></div>'+
-              '<div class="adm-user-stat"><div class="v">'+totalGestUser+'</div><div class="l">Gestiones hoy</div></div>'+
-              '<div class="adm-user-stat"><div class="v">'+(isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):'—')+'</div><div class="l">Tiempo activo</div></div>'+
-            '</div>'+
-            '<div class="adm-user-meta">'+(isOnline?'🕐 Conectado desde: '+_fmtTiempo(p.loginTime):'🕐 Última vez: '+(p.lastSeen?_fmtTiempo(p.lastSeen):'—'))+'</div>'+
-            resumenHtml+
-            '<button class="adm-hist-btn" onclick="_admToggleHistorial(this,\''+u.username+'\')">📊 Ver historial <span style="font-size:.8em;opacity:.6;">▼</span></button>'+
-            '<div class="adm-hist-wrap" id="hist-'+u.username+'"><div class="adm-hist-loading">Cargando...</div></div>'+
-            (u.username!=='3D Company'?
-              '<div style="display:flex;gap:6px;margin-top:10px;">'+
-                '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;" onclick="_admAbrirEditar(\''+u.username+'\',\''+( u.asesor||'')+'\',\''+( u.tienda||'')+'\')">✏️ Editar</button>'+
-                '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;background:#7f1d1d;" onclick="_admEliminarUsuario(\''+u.username+'\')">✕ Eliminar</button>'+
-              '</div>':'');
-          grid.appendChild(card);
-        });
+      usuarios.forEach(u => {
+        const p = presencia[u.username] || {};
+        const isOnline = !!p.online;
+        const totalGestUser = p.sessionGestiones || 0;
+        const tiempoActivo = isOnline&&p.loginTime ? _fmtDuracion(Date.now()-p.loginTime) : null;
+
+        const row = document.createElement('div');
+        row.className = 'adm-user-row' + (isOnline ? ' online' : '');
+        row.innerHTML =
+          '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
+          '<div class="adm-user-row-info">'+
+            '<div class="adm-user-row-name">'+(u.asesor||u.username)+'</div>'+
+            '<div class="adm-user-row-meta">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div>'+
+          '</div>'+
+          '<div class="adm-user-row-status" style="color:'+(isOnline?'#4ade80':'#475569')+';">'+
+            (isOnline
+              ? '🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:'')+(totalGestUser?' · '+totalGestUser+' gest.':'')
+              : (p.lastSeen ? '⚫ '+_fmtTiempo(p.lastSeen) : '⚫ Sin conexión')
+            )+
+          '</div>'+
+          (u.username!=='3D Company'
+            ? '<div class="adm-user-row-actions">'+
+                '<button class="adm-row-btn" onclick="_admAbrirEditar(\''+u.username+'\',\''+(u.asesor||'')+'\',\''+(u.tienda||'')+'\')" title="Editar">✏️</button>'+
+                '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+u.username+'\')" title="Eliminar">✕</button>'+
+              '</div>'
+            : '');
+        list.appendChild(row);
       });
     });
+  });
+}
+
+// ===== ANALÍTICA =====
+function _anlInicializar(){
+  const sel = document.getElementById('anl-user-filter');
+  // Poblar selector de usuarios
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todos los usuarios</option>';
+  _admUsuariosCache.forEach(u=>{
+    const opt = document.createElement('option');
+    opt.value = u.username;
+    opt.textContent = u.asesor || u.username;
+    if(u.username===current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  _anlCargar();
+}
+
+function _anlCargar(){
+  const userFilter = document.getElementById('anl-user-filter').value;
+  const metrica = document.getElementById('anl-metric-filter').value;
+  const metricaLabel = {finalizados:'Finalizados',contestaron:'Contestaron',noContestaron:'No contestaron',waEnviados:'WA enviados',devoluciones:'Devoluciones'}[metrica];
+
+  document.getElementById('anl-chart-title').textContent =
+    (userFilter ? (_admUsuariosCache.find(u=>u.username===userFilter)||{asesor:userFilter}).asesor : 'Todos los usuarios')
+    + ' — ' + metricaLabel + ' (últimos 14 días)';
+
+  // Calcular rango de fechas: últimos 14 días
+  const fechas = [];
+  for(let i=13;i>=0;i--){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    fechas.push(d.toISOString().slice(0,10));
+  }
+
+  // Leer historial_diario
+  const users = userFilter ? [userFilter] : _admUsuariosCache.map(u=>u.username);
+  const promises = users.map(u => _db.ref('historial_diario/'+u).orderByKey().limitToLast(14).once('value').then(s=>({u, data:s.val()||{}})));
+
+  Promise.all(promises).then(results=>{
+    // Agregar datos por fecha
+    const byFecha = {};
+    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,minutos:0,dias:0}; });
+
+    results.forEach(({data})=>{
+      Object.entries(data).forEach(([f,d])=>{
+        if(!byFecha[f]) return;
+        byFecha[f].finalizados += d.finalizados||0;
+        byFecha[f].contestaron += d.contestaron||0;
+        byFecha[f].noContestaron += d.noContestaron||0;
+        byFecha[f].waEnviados += d.waEnviados||0;
+        byFecha[f].devoluciones += d.devoluciones||0;
+        byFecha[f].minutos += d.minutos||0;
+        byFecha[f].dias++;
+      });
+    });
+
+    const vals = fechas.map(f=>byFecha[f][metrica]||0);
+    const labels = fechas.map(f=>{ const [,m,d]=f.split('-'); return d+'/'+m; });
+
+    // KPIs
+    const tot = (k)=>Object.values(byFecha).reduce((s,d)=>s+d[k],0);
+    const totMin = tot('minutos');
+    const totFin = tot('finalizados');
+    const gpm = totMin>0 ? (totFin/totMin).toFixed(2) : '—';
+    document.getElementById('kpi-fin').textContent = tot('finalizados');
+    document.getElementById('kpi-cont').textContent = tot('contestaron');
+    document.getElementById('kpi-wa').textContent = tot('waEnviados');
+    document.getElementById('kpi-gpm').textContent = gpm+(gpm!=='—'?'/min':'');
+    document.getElementById('kpi-gpm').style.color = gpm==='—'?'white':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
+
+    // Chart
+    const ctx = document.getElementById('anl-chart').getContext('2d');
+    if(_anlChart) _anlChart.destroy();
+    const colorMap={finalizados:'#4ade80',contestaron:'#60a5fa',noContestaron:'#f87171',waEnviados:'#a78bfa',devoluciones:'#fb923c'};
+    const color = colorMap[metrica]||'#60a5fa';
+    _anlChart = new Chart(ctx,{
+      type:'bar',
+      data:{
+        labels,
+        datasets:[{
+          label: metricaLabel,
+          data: vals,
+          backgroundColor: color+'33',
+          borderColor: color,
+          borderWidth: 2,
+          borderRadius: 6,
+          pointBackgroundColor: color,
+        }]
+      },
+      options:{
+        responsive:true,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y+' '+metricaLabel.toLowerCase()}}},
+        scales:{
+          x:{ticks:{color:'#64748b',font:{size:11}},grid:{color:'#1e293b'}},
+          y:{ticks:{color:'#64748b',font:{size:11},stepSize:1},grid:{color:'#334155'},beginAtZero:true}
+        }
+      }
+    });
+
+    // Tabla
+    if(!userFilter){
+      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Selecciona un usuario específico para ver el detalle día a día</div>';
+      return;
+    }
+    const userHist = results[0]?.data || {};
+    const dias = Object.keys(userHist).sort().reverse().slice(0,14);
+    if(!dias.length){
+      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Sin historial registrado para este usuario</div>';
+      return;
+    }
+    let rows='';
+    dias.forEach(f=>{
+      const d=userHist[f];
+      const gpmD = d.minutos>0 ? (d.finalizados/d.minutos).toFixed(2) : '—';
+      const gc = gpmD==='—'?'#64748b':gpmD>=1?'#4ade80':gpmD>=0.5?'#fbbf24':'#f87171';
+      const [y,m,dd]=f.split('-');
+      rows+='<tr>'+
+        '<td>'+dd+'/'+m+'/'+y.slice(2)+'</td>'+
+        '<td style="color:#60a5fa">'+( d.contestaron||0)+'</td>'+
+        '<td style="color:#f87171">'+( d.noContestaron||0)+'</td>'+
+        '<td style="color:#a78bfa">'+( d.waEnviados||0)+'</td>'+
+        '<td style="color:#4ade80">'+( d.finalizados||0)+'</td>'+
+        '<td style="color:#fb923c">'+( d.devoluciones||0)+'</td>'+
+        '<td>'+( d.minutos||0)+'m</td>'+
+        '<td style="color:'+gc+';font-weight:700">'+(gpmD==='—'?'—':gpmD+'/m')+'</td>'+
+      '</tr>';
+    });
+    document.getElementById('anl-table-wrap').innerHTML=
+      '<table class="anl-table">'+
+      '<thead><tr><th>Fecha</th><th>✅ Cont.</th><th>❌ No cont.</th><th>📱 WA</th><th>🏁 Final.</th><th>↩️ Dev.</th><th>⏱ Mins</th><th>G/min</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table>';
   });
 }
 
@@ -5305,55 +5524,6 @@ function _admGuardarEdicion(){
       child.ref.update(updates);
     });
     _admCerrarEditar();
-  });
-}
-
-function _admToggleHistorial(btn, username){
-  const wrap = document.getElementById('hist-'+username);
-  const isOpen = wrap.classList.contains('open');
-  wrap.classList.toggle('open');
-  const arrow = btn.querySelector('span');
-  if(arrow) arrow.textContent = isOpen ? '▼' : '▲';
-  if(!isOpen && !wrap.dataset.loaded){
-    wrap.dataset.loaded = '1';
-    _admCargarHistorial(username, wrap);
-  }
-}
-
-function _admCargarHistorial(username, wrap){
-  _db.ref('historial_diario/'+username).orderByKey().limitToLast(14).once('value', snap=>{
-    const hist = snap.val() || {};
-    const dias = Object.keys(hist).sort().reverse();
-    if(!dias.length){
-      wrap.innerHTML='<div class="adm-hist-loading">Sin historial registrado aún</div>';
-      return;
-    }
-    let rows = '';
-    dias.forEach(fecha=>{
-      const d = hist[fecha];
-      const total = (d.contestaron||0)+(d.noContestaron||0)+(d.waEnviados||0)+(d.finalizados||0);
-      const gpm = d.minutos>0 ? (d.finalizados/d.minutos).toFixed(2) : '—';
-      const gpmColor = gpm==='—'?'#64748b':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
-      const [y,m,dd] = fecha.split('-');
-      rows +=
-        '<tr>'+
-        '<td>'+dd+'/'+m+'</td>'+
-        '<td>'+( d.contestaron||0)+'</td>'+
-        '<td>'+( d.noContestaron||0)+'</td>'+
-        '<td>'+( d.waEnviados||0)+'</td>'+
-        '<td style="color:#4ade80;">'+( d.finalizados||0)+'</td>'+
-        '<td style="color:#f87171;">'+( d.devoluciones||0)+'</td>'+
-        '<td>'+( d.minutos||0)+'m</td>'+
-        '<td class="gpm-cell" style="color:'+gpmColor+';">'+(gpm==='—'?'—':gpm+'/m')+'</td>'+
-        '</tr>';
-    });
-    wrap.innerHTML =
-      '<table class="adm-hist-table">'+
-      '<thead><tr>'+
-        '<th>Fecha</th><th>✅</th><th>❌</th><th>WA</th><th>Fin.</th><th>Dev.</th><th>Mins</th><th>G/min</th>'+
-      '</tr></thead>'+
-      '<tbody>'+rows+'</tbody>'+
-      '</table>';
   });
 }
 
