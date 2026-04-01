@@ -5129,10 +5129,10 @@ function _admCargarDashboard(){
   const grid = document.getElementById('adm-users-grid');
   _db.ref('presence').on('value', snapPresence => {
     _db.ref('users').once('value', snapUsers => {
-      _db.ref('notes').once('value', snapNotes => {
+      _db.ref('gestiones_sync').once('value', snapGest => {
         const presencia = snapPresence.val() || {};
         const usuarios = Object.values(snapUsers.val() || {});
-        const notas = snapNotes.val() || {};
+        const gestSync = snapGest.val() || {};
         if(!usuarios.find(u=>u.username==='3D Company'))
           usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
 
@@ -5148,13 +5148,46 @@ function _admCargarDashboard(){
         usuarios.forEach(u => {
           const p = presencia[u.username] || {};
           const isOnline = !!p.online;
-          const lastNote = (notas[u.username]||{}).lastNote || null;
-          const noteHtml = lastNote
-            ? '<div style="margin-top:8px;padding:7px 10px;background:#1e293b;border-left:3px solid #f59e0b;border-radius:4px;">'+
-                '<div style="font-size:.7rem;color:#94a3b8;margin-bottom:2px;">📝 Última nota · '+(lastNote.fecha||'')+(lastNote.guia?' · Guía: '+lastNote.guia:'')+'</div>'+
-                '<div style="font-size:.8rem;color:#e2e8f0;white-space:pre-wrap;word-break:break-word;">'+(lastNote.texto||'')+'</div>'+
-              '</div>'
-            : '';
+          const gest = gestSync[u.username] || {};
+          const gestArr = Object.values(gest);
+          const totalGestUser = p.sessionGestiones || 0;
+          const contestaron = gestArr.filter(g=>g.llamada==='contestó').length;
+          const noContestaron = gestArr.filter(g=>g.llamada==='no_contestó').length;
+          const waEnv = gestArr.filter(g=>g.wa_enviado).length;
+          const finalizados = gestArr.filter(g=>g.gestion_final).length;
+          const devoluciones = gestArr.filter(g=>g.devolucion).length;
+          const minActivo = isOnline&&p.loginTime ? Math.max(1,Math.floor((Date.now()-p.loginTime)/60000)) : null;
+          const gpm = (minActivo&&totalGestUser) ? (totalGestUser/minActivo).toFixed(2) : null;
+          const rendColor = !gpm?'#64748b':gpm>=1?'#16a34a':gpm>=0.5?'#d97706':'#dc2626';
+
+          const resumenHtml =
+            '<div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;">'+
+              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
+                '<div style="font-size:.8rem;font-weight:700;color:#1e293b;">'+contestaron+'</div>'+
+                '<div style="font-size:.62rem;color:#64748b;">Contestaron</div>'+
+              '</div>'+
+              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
+                '<div style="font-size:.8rem;font-weight:700;color:#1e293b;">'+noContestaron+'</div>'+
+                '<div style="font-size:.62rem;color:#64748b;">No contest.</div>'+
+              '</div>'+
+              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
+                '<div style="font-size:.8rem;font-weight:700;color:#1e293b;">'+waEnv+'</div>'+
+                '<div style="font-size:.62rem;color:#64748b;">WA enviados</div>'+
+              '</div>'+
+              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
+                '<div style="font-size:.8rem;font-weight:700;color:#16a34a;">'+finalizados+'</div>'+
+                '<div style="font-size:.62rem;color:#64748b;">Finalizados</div>'+
+              '</div>'+
+              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
+                '<div style="font-size:.8rem;font-weight:700;color:#be123c;">'+devoluciones+'</div>'+
+                '<div style="font-size:.62rem;color:#64748b;">Devoluciones</div>'+
+              '</div>'+
+              '<div style="background:#f1f5f9;border-radius:6px;padding:5px 4px;text-align:center;">'+
+                '<div style="font-size:.8rem;font-weight:700;color:'+rendColor+';">'+(gpm?gpm+'/min':'—')+'</div>'+
+                '<div style="font-size:.62rem;color:#64748b;">Gest./min</div>'+
+              '</div>'+
+            '</div>';
+
           const card = document.createElement('div');
           card.className = 'adm-user-card'+(isOnline?' online':'');
           card.innerHTML =
@@ -5165,11 +5198,11 @@ function _admCargarDashboard(){
             '</div>'+
             '<div class="adm-user-stats">'+
               '<div class="adm-user-stat"><div class="v">'+(isOnline?'🟢':'⚫')+'</div><div class="l">'+(isOnline?'En línea':'Fuera')+'</div></div>'+
-              '<div class="adm-user-stat"><div class="v">'+(p.sessionGestiones||0)+'</div><div class="l">Gestiones hoy</div></div>'+
+              '<div class="adm-user-stat"><div class="v">'+totalGestUser+'</div><div class="l">Gestiones hoy</div></div>'+
               '<div class="adm-user-stat"><div class="v">'+(isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):'—')+'</div><div class="l">Tiempo activo</div></div>'+
             '</div>'+
             '<div class="adm-user-meta">'+(isOnline?'🕐 Conectado desde: '+_fmtTiempo(p.loginTime):'🕐 Última vez: '+(p.lastSeen?_fmtTiempo(p.lastSeen):'—'))+'</div>'+
-            noteHtml+
+            resumenHtml+
             (u.username!=='3D Company'?
               '<div style="display:flex;gap:6px;margin-top:10px;">'+
                 '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;" onclick="_admAbrirEditar(\''+u.username+'\',\''+( u.asesor||'')+'\',\''+( u.tienda||'')+'\')">✏️ Editar</button>'+
