@@ -700,35 +700,44 @@ header h1{font-size:1.05rem;font-weight:700;}
               </select>
             </div>
             <div>
-              <div class="anl-filter-label" style="margin-bottom:4px;">Métrica</div>
-              <select class="anl-select" id="anl-metric-filter" onchange="_anlCargar()">
-                <option value="finalizados">Finalizados</option>
-                <option value="contestaron">Contestaron</option>
-                <option value="noContestaron">No contestaron</option>
-                <option value="waEnviados">WA enviados</option>
-                <option value="devoluciones">Devoluciones</option>
+              <div class="anl-filter-label" style="margin-bottom:4px;">Período</div>
+              <select class="anl-select" id="anl-period-filter" onchange="_anlPeriodChange()">
+                <option value="7">Últimos 7 días</option>
+                <option value="14" selected>Últimos 14 días</option>
+                <option value="30">Últimos 30 días</option>
+                <option value="custom">Rango personalizado</option>
               </select>
+            </div>
+            <div id="anl-custom-range" style="display:none;display:flex;gap:8px;align-items:flex-end;">
+              <div>
+                <div class="anl-filter-label" style="margin-bottom:4px;">Desde</div>
+                <input type="date" class="anl-select" id="anl-date-from" onchange="_anlCargar()" style="cursor:text;"/>
+              </div>
+              <div>
+                <div class="anl-filter-label" style="margin-bottom:4px;">Hasta</div>
+                <input type="date" class="anl-select" id="anl-date-to" onchange="_anlCargar()" style="cursor:text;"/>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- KPIs -->
-        <div class="anl-grid" id="anl-kpis">
-          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-fin">—</div><div class="anl-kpi-lbl">Finalizados (14d)</div></div>
-          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-cont">—</div><div class="anl-kpi-lbl">Contestaron (14d)</div></div>
-          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-wa">—</div><div class="anl-kpi-lbl">WA enviados (14d)</div></div>
+        <div class="anl-grid">
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-fin">—</div><div class="anl-kpi-lbl" id="kpi-fin-lbl">Finalizados</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-cont">—</div><div class="anl-kpi-lbl" id="kpi-cont-lbl">Contestaron</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-wa">—</div><div class="anl-kpi-lbl" id="kpi-wa-lbl">WA enviados</div></div>
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-gpm" style="font-size:1.2rem;">—</div><div class="anl-kpi-lbl">Prom. Gest/min</div></div>
         </div>
 
         <!-- Chart -->
-        <div class="anl-card">
-          <div class="anl-card-title" id="anl-chart-title">Selecciona un usuario para ver la gráfica</div>
+        <div class="anl-card" style="margin-top:16px;">
+          <div class="anl-card-title" id="anl-chart-title">Gestiones por día</div>
           <canvas id="anl-chart" height="90"></canvas>
         </div>
 
         <!-- Tabla historial -->
         <div class="anl-card">
-          <div class="anl-card-title">Detalle día a día — últimos 14 días</div>
+          <div class="anl-card-title">Detalle día a día</div>
           <div id="anl-table-wrap"><div class="anl-empty">Selecciona un usuario para ver el historial</div></div>
         </div>
       </div>
@@ -5372,118 +5381,138 @@ function _anlInicializar(){
   _anlCargar();
 }
 
+function _anlPeriodChange(){
+  const v = document.getElementById('anl-period-filter').value;
+  const cr = document.getElementById('anl-custom-range');
+  cr.style.display = v==='custom' ? 'flex' : 'none';
+  if(v!=='custom') _anlCargar();
+}
+
+function _anlGetFechas(){
+  const period = document.getElementById('anl-period-filter').value;
+  const fechas = [];
+  if(period==='custom'){
+    const from = document.getElementById('anl-date-from').value;
+    const to   = document.getElementById('anl-date-to').value;
+    if(!from||!to) return [];
+    const cur = new Date(from);
+    const end = new Date(to);
+    while(cur<=end){ fechas.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+  } else {
+    const dias = parseInt(period);
+    for(let i=dias-1;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); fechas.push(d.toISOString().slice(0,10)); }
+  }
+  return fechas;
+}
+
 function _anlCargar(){
   const userFilter = document.getElementById('anl-user-filter').value;
-  const metrica = document.getElementById('anl-metric-filter').value;
-  const metricaLabel = {finalizados:'Finalizados',contestaron:'Contestaron',noContestaron:'No contestaron',waEnviados:'WA enviados',devoluciones:'Devoluciones'}[metrica];
+  const period     = document.getElementById('anl-period-filter').value;
+  const fechas     = _anlGetFechas();
+  if(!fechas.length) return;
 
-  document.getElementById('anl-chart-title').textContent =
-    (userFilter ? (_admUsuariosCache.find(u=>u.username===userFilter)||{asesor:userFilter}).asesor : 'Todos los usuarios')
-    + ' — ' + metricaLabel + ' (últimos 14 días)';
+  const userName = userFilter ? ((_admUsuariosCache.find(u=>u.username===userFilter)||{}).asesor||userFilter) : 'Todos los usuarios';
+  const periodLabel = period==='custom' ? 'Rango personalizado' : 'Últimos '+period+' días';
+  document.getElementById('anl-chart-title').textContent = userName + ' — ' + periodLabel;
 
-  // Calcular rango de fechas: últimos 14 días
-  const fechas = [];
-  for(let i=13;i>=0;i--){
-    const d = new Date(); d.setDate(d.getDate()-i);
-    fechas.push(d.toISOString().slice(0,10));
-  }
+  // Label de KPIs con el período
+  const kpiSuffix = period==='custom'?'':' ('+period+'d)';
+  document.getElementById('kpi-fin-lbl').textContent  = 'Finalizados'+kpiSuffix;
+  document.getElementById('kpi-cont-lbl').textContent = 'Contestaron'+kpiSuffix;
+  document.getElementById('kpi-wa-lbl').textContent   = 'WA enviados'+kpiSuffix;
 
-  // Leer historial_diario
   const users = userFilter ? [userFilter] : _admUsuariosCache.map(u=>u.username);
-  const promises = users.map(u => _db.ref('historial_diario/'+u).orderByKey().limitToLast(14).once('value').then(s=>({u, data:s.val()||{}})));
+  const limit = Math.max(fechas.length, 30);
+  const promises = users.map(u => _db.ref('historial_diario/'+u).orderByKey().limitToLast(limit).once('value').then(s=>({u,data:s.val()||{}})));
 
   Promise.all(promises).then(results=>{
-    // Agregar datos por fecha
     const byFecha = {};
-    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,minutos:0,dias:0}; });
+    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,minutos:0}; });
 
     results.forEach(({data})=>{
       Object.entries(data).forEach(([f,d])=>{
         if(!byFecha[f]) return;
-        byFecha[f].finalizados += d.finalizados||0;
-        byFecha[f].contestaron += d.contestaron||0;
+        byFecha[f].finalizados   += d.finalizados||0;
+        byFecha[f].contestaron   += d.contestaron||0;
         byFecha[f].noContestaron += d.noContestaron||0;
-        byFecha[f].waEnviados += d.waEnviados||0;
-        byFecha[f].devoluciones += d.devoluciones||0;
-        byFecha[f].minutos += d.minutos||0;
-        byFecha[f].dias++;
+        byFecha[f].waEnviados    += d.waEnviados||0;
+        byFecha[f].devoluciones  += d.devoluciones||0;
+        byFecha[f].minutos       += d.minutos||0;
       });
     });
 
-    const vals = fechas.map(f=>byFecha[f][metrica]||0);
     const labels = fechas.map(f=>{ const [,m,d]=f.split('-'); return d+'/'+m; });
+    const tot = k => Object.values(byFecha).reduce((s,d)=>s+d[k],0);
 
     // KPIs
-    const tot = (k)=>Object.values(byFecha).reduce((s,d)=>s+d[k],0);
     const totMin = tot('minutos');
     const totFin = tot('finalizados');
     const gpm = totMin>0 ? (totFin/totMin).toFixed(2) : '—';
-    document.getElementById('kpi-fin').textContent = tot('finalizados');
+    document.getElementById('kpi-fin').textContent  = totFin;
     document.getElementById('kpi-cont').textContent = tot('contestaron');
-    document.getElementById('kpi-wa').textContent = tot('waEnviados');
-    document.getElementById('kpi-gpm').textContent = gpm+(gpm!=='—'?'/min':'');
-    document.getElementById('kpi-gpm').style.color = gpm==='—'?'white':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
+    document.getElementById('kpi-wa').textContent   = tot('waEnviados');
+    document.getElementById('kpi-gpm').textContent  = gpm+(gpm!=='—'?'/min':'');
+    document.getElementById('kpi-gpm').style.color  = gpm==='—'?'white':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
 
-    // Chart
+    // Chart — todas las gestiones como barras agrupadas
     const ctx = document.getElementById('anl-chart').getContext('2d');
     if(_anlChart) _anlChart.destroy();
-    const colorMap={finalizados:'#4ade80',contestaron:'#60a5fa',noContestaron:'#f87171',waEnviados:'#a78bfa',devoluciones:'#fb923c'};
-    const color = colorMap[metrica]||'#60a5fa';
     _anlChart = new Chart(ctx,{
       type:'bar',
       data:{
         labels,
-        datasets:[{
-          label: metricaLabel,
-          data: vals,
-          backgroundColor: color+'33',
-          borderColor: color,
-          borderWidth: 2,
-          borderRadius: 6,
-          pointBackgroundColor: color,
-        }]
+        datasets:[
+          {label:'Finalizados',   data:fechas.map(f=>byFecha[f].finalizados),   backgroundColor:'#4ade8044',borderColor:'#4ade80',borderWidth:2,borderRadius:5},
+          {label:'Contestaron',   data:fechas.map(f=>byFecha[f].contestaron),   backgroundColor:'#60a5fa44',borderColor:'#60a5fa',borderWidth:2,borderRadius:5},
+          {label:'No contestaron',data:fechas.map(f=>byFecha[f].noContestaron), backgroundColor:'#f8717144',borderColor:'#f87171',borderWidth:2,borderRadius:5},
+          {label:'WA enviados',   data:fechas.map(f=>byFecha[f].waEnviados),    backgroundColor:'#a78bfa44',borderColor:'#a78bfa',borderWidth:2,borderRadius:5},
+          {label:'Devoluciones',  data:fechas.map(f=>byFecha[f].devoluciones),  backgroundColor:'#fb923c44',borderColor:'#fb923c',borderWidth:2,borderRadius:5},
+        ]
       },
       options:{
         responsive:true,
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y+' '+metricaLabel.toLowerCase()}}},
+        plugins:{
+          legend:{labels:{color:'#94a3b8',font:{size:11},boxWidth:12,padding:16}},
+          tooltip:{mode:'index',intersect:false}
+        },
         scales:{
-          x:{ticks:{color:'#64748b',font:{size:11}},grid:{color:'#1e293b'}},
+          x:{ticks:{color:'#64748b',font:{size:10},maxRotation:45},grid:{color:'#1e293b'}},
           y:{ticks:{color:'#64748b',font:{size:11},stepSize:1},grid:{color:'#334155'},beginAtZero:true}
         }
       }
     });
 
-    // Tabla
+    // Tabla detalle (solo si hay un usuario seleccionado)
     if(!userFilter){
       document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Selecciona un usuario específico para ver el detalle día a día</div>';
       return;
     }
     const userHist = results[0]?.data || {};
-    const dias = Object.keys(userHist).sort().reverse().slice(0,14);
-    if(!dias.length){
-      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Sin historial registrado para este usuario</div>';
+    const diasFiltrados = fechas.filter(f=>userHist[f]).reverse();
+    if(!diasFiltrados.length){
+      document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Sin historial en este período para este usuario</div>';
       return;
     }
     let rows='';
-    dias.forEach(f=>{
+    diasFiltrados.forEach(f=>{
       const d=userHist[f];
       const gpmD = d.minutos>0 ? (d.finalizados/d.minutos).toFixed(2) : '—';
       const gc = gpmD==='—'?'#64748b':gpmD>=1?'#4ade80':gpmD>=0.5?'#fbbf24':'#f87171';
       const [y,m,dd]=f.split('-');
       rows+='<tr>'+
         '<td>'+dd+'/'+m+'/'+y.slice(2)+'</td>'+
-        '<td style="color:#60a5fa">'+( d.contestaron||0)+'</td>'+
-        '<td style="color:#f87171">'+( d.noContestaron||0)+'</td>'+
-        '<td style="color:#a78bfa">'+( d.waEnviados||0)+'</td>'+
-        '<td style="color:#4ade80">'+( d.finalizados||0)+'</td>'+
-        '<td style="color:#fb923c">'+( d.devoluciones||0)+'</td>'+
-        '<td>'+( d.minutos||0)+'m</td>'+
+        '<td style="color:#60a5fa">'+(d.contestaron||0)+'</td>'+
+        '<td style="color:#f87171">'+(d.noContestaron||0)+'</td>'+
+        '<td style="color:#a78bfa">'+(d.waEnviados||0)+'</td>'+
+        '<td style="color:#4ade80">'+(d.finalizados||0)+'</td>'+
+        '<td style="color:#fb923c">'+(d.devoluciones||0)+'</td>'+
+        '<td>'+(d.minutos||0)+'m</td>'+
         '<td style="color:'+gc+';font-weight:700">'+(gpmD==='—'?'—':gpmD+'/m')+'</td>'+
       '</tr>';
     });
     document.getElementById('anl-table-wrap').innerHTML=
       '<table class="anl-table">'+
-      '<thead><tr><th>Fecha</th><th>✅ Cont.</th><th>❌ No cont.</th><th>📱 WA</th><th>🏁 Final.</th><th>↩️ Dev.</th><th>⏱ Mins</th><th>G/min</th></tr></thead>'+
+      '<thead><tr><th>Fecha</th><th style="color:#60a5fa">✅ Cont.</th><th style="color:#f87171">❌ No cont.</th><th style="color:#a78bfa">📱 WA</th><th style="color:#4ade80">🏁 Final.</th><th style="color:#fb923c">↩️ Dev.</th><th>⏱ Mins</th><th>G/min</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>';
   });
 }
