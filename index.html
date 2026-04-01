@@ -1963,8 +1963,7 @@ function estaCompleta(p){
   if(!ll)return false;
   if(ll==='contestó'){
     if(p.estadoKey==='oficina'){
-      const notas=g.notas||(g.nota?[{texto:g.nota}]:[]);
-      return notas.length>0||!!getUltimaNota(p.id);
+      return tieneNotaHoy(p.id);
     }
     return true;
   }
@@ -3324,9 +3323,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
     if(resultado==='contestó'){
       const p=pedidos.find(x=>x.id===id);
       if(p&&p.estadoKey==='oficina'){
-        const gOf=gestiones[id]||{};
-        const notasOf=gOf.notas||(gOf.nota?[{texto:gOf.nota}]:[]);
-        if(notasOf.length||!!getUltimaNota(id)){
+        if(tieneNotaHoy(id)){
           // Ya tiene nota → gestionar normal con animación
           animarCompletado(id,()=>renderAll(),'✅');
         } else {
@@ -3409,23 +3406,10 @@ function marcarDevolucion(id){
     toast('↩️ Devolución desmarcada');
     return;
   }
-  // Sin nota guardada → exigir que escriba en el textarea de la card
+  // Validar que haya una nota de HOY
+  if(!tieneNotaHoy(id)){_pedirNotaHoy(id);return;}
+  // Marcar devolución usando la última nota como justificación
   const notas=gestiones[id].notas||(gestiones[id].nota?[{texto:gestiones[id].nota}]:[]);
-  if(!notas.length){
-    const ta=document.getElementById('nota-inp-'+id);
-    if(ta){
-      ta.classList.remove('nota-req-shake');
-      void ta.offsetWidth;
-      ta.classList.add('nota-req-shake');
-      ta.focus();
-      const orig=ta.placeholder;
-      ta.placeholder='✏️ Escribe el motivo de la devolución...';
-      setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=orig;},1600);
-    }
-    toast('📝 Escribe el motivo de la devolución en la nota antes de marcar');
-    return;
-  }
-  // Tiene nota → marcar devolución usando la última nota como justificación
   gestiones[id].devolucion=true;
   gestiones[id].devolucion_razon=notas[notas.length-1].texto;
   guardar();_fbSyncGestion(id);
@@ -3435,25 +3419,8 @@ function marcarDevolucion(id){
 function marcarFinalizadoNov(id){
   ultimaGestion=Date.now();
   const g=gestiones[id]||{};
-  // Si ya está finalizado, permitir desmarcar sin validar nota
   if(g.gestion_final){marcarFinalizado(id);return;}
-  // Validar que exista al menos una nota guardada (incluyendo fallback estable)
-  const notas=g.notas||(g.nota?[{texto:g.nota}]:[])||[];
-  const tieneNota=notas.length>0||!!getUltimaNota(id);
-  if(!tieneNota){
-    const ta=document.getElementById('nota-inp-'+id);
-    if(ta){
-      ta.classList.remove('nota-req-shake');
-      void ta.offsetWidth; // forzar reflow para reiniciar animación
-      ta.classList.add('nota-req-shake');
-      ta.focus();
-      const origPlaceholder=ta.placeholder;
-      ta.placeholder='⚠️ Escribe y guarda una nota primero...';
-      setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=origPlaceholder;},1400);
-    }
-    toast('📝 Escribe una nota antes de finalizar la gestión');
-    return;
-  }
+  if(!tieneNotaHoy(id)){_pedirNotaHoy(id);return;}
   marcarFinalizado(id);
 }
 
@@ -3461,21 +3428,7 @@ function marcarFinalizadoOficina(id){
   ultimaGestion=Date.now();
   const g=gestiones[id]||{};
   if(g.gestion_final){marcarFinalizado(id);return;}
-  const notas=g.notas||(g.nota?[{texto:g.nota}]:[]);
-  if(!notas.length){
-    const ta=document.getElementById('nota-inp-'+id);
-    if(ta){
-      ta.classList.remove('nota-req-shake');
-      void ta.offsetWidth;
-      ta.classList.add('nota-req-shake');
-      ta.focus();
-      const origPlaceholder=ta.placeholder;
-      ta.placeholder='⚠️ ¿Qué dijo el cliente? Escribe una nota antes de finalizar...';
-      setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=origPlaceholder;},1400);
-    }
-    toast('📝 En oficina es obligatorio registrar lo que dijo el cliente antes de finalizar');
-    return;
-  }
+  if(!tieneNotaHoy(id)){_pedirNotaHoy(id);return;}
   marcarFinalizado(id);
 }
 
@@ -3525,6 +3478,27 @@ function setNota(id, texto){
     if(wrap)wrap.outerHTML=notaWidgetHtml(id);
   }
   toast('📝 Nota guardada');
+}
+
+function tieneNotaHoy(id){
+  const hoy=new Date().toLocaleDateString('es-CO');
+  const g=gestiones[id]||{};
+  const notas=g.notas||(g.nota?[{texto:g.nota,fecha:''}]:[]);
+  return notas.some(n=>n.fecha===hoy);
+}
+
+function _pedirNotaHoy(id){
+  const ta=document.getElementById('nota-inp-'+id);
+  if(ta){
+    ta.classList.remove('nota-req-shake');
+    void ta.offsetWidth;
+    ta.classList.add('nota-req-shake');
+    ta.focus();
+    const orig=ta.placeholder;
+    ta.placeholder='✏️ Escribe una nota de hoy antes de continuar...';
+    setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=orig;},1600);
+  }
+  toast('📝 La nota debe ser de hoy para poder gestionar este pedido');
 }
 
 function getUltimaNota(id){
