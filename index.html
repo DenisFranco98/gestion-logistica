@@ -741,6 +741,7 @@ header h1{font-size:1.05rem;font-weight:700;}
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-dev-rate" style="font-size:1.2rem;">—</div><div class="anl-kpi-lbl">% Devoluciones</div></div>
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-total">—</div><div class="anl-kpi-lbl">Total gestionados</div></div>
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-gsg" style="font-size:1.2rem;color:#93c5fd;">—</div><div class="anl-kpi-lbl">Guías Sin Gestión</div></div>
+          <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-tsg" style="font-size:1.2rem;color:#67e8f9;">—</div><div class="anl-kpi-lbl">Tránsito Sin Gestión</div></div>
         </div>
 
         <!-- Fila: Donut contacto + % cierre por día -->
@@ -1739,7 +1740,7 @@ function crearFila(p,est,esGest){
   }else if(est.key==='rechazado'&&p.dias!=null){
     diaVal='🚫 '+p.dias+' días';diaColor='#be123c';
   }else if(p.dias!=null&&p.dias>0){diaVal=p.dias+'d';}
-  const gestIco=g.guia_generada_hoy?'📦':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
+  const gestIco=g.guia_generada_hoy?'📦':g.transito_sin_gestion?'🚚':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
   const row=document.createElement('div');
   row.className='card-fila';
   const _tcFila=p.tienda?getTiendaColor(p.tienda):null;
@@ -2135,7 +2136,7 @@ function estaCompleta(p){
   const g=gestiones[p.id]||{};
   if(g.devolucion)return true;
   if(p.estadoKey==='reparto'&&g.guia_generada_hoy)return true;
-  if(p.estadoKey==='transito'){return!!(g.wa_enviado);}
+  if(p.estadoKey==='transito'){return!!(g.wa_enviado)||!!(g.transito_sin_gestion);}
   if(g.gestion_final)return true; // compatibilidad con versiones anteriores
   const ll=g.llamada;
   if(!ll)return false;
@@ -2887,7 +2888,7 @@ function crearCard(p,est,esGest){
         (telDisplay?'<div class="card-phone" onclick="copiarTel(\''+p.telefono+'\')">📞 '+telDisplay+'<span class="copy-hint">copiar</span></div>':'<div style="font-size:.78rem;color:#94a3b8">Sin teléfono</div>')+
       '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">'+
-        (g.devolucion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#fff1f2;color:#be123c">🔄 Devolución</span>':g.guia_generada_hoy?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#eff6ff;color:#1d4ed8">📦 Sin gestión</span>':esGest?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0f5f2;color:#2d5a3d">✅ Listo</span>':'')+
+        (g.devolucion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#fff1f2;color:#be123c">🔄 Devolución</span>':g.guia_generada_hoy?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#eff6ff;color:#1d4ed8">📦 Sin gestión</span>':g.transito_sin_gestion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#ecfeff;color:#0891b2">🚚 Sin novedad</span>':esGest?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:#f0f5f2;color:#2d5a3d">✅ Listo</span>':'')+
         (ncPend&&intentos>0?'<span class="intentos-badge">📵 '+intentos+' intento'+(intentos>1?'s':'')+'</span>':'')+
       '</div>'+
     '</div>';
@@ -3063,6 +3064,7 @@ function crearCard(p,est,esGest){
       btnExp.onclick=exportarPendientes;
       sec.appendChild(btnExp);
     } else if(est.key==='transito'){
+      html+='<button id="btn-tsg-'+p.id+'" onclick="marcarTransitoSinGestion('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #0891b2;background:transparent;color:#0891b2;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;transition:all .25s;">🚚 En tránsito sin novedad</button>';
       const wi=getWAInfo(p,est.key);
       html+=waBoton(p,est.key,wi,g.wa_enviado);
       if(g.wa_enviado&&!g.mensajes_listos&&!g.gestion_final){
@@ -3587,6 +3589,34 @@ function marcarGuiaGeneradaHoy(id, btn){
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);renderAll();
   toast('📦 Guía generada hoy — no cuenta como gestionado');
+}
+
+function marcarTransitoSinGestion(id, btn){
+  if(btn){
+    btn.disabled=true;
+    btn.innerHTML='✅ Listo';
+    btn.style.background='#0e7490';
+    btn.style.color='white';
+    btn.style.borderColor='#0e7490';
+    btn.style.transform='scale(1.04)';
+    setTimeout(()=>{
+      btn.style.transform='scale(1)';
+      btn.style.opacity='0';
+      setTimeout(()=>{
+        if(!gestiones[id])gestiones[id]={};
+        gestiones[id].transito_sin_gestion=true;
+        gestiones[id]._ts=Date.now();
+        guardar();_fbSyncGestion(id);renderAll();
+        toast('🚚 En tránsito sin novedad — no cuenta como gestionado');
+      },200);
+    },380);
+    return;
+  }
+  if(!gestiones[id])gestiones[id]={};
+  gestiones[id].transito_sin_gestion=true;
+  gestiones[id]._ts=Date.now();
+  guardar();_fbSyncGestion(id);renderAll();
+  toast('🚚 En tránsito sin novedad — no cuenta como gestionado');
 }
 
 function marcarFinalizado(id){ultimaGestion=Date.now();
@@ -5399,6 +5429,7 @@ function _fbSyncGestion(id){
     finalizados: arr.filter(x=>x.gestion_final).length,
     devoluciones: arr.filter(x=>x.devolucion).length,
     guiasSinGestion: arr.filter(x=>x.guia_generada_hoy).length,
+    transitoSinGestion: arr.filter(x=>x.transito_sin_gestion).length,
   });
 }
 
@@ -5416,13 +5447,14 @@ function _fbActualizarHistorial(){
   const finalizados=arr.filter(g=>g.gestion_final).length;
   const devoluciones=arr.filter(g=>g.devolucion).length;
   const guiasSinGestion=arr.filter(g=>g.guia_generada_hoy).length;
+  const transitoSinGestion=arr.filter(g=>g.transito_sin_gestion).length;
   _db.ref('presence/'+user+'/loginTime').once('value',snap=>{
     const loginTime=snap.val()||Date.now();
     const minutos=Math.max(1,Math.floor((Date.now()-loginTime)/60000));
     // Guardar bajo tienda/asesor/fecha
     _db.ref('historial_diario/'+user+'/'+asesorKey+'/'+hoy).set({
       asesorNombre: asesorRaw||user,
-      contestaron,noContestaron,waEnviados,finalizados,devoluciones,guiasSinGestion,minutos,_ts:Date.now()
+      contestaron,noContestaron,waEnviados,finalizados,devoluciones,guiasSinGestion,transitoSinGestion,minutos,_ts:Date.now()
     });
   });
 }
@@ -5507,6 +5539,7 @@ function _admCargarDashboard(){
         const fin   = p.finalizados||0;
         const dev   = p.devoluciones||0;
         const gsg   = p.guiasSinGestion||0;
+        const tsg   = p.transitoSinGestion||0;
 
         const statsHtml = isOnline
           ? '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">'+
@@ -5516,7 +5549,8 @@ function _admCargarDashboard(){
               (fin   ?'<span style="background:#14532d33;color:#4ade80;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">🏁 '+fin+' final.</span>':'')+
               (dev   ?'<span style="background:#7c2d1233;color:#fb923c;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">↩️ '+dev+' dev.</span>':'')+
               (gsg   ?'<span style="background:#1e3a8a33;color:#93c5fd;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">📦 '+gsg+' s/gest.</span>':'')+
-              (!cont&&!noCont&&!wa&&!fin&&!gsg?'<span style="color:#475569;font-size:.65rem;">Sin gestiones aún</span>':'')+
+              (tsg   ?'<span style="background:#164e6333;color:#67e8f9;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">🚚 '+tsg+' tránsito ok</span>':'')+
+              (!cont&&!noCont&&!wa&&!fin&&!gsg&&!tsg?'<span style="color:#475569;font-size:.65rem;">Sin gestiones aún</span>':'')+
             '</div>'
           : '';
 
@@ -5657,7 +5691,7 @@ function _anlCargar(){
   // Helper: aplanar estructura nueva (tienda/asesor/fecha) o vieja (tienda/fecha)
   function _aplanarHistorial(data, soloAsesor){
     const byFecha = {};
-    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,guiasSinGestion:0,minutos:0}; });
+    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,guiasSinGestion:0,transitoSinGestion:0,minutos:0}; });
     // Detectar si es estructura nueva: primer key no es una fecha
     const keys = Object.keys(data);
     const isNew = keys.length>0 && !keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
@@ -5671,7 +5705,8 @@ function _anlCargar(){
           byFecha[f].noContestaron += d.noContestaron||0;
           byFecha[f].waEnviados    += d.waEnviados||0;
           byFecha[f].devoluciones  += d.devoluciones||0;
-          byFecha[f].guiasSinGestion += d.guiasSinGestion||0;
+          byFecha[f].guiasSinGestion   += d.guiasSinGestion||0;
+          byFecha[f].transitoSinGestion += d.transitoSinGestion||0;
           byFecha[f].minutos       += d.minutos||0;
         });
       });
@@ -5698,14 +5733,15 @@ function _anlCargar(){
     return Object.entries(data).map(([asesorKey, fechasData])=>{
       let cont=0,noCont=0,wa=0,fin=0,dev=0,gsg=0,min=0;
       const nombre = fechasData[Object.keys(fechasData)[0]]?.asesorNombre || asesorKey;
-      fechas.forEach(f=>{ const d=fechasData[f]||{}; cont+=d.contestaron||0; noCont+=d.noContestaron||0; wa+=d.waEnviados||0; fin+=d.finalizados||0; dev+=d.devoluciones||0; gsg+=d.guiasSinGestion||0; min+=d.minutos||0; });
-      return {asesorKey, nombre, cont, noCont, wa, fin, dev, gsg, min};
-    }).filter(x=>x.cont+x.noCont+x.wa+x.fin+x.gsg>0);
+      let tsg=0;
+      fechas.forEach(f=>{ const d=fechasData[f]||{}; cont+=d.contestaron||0; noCont+=d.noContestaron||0; wa+=d.waEnviados||0; fin+=d.finalizados||0; dev+=d.devoluciones||0; gsg+=d.guiasSinGestion||0; tsg+=d.transitoSinGestion||0; min+=d.minutos||0; });
+      return {asesorKey, nombre, cont, noCont, wa, fin, dev, gsg, tsg, min};
+    }).filter(x=>x.cont+x.noCont+x.wa+x.fin+x.gsg+x.tsg>0);
   }
 
   Promise.all(promises).then(results=>{
     const byFecha = {};
-    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,guiasSinGestion:0,minutos:0}; });
+    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,guiasSinGestion:0,transitoSinGestion:0,minutos:0}; });
 
     results.forEach(({data})=>{
       const parcial = _aplanarHistorial(data, asesorFilter);
@@ -5715,7 +5751,8 @@ function _anlCargar(){
         byFecha[f].noContestaron += d.noContestaron;
         byFecha[f].waEnviados    += d.waEnviados;
         byFecha[f].devoluciones  += d.devoluciones;
-        byFecha[f].guiasSinGestion += d.guiasSinGestion||0;
+        byFecha[f].guiasSinGestion   += d.guiasSinGestion||0;
+        byFecha[f].transitoSinGestion += d.transitoSinGestion||0;
         byFecha[f].minutos       += d.minutos;
       });
     });
@@ -5731,6 +5768,7 @@ function _anlCargar(){
     const totWA    = tot('waEnviados');
     const totDev   = tot('devoluciones');
     const totGSG   = tot('guiasSinGestion');
+    const totTSG   = tot('transitoSinGestion');
     const totGest  = totCont + totNoCont + totWA; // total contactos únicos (aprox)
     const gpm = totMin>0 ? (totFin/totMin).toFixed(2) : '—';
     const tasaContacto = totGest>0 ? Math.round(totCont/totGest*100) : null;
@@ -5742,6 +5780,7 @@ function _anlCargar(){
     document.getElementById('kpi-wa').textContent   = totWA;
     document.getElementById('kpi-total').textContent= totGest;
     document.getElementById('kpi-gsg').textContent  = totGSG||'—';
+    document.getElementById('kpi-tsg').textContent  = totTSG||'—';
     document.getElementById('kpi-gpm').textContent  = gpm+(gpm!=='—'?'/min':'');
     document.getElementById('kpi-gpm').style.color  = gpm==='—'?'white':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
 
@@ -5910,7 +5949,8 @@ function _anlCargar(){
           {label:'No contestaron',    data:fechas.map(f=>byFecha[f].noContestaron),   backgroundColor:'#f8717144',borderColor:'#f87171',borderWidth:2,borderRadius:5},
           {label:'WA enviados',       data:fechas.map(f=>byFecha[f].waEnviados),      backgroundColor:'#a78bfa44',borderColor:'#a78bfa',borderWidth:2,borderRadius:5},
           {label:'Devoluciones',      data:fechas.map(f=>byFecha[f].devoluciones),    backgroundColor:'#fb923c44',borderColor:'#fb923c',borderWidth:2,borderRadius:5},
-          {label:'Guías Sin Gestión', data:fechas.map(f=>byFecha[f].guiasSinGestion), backgroundColor:'#93c5fd44',borderColor:'#93c5fd',borderWidth:2,borderRadius:5},
+          {label:'Guías Sin Gestión',   data:fechas.map(f=>byFecha[f].guiasSinGestion),   backgroundColor:'#93c5fd44',borderColor:'#93c5fd',borderWidth:2,borderRadius:5},
+          {label:'Tránsito Sin Gestión',data:fechas.map(f=>byFecha[f].transitoSinGestion), backgroundColor:'#67e8f944',borderColor:'#67e8f9',borderWidth:2,borderRadius:5},
         ]
       },
       options:{
@@ -5957,6 +5997,7 @@ function _anlCargar(){
               '<td style="color:#4ade80;font-weight:700">'+x.fin+'</td>'+
               '<td style="color:#fb923c">'+x.dev+'</td>'+
               '<td style="color:#93c5fd">'+x.gsg+'</td>'+
+              '<td style="color:#67e8f9">'+x.tsg+'</td>'+
               '<td style="color:'+(tCont>=70?'#4ade80':tCont>=50?'#fbbf24':'#f87171')+'">'+(tCont+'%')+'</td>'+
               '<td style="color:'+(tCierre>=60?'#4ade80':tCierre>=40?'#fbbf24':'#f87171')+';font-weight:700">'+tCierre+'%</td>'+
               '<td style="color:'+gc+';font-weight:700">'+(gpm==='—'?'—':gpm+'/m')+'</td>'+
@@ -5973,6 +6014,7 @@ function _anlCargar(){
               '<th style="color:#4ade80">🏁 Final.</th>'+
               '<th style="color:#fb923c">↩️ Dev.</th>'+
               '<th style="color:#93c5fd">📦 S/G</th>'+
+              '<th style="color:#67e8f9">🚚 T.ok</th>'+
               '<th>% Contacto</th>'+
               '<th>% Cierre</th>'+
               '<th>G/min</th>'+
@@ -5990,7 +6032,7 @@ function _anlCargar(){
 
     // Obtener datos aplanados del período ya filtrados
     const userHistFlat = _aplanarHistorial(results[0]?.data||{}, asesorFilter);
-    const diasFiltrados = fechas.filter(f=>userHistFlat[f]&&(userHistFlat[f].contestaron||userHistFlat[f].finalizados||userHistFlat[f].waEnviados||userHistFlat[f].guiasSinGestion)).reverse();
+    const diasFiltrados = fechas.filter(f=>userHistFlat[f]&&(userHistFlat[f].contestaron||userHistFlat[f].finalizados||userHistFlat[f].waEnviados||userHistFlat[f].guiasSinGestion||userHistFlat[f].transitoSinGestion)).reverse();
     const userHist = userHistFlat;
     if(!diasFiltrados.length){
       document.getElementById('anl-table-wrap').innerHTML='<div class="anl-empty">Sin historial en este período'+(asesorFilter?' para este asesor':' para esta tienda')+'</div>';
@@ -6010,13 +6052,14 @@ function _anlCargar(){
         '<td style="color:#4ade80">'+(d.finalizados||0)+'</td>'+
         '<td style="color:#fb923c">'+(d.devoluciones||0)+'</td>'+
         '<td style="color:#93c5fd">'+(d.guiasSinGestion||0)+'</td>'+
+        '<td style="color:#67e8f9">'+(d.transitoSinGestion||0)+'</td>'+
         '<td>'+(d.minutos||0)+'m</td>'+
         '<td style="color:'+gc+';font-weight:700">'+(gpmD==='—'?'—':gpmD+'/m')+'</td>'+
       '</tr>';
     });
     document.getElementById('anl-table-wrap').innerHTML=
       '<table class="anl-table">'+
-      '<thead><tr><th>Fecha</th><th style="color:#60a5fa">✅ Cont.</th><th style="color:#f87171">❌ No cont.</th><th style="color:#a78bfa">📱 WA</th><th style="color:#4ade80">🏁 Final.</th><th style="color:#fb923c">↩️ Dev.</th><th style="color:#93c5fd">📦 S/Gest.</th><th>⏱ Mins</th><th>G/min</th></tr></thead>'+
+      '<thead><tr><th>Fecha</th><th style="color:#60a5fa">✅ Cont.</th><th style="color:#f87171">❌ No cont.</th><th style="color:#a78bfa">📱 WA</th><th style="color:#4ade80">🏁 Final.</th><th style="color:#fb923c">↩️ Dev.</th><th style="color:#93c5fd">📦 S/G</th><th style="color:#67e8f9">🚚 T.ok</th><th>⏱ Mins</th><th>G/min</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>';
   });
 }
