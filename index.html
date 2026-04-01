@@ -841,10 +841,23 @@ header h1{font-size:1.05rem;font-weight:700;}
 <!-- ===== MODAL SEGUNDO PASO (tienda/asesor) ===== -->
 <div class="adm-modal-bg" id="login-step2-modal">
   <div class="adm-modal">
-    <h3>👤 Completa tu perfil</h3>
-    <p style="color:#94a3b8;font-size:.78rem;margin-bottom:18px;">Primera vez que ingresas. Registra tu información.</p>
-    <div class="adm-field"><label>Nombre del asesor</label><input type="text" id="ls2-asesor" placeholder="Ej: Juan Pérez" autocomplete="off"/></div>
-    <div class="adm-field"><label>Tienda</label><input type="text" id="ls2-tienda" placeholder="Ej: Mi Tienda" autocomplete="off"/></div>
+    <h3>👤 ¿Quién va a trabajar hoy?</h3>
+    <p style="color:#94a3b8;font-size:.78rem;margin-bottom:18px;" id="ls2-subtitle">Selecciona tu nombre o escribe uno nuevo.</p>
+    <div class="adm-field">
+      <label>Asesor</label>
+      <div style="position:relative;">
+        <input type="text" id="ls2-asesor" placeholder="Escribe o selecciona tu nombre" autocomplete="off"
+          oninput="_ls2FiltrarAsesores(this.value)"
+          onfocus="_ls2FiltrarAsesores(this.value)"
+          onblur="setTimeout(()=>_ls2OcultarLista(),150)"/>
+        <div id="ls2-asesor-lista" style="display:none;position:absolute;top:100%;left:0;right:0;background:#1e293b;border:1.5px solid #3b82f6;border-top:none;border-radius:0 0 8px 8px;z-index:100;max-height:180px;overflow-y:auto;"></div>
+      </div>
+      <div id="ls2-asesor-hint" style="font-size:.68rem;color:#4ade80;margin-top:5px;display:none;"></div>
+    </div>
+    <div class="adm-field" id="ls2-tienda-field">
+      <label>Tienda</label>
+      <input type="text" id="ls2-tienda" placeholder="Ej: Mi Tienda" autocomplete="off"/>
+    </div>
     <div class="adm-modal-btns">
       <button class="adm-modal-btn cancel" onclick="document.getElementById('login-step2-modal').classList.remove('open')">Cancelar</button>
       <button class="adm-modal-btn primary" onclick="_loginStep2Confirmar()">Continuar</button>
@@ -5189,19 +5202,70 @@ const _db = firebase.database();
 
   let _pendingUser = null, _pendingPass = null;
 
-  function _pedirPerfil(username){
+  let _ls2AsesoresList = [];
+
+  function _pedirPerfil(username, tiendaGuardada){
     _pendingUser = username;
+    _ls2AsesoresList = [];
     document.getElementById('ls2-asesor').value = '';
-    document.getElementById('ls2-tienda').value = '';
+    document.getElementById('ls2-asesor-lista').style.display = 'none';
+    document.getElementById('ls2-asesor-hint').style.display = 'none';
+    document.getElementById('ls2-tienda').value = tiendaGuardada||'';
+    // Ocultar campo tienda si ya está guardada
+    document.getElementById('ls2-tienda-field').style.display = tiendaGuardada ? 'none' : 'block';
     document.getElementById('ls2-error').style.display = 'none';
+    // Cargar asesores previos desde historial_diario
+    _db.ref('historial_diario/'+username).once('value', snap=>{
+      const data = snap.val()||{};
+      const keys = Object.keys(data);
+      const isNew = keys.length>0 && !keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
+      if(isNew){
+        _ls2AsesoresList = keys.map(k=>{
+          // obtener nombre legible del primer día disponible
+          const dias = data[k];
+          const primerDia = dias[Object.keys(dias)[0]];
+          return primerDia?.asesorNombre || k;
+        }).filter(Boolean);
+        if(_ls2AsesoresList.length){
+          const hint = document.getElementById('ls2-asesor-hint');
+          hint.textContent = '👥 '+_ls2AsesoresList.length+' asesor'+(+_ls2AsesoresList.length>1?'es':'')+ ' han trabajado en esta cuenta';
+          hint.style.display = 'block';
+        }
+      }
+    });
     document.getElementById('login-step2-modal').classList.add('open');
     document.getElementById('ls2-asesor').focus();
   }
 
+  window._ls2FiltrarAsesores = function(val){
+    const lista = document.getElementById('ls2-asesor-lista');
+    if(!_ls2AsesoresList.length){ lista.style.display='none'; return; }
+    const filtrados = val.trim()===''
+      ? _ls2AsesoresList
+      : _ls2AsesoresList.filter(n=>n.toLowerCase().includes(val.toLowerCase()));
+    if(!filtrados.length){ lista.style.display='none'; return; }
+    lista.innerHTML = filtrados.map(n=>
+      '<div onclick="_ls2SeleccionarAsesor(\''+n.replace(/'/g,"\\'")+'\')" style="padding:10px 14px;cursor:pointer;font-size:.82rem;color:#e2e8f0;border-bottom:1px solid #334155;" onmouseenter="this.style.background=\'#334155\'" onmouseleave="this.style.background=\'\'">'+n+'</div>'
+    ).join('');
+    lista.style.display='block';
+  };
+
+  window._ls2SeleccionarAsesor = function(nombre){
+    document.getElementById('ls2-asesor').value = nombre;
+    document.getElementById('ls2-asesor-lista').style.display='none';
+  };
+
+  window._ls2OcultarLista = function(){
+    document.getElementById('ls2-asesor-lista').style.display='none';
+  };
+
   window._loginStep2Confirmar = function(){
     const a = document.getElementById('ls2-asesor').value.trim();
-    const t = document.getElementById('ls2-tienda').value.trim();
+    const tInput = document.getElementById('ls2-tienda').value.trim();
+    const tHidden = document.getElementById('ls2-tienda-field').style.display==='none';
+    const t = tHidden ? document.getElementById('ls2-tienda').value.trim() || localStorage.getItem('lgs_tienda') || '' : tInput;
     if(!a || !t){ document.getElementById('ls2-error').style.display='block'; return; }
+    document.getElementById('ls2-asesor-lista').style.display='none';
     document.getElementById('login-step2-modal').classList.remove('open');
     _entrarApp(_pendingUser, t, a);
     _pendingUser = null;
@@ -5226,14 +5290,13 @@ const _db = firebase.database();
         found = true;
         const d = child.val();
         if(d.password !== p){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-        // Si tiene tienda y asesor guardados, entra directo
-        if(d.tienda && d.asesor){ _entrarApp(u, d.tienda, d.asesor); }
-        else { _pedirPerfil(u); }
+        // Siempre preguntar quién trabaja hoy; si tiene tienda guardada la pre-llena
+        _pedirPerfil(u, d.tienda||'');
       });
       if(!found){
         // Fallback hardcodeado
         if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-        _pedirPerfil(u);
+        _pedirPerfil(u, '');
       }
     });
   };
