@@ -5401,8 +5401,15 @@ function _admCargarDashboard(){
           '<div class="adm-user-row-info" style="flex:1;">'+
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
               '<div>'+
-                '<div class="adm-user-row-name">'+(u.asesor||u.username)+'</div>'+
-                '<div class="adm-user-row-meta">@'+u.username+(u.tienda?' · '+u.tienda:'')+'</div>'+
+                '<div class="adm-user-row-name">'+
+                  (isOnline && p.asesor && p.asesor!==u.username
+                    ? p.asesor+'<span style="color:#64748b;font-size:.7rem;font-weight:400;margin-left:6px;">('+u.username+')</span>'
+                    : (u.asesor||u.username)
+                  )+
+                '</div>'+
+                '<div class="adm-user-row-meta">'+
+                  (isOnline && p.tienda ? '🏪 '+p.tienda : (u.tienda ? '🏪 '+u.tienda : '@'+u.username))+
+                '</div>'+
               '</div>'+
               '<div style="text-align:right;flex-shrink:0;">'+
                 '<div style="color:'+(isOnline?'#4ade80':'#475569')+';font-size:.68rem;font-weight:600;">'+
