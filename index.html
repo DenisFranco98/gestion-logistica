@@ -3561,12 +3561,18 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
 function setCheck(id,campo,valor){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id][campo]=valor;
-  guardar();
-  const ct=document.getElementById('content');
-  const sx=ct?ct.scrollLeft:0; const sy=window.scrollY;
-  renderAll();
-  if(ct)ct.scrollLeft=sx; window.scrollTo(0,sy);
-  _fbSyncGestion(id);
+  guardar();_fbSyncGestion(id);
+  // Actualizar solo el ícono de la fila sin re-renderizar toda la pantalla
+  const p=pedidos.find(x=>x.id===id);
+  if(p){
+    const icoEl=document.querySelector('#card-'+id+' .cf-gest-ico, .cf-wrap .cf-gest-ico');
+    const g=gestiones[id]||{};
+    const ico=g.guia_generada_hoy?'📦':g.transito_gestionado?'✅':g.transito_sin_gestion?'🚚':g.rechazado_gestionado?'✅':g.rechazado_sin_gestion?'🚫':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
+    // Actualizar ícono en fila si está visible
+    const wrap=document.getElementById('card-'+id);
+    if(wrap){const fi=wrap.previousElementSibling?.querySelector('.cf-gest-ico');if(fi)fi.textContent=ico;}
+  }
+  renderResumen();renderProgress();
 }
 
 function marcarWA(id,estadoKey){ultimaGestion=Date.now();
