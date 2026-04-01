@@ -551,6 +551,18 @@ header h1{font-size:1.05rem;font-weight:700;}
 .adm-modal-btn.primary{background:#1d4ed8;color:white;}
 .adm-modal-btn.cancel{background:#334155;color:#94a3b8;}
 .adm-empty{color:#475569;font-size:.85rem;text-align:center;padding:40px;}
+.adm-hist-btn{width:100%;margin-top:10px;background:#0f172a;color:#94a3b8;border:1.5px solid #334155;border-radius:8px;padding:7px 12px;font-size:.72rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;}
+.adm-hist-btn:hover{background:#1e293b;color:#e2e8f0;border-color:#475569;}
+.adm-hist-wrap{display:none;margin-top:10px;border-top:1px solid #334155;padding-top:10px;}
+.adm-hist-wrap.open{display:block;}
+.adm-hist-table{width:100%;border-collapse:collapse;font-size:.68rem;}
+.adm-hist-table th{color:#64748b;font-weight:700;text-align:center;padding:4px 3px;border-bottom:1px solid #334155;white-space:nowrap;}
+.adm-hist-table th:first-child{text-align:left;}
+.adm-hist-table td{text-align:center;padding:5px 3px;border-bottom:1px solid #1e293b;color:#cbd5e1;}
+.adm-hist-table td:first-child{text-align:left;color:#94a3b8;font-weight:600;}
+.adm-hist-table tr:hover td{background:#1e293b;}
+.adm-hist-table .gpm-cell{font-weight:700;}
+.adm-hist-loading{color:#475569;font-size:.72rem;text-align:center;padding:12px;}
 
 /* ===== LOGIN SCREEN ===== */
 #login-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;}
@@ -2052,6 +2064,10 @@ function _cargarArchivo(file){
       }catch(e){}
     }
     pedidos=nuevosPedidos;
+    // Limpiar gestiones_sync en Firebase al cargar nuevo archivo (historial_diario se conserva)
+    if(typeof _db!=='undefined'&&window._currentUsername){
+      _db.ref('gestiones_sync/'+window._currentUsername).remove();
+    }
     // Reasignar gestiones al nuevo id interno usando dropiId como puente
     gestiones={};
     pedidos.forEach(p=>{
@@ -5093,6 +5109,28 @@ function _fbSyncGestion(id){
   delete g.mensajes_listos;
   g._ts=Date.now();
   _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
+  _fbActualizarHistorial();
+}
+
+function _fbActualizarHistorial(){
+  if(typeof _db==='undefined'||!window._currentUsername)return;
+  const hoy=new Date().toISOString().slice(0,10);
+  const user=window._currentUsername;
+  // Calcular totales del día desde gestiones actuales en memoria
+  const arr=Object.values(gestiones);
+  const contestaron=arr.filter(g=>g.llamada==='contestó').length;
+  const noContestaron=arr.filter(g=>g.llamada==='no_contestó').length;
+  const waEnviados=arr.filter(g=>g.wa_enviado).length;
+  const finalizados=arr.filter(g=>g.gestion_final).length;
+  const devoluciones=arr.filter(g=>g.devolucion).length;
+  // Tiempo activo desde loginTime en presence
+  _db.ref('presence/'+user+'/loginTime').once('value',snap=>{
+    const loginTime=snap.val()||Date.now();
+    const minutos=Math.max(1,Math.floor((Date.now()-loginTime)/60000));
+    _db.ref('historial_diario/'+user+'/'+hoy).set({
+      contestaron,noContestaron,waEnviados,finalizados,devoluciones,minutos,_ts:Date.now()
+    });
+  });
 }
 
 function _fbRestaurarGestiones(cb){
@@ -5203,6 +5241,8 @@ function _admCargarDashboard(){
             '</div>'+
             '<div class="adm-user-meta">'+(isOnline?'🕐 Conectado desde: '+_fmtTiempo(p.loginTime):'🕐 Última vez: '+(p.lastSeen?_fmtTiempo(p.lastSeen):'—'))+'</div>'+
             resumenHtml+
+            '<button class="adm-hist-btn" onclick="_admToggleHistorial(this,\''+u.username+'\')">📊 Ver historial <span style="font-size:.8em;opacity:.6;">▼</span></button>'+
+            '<div class="adm-hist-wrap" id="hist-'+u.username+'"><div class="adm-hist-loading">Cargando...</div></div>'+
             (u.username!=='3D Company'?
               '<div style="display:flex;gap:6px;margin-top:10px;">'+
                 '<button class="adm-del-btn" style="position:static;flex:1;padding:5px 8px;" onclick="_admAbrirEditar(\''+u.username+'\',\''+( u.asesor||'')+'\',\''+( u.tienda||'')+'\')">✏️ Editar</button>'+
@@ -5265,6 +5305,55 @@ function _admGuardarEdicion(){
       child.ref.update(updates);
     });
     _admCerrarEditar();
+  });
+}
+
+function _admToggleHistorial(btn, username){
+  const wrap = document.getElementById('hist-'+username);
+  const isOpen = wrap.classList.contains('open');
+  wrap.classList.toggle('open');
+  const arrow = btn.querySelector('span');
+  if(arrow) arrow.textContent = isOpen ? '▼' : '▲';
+  if(!isOpen && !wrap.dataset.loaded){
+    wrap.dataset.loaded = '1';
+    _admCargarHistorial(username, wrap);
+  }
+}
+
+function _admCargarHistorial(username, wrap){
+  _db.ref('historial_diario/'+username).orderByKey().limitToLast(14).once('value', snap=>{
+    const hist = snap.val() || {};
+    const dias = Object.keys(hist).sort().reverse();
+    if(!dias.length){
+      wrap.innerHTML='<div class="adm-hist-loading">Sin historial registrado aún</div>';
+      return;
+    }
+    let rows = '';
+    dias.forEach(fecha=>{
+      const d = hist[fecha];
+      const total = (d.contestaron||0)+(d.noContestaron||0)+(d.waEnviados||0)+(d.finalizados||0);
+      const gpm = d.minutos>0 ? (d.finalizados/d.minutos).toFixed(2) : '—';
+      const gpmColor = gpm==='—'?'#64748b':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
+      const [y,m,dd] = fecha.split('-');
+      rows +=
+        '<tr>'+
+        '<td>'+dd+'/'+m+'</td>'+
+        '<td>'+( d.contestaron||0)+'</td>'+
+        '<td>'+( d.noContestaron||0)+'</td>'+
+        '<td>'+( d.waEnviados||0)+'</td>'+
+        '<td style="color:#4ade80;">'+( d.finalizados||0)+'</td>'+
+        '<td style="color:#f87171;">'+( d.devoluciones||0)+'</td>'+
+        '<td>'+( d.minutos||0)+'m</td>'+
+        '<td class="gpm-cell" style="color:'+gpmColor+';">'+(gpm==='—'?'—':gpm+'/m')+'</td>'+
+        '</tr>';
+    });
+    wrap.innerHTML =
+      '<table class="adm-hist-table">'+
+      '<thead><tr>'+
+        '<th>Fecha</th><th>✅</th><th>❌</th><th>WA</th><th>Fin.</th><th>Dev.</th><th>Mins</th><th>G/min</th>'+
+      '</tr></thead>'+
+      '<tbody>'+rows+'</tbody>'+
+      '</table>';
   });
 }
 
