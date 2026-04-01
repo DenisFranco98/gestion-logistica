@@ -3071,7 +3071,7 @@ function crearCard(p,est,esGest){
       html+=notaWidgetHtml(p.id);
     } else {
       if(est.key==='reparto'){
-        html+='<button onclick="marcarGuiaGeneradaHoy('+p.id+')" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:transparent;color:#2563eb;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;">📦 Guía generada hoy</button>';
+        html+='<button id="btn-ggh-'+p.id+'" onclick="marcarGuiaGeneradaHoy('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:transparent;color:#2563eb;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;transition:all .25s;">📦 Guía generada hoy</button>';
       }
       html+=btnLlamarHtml(p.id,p.telefono);
       html+=llamadaRowHtml(p.id);
@@ -3561,12 +3561,32 @@ function marcarMensajesListos(id){ultimaGestion=Date.now();
   guardar();renderAll();toast('\uD83D\uDCE8 Movido al fondo — mensajes enviados');
 }
 
-function marcarGuiaGeneradaHoy(id){
+function marcarGuiaGeneradaHoy(id, btn){
+  if(btn){
+    btn.disabled=true;
+    btn.innerHTML='✅ Listo';
+    btn.style.background='#1d4ed8';
+    btn.style.color='white';
+    btn.style.borderColor='#1d4ed8';
+    btn.style.transform='scale(1.04)';
+    setTimeout(()=>{
+      btn.style.transform='scale(1)';
+      btn.style.opacity='0';
+      setTimeout(()=>{
+        if(!gestiones[id])gestiones[id]={};
+        gestiones[id].guia_generada_hoy=true;
+        gestiones[id]._ts=Date.now();
+        guardar();_fbSyncGestion(id);renderAll();
+        toast('📦 Guía generada hoy — no cuenta como gestionado');
+      },200);
+    },380);
+    return;
+  }
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].guia_generada_hoy=true;
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);renderAll();
-  toast('📦 Marcado como "Guía generada hoy" — no cuenta como gestionado');
+  toast('📦 Guía generada hoy — no cuenta como gestionado');
 }
 
 function marcarFinalizado(id){ultimaGestion=Date.now();
