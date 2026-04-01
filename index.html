@@ -5091,10 +5091,23 @@ const _db = firebase.database();
     _currentUsername = username;
     window._currentUsername = username;
     const ref = _db.ref('presence/' + username);
-    ref.set({ online: true, lastSeen: Date.now(), loginTime: Date.now(), tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0 });
+    ref.set({ online: true, lastSeen: Date.now(), loginTime: Date.now(), tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0, force_logout: false });
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
     if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
     _heartbeatInterval = setInterval(()=>{ ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
+    // Escuchar si el admin fuerza cierre de sesión
+    ref.child('force_logout').on('value', snap=>{
+      if(snap.val()===true){
+        ref.child('force_logout').set(false);
+        _limpiarPresencia();
+        [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY].forEach(k=>localStorage.removeItem(k));
+        ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>{ const el=document.getElementById(id); if(el)el.value=''; });
+        // Cerrar cualquier modal abierto
+        ['logout-modal','nuevo-modal','reset-modal'].forEach(id=>{ const el=document.getElementById(id); if(el){el.classList.remove('open');el.style.display='none';} });
+        _loginShow();
+        setTimeout(()=>{ const err=document.getElementById('login-error'); if(err){err.textContent='⚠️ Tu sesión fue cerrada por el administrador';err.classList.add('show');setTimeout(()=>err.classList.remove('show'),4000);} }, 200);
+      }
+    });
   }
 
   function _limpiarPresencia(){
@@ -5332,6 +5345,7 @@ function _admCargarDashboard(){
           '</div>'+
           (u.username!=='3D Company'
             ? '<div class="adm-user-row-actions">'+
+                (isOnline ? '<button class="adm-row-btn" style="background:#78350f;color:#fcd34d;" onclick="_admForzarLogout(\''+u.username+'\')" title="Cerrar sesión">⏻</button>' : '')+
                 '<button class="adm-row-btn" onclick="_admAbrirEditar(\''+u.username+'\',\''+(u.asesor||'')+'\',\''+(u.tienda||'')+'\')" title="Editar">✏️</button>'+
                 '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+u.username+'\')" title="Eliminar">✕</button>'+
               '</div>'
@@ -5525,6 +5539,12 @@ function _admGuardarEdicion(){
     });
     _admCerrarEditar();
   });
+}
+
+function _admForzarLogout(username){
+  if(!confirm('¿Cerrar la sesión de "'+username+'" remotamente?')) return;
+  _db.ref('presence/'+username).update({ force_logout: true, online: false, lastSeen: Date.now() });
+  toast('⏻ Sesión de '+username+' cerrada');
 }
 
 function _admEliminarUsuario(username){
