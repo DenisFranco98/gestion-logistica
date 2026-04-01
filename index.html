@@ -5131,7 +5131,7 @@ const _db = firebase.database();
     ref.set({ online: true, lastSeen: Date.now(), loginTime: Date.now(), tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0, force_logout: false });
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
     if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
-    _heartbeatInterval = setInterval(()=>{ ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
+    _heartbeatInterval = setInterval(()=>{ if(_currentUsername===username) ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
     // Marcar offline si el usuario cierra o recarga la pestaña sin hacer logout
     window.addEventListener('beforeunload', ()=>{
       if(_currentUsername) _db.ref('presence/'+_currentUsername).update({ online: false, lastSeen: Date.now() });
@@ -5139,6 +5139,9 @@ const _db = firebase.database();
     // Escuchar si el admin fuerza cierre de sesión
     ref.child('force_logout').on('value', snap=>{
       if(snap.val()===true){
+        // Detener heartbeat PRIMERO antes de cualquier operación async
+        // para evitar que sobreescriba online:false con online:true
+        if(_heartbeatInterval){ clearInterval(_heartbeatInterval); _heartbeatInterval=null; }
         ref.child('force_logout').set(false);
         _limpiarPresencia();
         [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY].forEach(k=>localStorage.removeItem(k));
