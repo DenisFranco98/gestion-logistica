@@ -924,7 +924,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 
 <header>
   <h1>🚚 Gestión Logística Diaria</h1>
-  <div class="hright"><span id="save-st"></span><div id="fecha"></div><button onclick="abrirConfig()" style="background:rgba(255,255,255,.12);border:none;color:white;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⚙️</button><button onclick="_cerrarSesion()" title="Cerrar sesión" style="background:rgba(220,38,38,.25);border:1px solid rgba(220,38,38,.4);color:#fca5a5;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⏻ Salir</button></div>
+  <div class="hright"><span id="save-st"></span><div id="fecha"></div><button id="btn-pausa" onclick="togglePausa()" style="background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.4);color:#fcd34d;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:700;">⏸ Pausa</button><button onclick="abrirConfig()" style="background:rgba(255,255,255,.12);border:none;color:white;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⚙️</button><button onclick="_cerrarSesion()" title="Cerrar sesión" style="background:rgba(220,38,38,.25);border:1px solid rgba(220,38,38,.4);color:#fca5a5;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⏻ Salir</button></div>
 </header>
 <div class="toast" id="toast"></div>
 <div class="kb-hint" id="kb-hint">⌨️ <strong>C</strong> Contestó &nbsp;·&nbsp; <strong>N</strong> No contestó &nbsp;·&nbsp; <strong>Tab</strong> siguiente</div>
@@ -998,7 +998,6 @@ header h1{font-size:1.05rem;font-weight:700;}
         <button class="btn-vista" data-vista="grid" onclick="setVista('grid')" title="Vista cuadrícula">⊞ Cuadros</button>
         <button class="btn-vista" data-vista="lista" onclick="setVista('lista')" title="Vista lista">☰ Lista</button>
       </div>
-      <button class="btn-pausa" id="btn-pausa" onclick="togglePausa()">⏸ Pausar actividad</button>
       <button class="btn-topbar" onclick="toggleBuscador()">🔍 Buscar</button>
       <button class="btn-topbar" onclick="generarPDF()">📋 Informe</button>
       <div id="btn-reportes-wrap" style="display:none;position:relative;">
@@ -2277,7 +2276,7 @@ function _cargarArchivo(file){
     contadorAlertasInactividad=0;
     pausaActiva=false;pausaInicio=null;totalPausadoMs=0;contadorPausas=0;
     const _btnP=document.getElementById('btn-pausa');
-    if(_btnP){_btnP.classList.remove('pausado');_btnP.textContent='⏸ Pausar actividad';}
+    if(_btnP){_btnP.style.background='rgba(245,158,11,.25)';_btnP.style.borderColor='rgba(245,158,11,.4)';_btnP.style.color='#fcd34d';_btnP.textContent='⏸ Pausa';}
     document.getElementById('alerta-inac').classList.remove('show');
     document.getElementById('restore-banner').style.display='none';
     document.getElementById('upload-zone').style.display='none';
@@ -4333,7 +4332,7 @@ function limpiarApp(){
   sesionInicio=null;tiemposPorSeccion={};
   pausaActiva=false;pausaInicio=null;totalPausadoMs=0;contadorPausas=0;
   const btnP=document.getElementById('btn-pausa');
-  if(btnP){btnP.classList.remove('pausado');btnP.textContent='⏸ Pausar actividad';}
+  if(btnP){btnP.style.background='rgba(245,158,11,.25)';btnP.style.borderColor='rgba(245,158,11,.4)';btnP.style.color='#fcd34d';btnP.textContent='⏸ Pausa';}
   document.getElementById('upload-zone').style.display='flex';
   document.getElementById('main').style.display='none';
   document.getElementById('right-panel').style.display='none';
@@ -4436,25 +4435,23 @@ function iniciarTimerInactividad(){
 function togglePausa(){
   const btn=document.getElementById('btn-pausa');
   if(!pausaActiva){
-    // Iniciar pausa
     pausaActiva=true;
     pausaInicio=Date.now();
     contadorPausas++;
-    btn.classList.add('pausado');
-    btn.textContent='▶ Reanudar actividad';
-    // Ocultar alerta de inactividad si estaba visible
+    btn.style.background='rgba(220,38,38,.35)';
+    btn.style.borderColor='rgba(220,38,38,.5)';
+    btn.style.color='#fca5a5';
+    btn.textContent='▶ Reanudar';
     document.getElementById('alerta-inac').classList.remove('show');
     toast('⏸ Actividad pausada — no se registrarán alertas de inactividad');
   } else {
-    // Terminar pausa
     pausaActiva=false;
-    if(pausaInicio){
-      totalPausadoMs+=Date.now()-pausaInicio;
-      pausaInicio=null;
-    }
-    ultimaGestion=Date.now(); // reiniciar contador de inactividad al reanudar
-    btn.classList.remove('pausado');
-    btn.textContent='⏸ Pausar actividad';
+    if(pausaInicio){totalPausadoMs+=Date.now()-pausaInicio;pausaInicio=null;}
+    ultimaGestion=Date.now();
+    btn.style.background='rgba(245,158,11,.25)';
+    btn.style.borderColor='rgba(245,158,11,.4)';
+    btn.style.color='#fcd34d';
+    btn.textContent='⏸ Pausa';
     toast('▶ Actividad reanudada');
   }
 }
