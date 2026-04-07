@@ -1748,7 +1748,7 @@ function crearFila(p,est,esGest){
   }else if(est.key==='rechazado'&&p.dias!=null){
     diaVal='🚫 '+p.dias+' días';diaColor='#be123c';
   }else if(p.dias!=null&&p.dias>0){diaVal=p.dias+'d';}
-  const gestIco=g.guia_generada_hoy?'📦':g.transito_gestionado?'✅':g.transito_sin_gestion?'🚚':g.rechazado_gestionado?'✅':g.rechazado_sin_gestion?'🚫':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
+  const gestIco=g.guia_reportada?'✅':g.guia_generada_hoy?'📦':g.transito_gestionado?'✅':g.transito_sin_gestion?'🚚':g.rechazado_gestionado?'✅':g.rechazado_sin_gestion?'🚫':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
   const row=document.createElement('div');
   row.className='card-fila';
   const _tcFila=p.tienda?getTiendaColor(p.tienda):null;
@@ -1802,7 +1802,7 @@ function crearFilaNovedad(p){
   else if(dNov>=2){diaVal='⚠️ '+dNov+' días en novedad — revisar';diaColor='#d97706';}
   else if(dNov===1){diaVal='📋 1 día en novedad';diaColor='#d97706';}
   else{diaVal='📋 Entró hoy';diaColor='#64748b';}
-  const gestIco=g.guia_generada_hoy?'📦':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
+  const gestIco=g.guia_reportada?'✅':g.guia_generada_hoy?'📦':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
   const row=document.createElement('div');
   row.className='card-fila';
   row.style.borderLeftColor='#d97706';
@@ -2143,7 +2143,7 @@ function alertaNivel(p){
 function estaCompleta(p){
   const g=gestiones[p.id]||{};
   if(g.devolucion)return true;
-  if(p.estadoKey==='reparto'&&g.guia_generada_hoy)return true;
+  if(p.estadoKey==='reparto'&&g.guia_reportada)return true;
   if(p.estadoKey==='transito'){return!!(g.wa_enviado)||!!(g.transito_sin_gestion)||!!(g.transito_gestionado);}
   if(p.estadoKey==='rechazado'){return!!(g.rechazado_gestionado)||!!(g.rechazado_sin_gestion);}
   if(g.gestion_final)return true; // compatibilidad con versiones anteriores
@@ -2267,6 +2267,7 @@ function _cargarArchivo(file){
       delete g.wa_enviado; delete g.gestion_final; delete g.mensajes_listos;
       delete g.chatepro; delete g.nueva_entrega; delete g.nov_solucionada;
       delete g.intentos; delete g.wa_nov_enviado; delete g.wa_nov_idx;
+      delete g.guia_reportada; delete g.guia_generada_hoy;
       // g.notas, g.nota, g.devolucion, g.rechazado_gestionado, g.rechazado_sin_gestion se conservan
     });
     const recuperadas=Object.keys(gestiones).filter(k=>gestiones[k].notas&&gestiones[k].notas.length).length;
@@ -3107,7 +3108,7 @@ function crearCard(p,est,esGest){
       '</div>';
     } else {
       if(est.key==='reparto'){
-        html+='<button id="btn-ggh-'+p.id+'" onclick="marcarGuiaGeneradaHoy('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:transparent;color:#2563eb;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;transition:all .25s;">📦 Guía generada hoy</button>';
+        html+='<button id="btn-ggh-'+p.id+'" onclick="marcarGuiaReportada('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:'+(g.guia_reportada?'#1d4ed8':'transparent')+';color:'+(g.guia_reportada?'white':'#2563eb')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;transition:all .25s;">'+(g.guia_reportada?'✅ Guía Reportada/Gestionada':'📋 Guía Reportada/Gestionada')+'</button>';
       }
       html+=btnLlamarHtml(p.id,p.telefono);
       html+=llamadaRowHtml(p.id);
@@ -3581,7 +3582,7 @@ function setCheck(id,campo,valor){ultimaGestion=Date.now();
   if(p){
     const icoEl=document.querySelector('#card-'+id+' .cf-gest-ico, .cf-wrap .cf-gest-ico');
     const g=gestiones[id]||{};
-    const ico=g.guia_generada_hoy?'📦':g.transito_gestionado?'✅':g.transito_sin_gestion?'🚚':g.rechazado_gestionado?'✅':g.rechazado_sin_gestion?'🚫':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
+    const ico=g.guia_reportada?'✅':g.guia_generada_hoy?'📦':g.transito_gestionado?'✅':g.transito_sin_gestion?'🚚':g.rechazado_gestionado?'✅':g.rechazado_sin_gestion?'🚫':estaCompleta(p)?'✅':(g.llamada?'📋':'·');
     // Actualizar ícono en fila si está visible
     const wrap=document.getElementById('card-'+id);
     if(wrap){const fi=wrap.previousElementSibling?.querySelector('.cf-gest-ico');if(fi)fi.textContent=ico;}
@@ -3610,32 +3611,15 @@ function marcarMensajesListos(id){ultimaGestion=Date.now();
   guardar();renderAll();toast('\uD83D\uDCE8 Movido al fondo — mensajes enviados');
 }
 
-function marcarGuiaGeneradaHoy(id, btn){
-  if(btn){
-    btn.disabled=true;
-    btn.innerHTML='✅ Listo';
-    btn.style.background='#1d4ed8';
-    btn.style.color='white';
-    btn.style.borderColor='#1d4ed8';
-    btn.style.transform='scale(1.04)';
-    setTimeout(()=>{
-      btn.style.transform='scale(1)';
-      btn.style.opacity='0';
-      setTimeout(()=>{
-        if(!gestiones[id])gestiones[id]={};
-        gestiones[id].guia_generada_hoy=true;
-        gestiones[id]._ts=Date.now();
-        guardar();_fbSyncGestion(id);renderAll();
-        toast('📦 Guía generada hoy — no cuenta como gestionado');
-      },200);
-    },380);
-    return;
-  }
+function marcarGuiaReportada(id, btn){
+  ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
-  gestiones[id].guia_generada_hoy=true;
+  gestiones[id].guia_reportada=true;
+  gestiones[id].guia_generada_hoy=true; // compatibilidad con estaCompleta
   gestiones[id]._ts=Date.now();
-  guardar();_fbSyncGestion(id);renderAll();
-  toast('📦 Guía generada hoy — no cuenta como gestionado');
+  guardar();_fbSyncGestion(id);
+  animarCompletado(id,()=>renderAll(),'✅');
+  toast('✅ Guía reportada y gestionada');
 }
 
 function marcarTransitoGestionado(id, btn){
