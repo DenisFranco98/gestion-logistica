@@ -2143,7 +2143,7 @@ function alertaNivel(p){
 function estaCompleta(p){
   const g=gestiones[p.id]||{};
   if(g.devolucion)return true;
-  if(p.estadoKey==='reparto'&&g.guia_reportada)return true;
+  if(p.estadoKey==='reparto'&&(g.guia_reportada||g.guia_generada_hoy))return true;
   if(p.estadoKey==='transito'){return!!(g.wa_enviado)||!!(g.transito_sin_gestion)||!!(g.transito_gestionado);}
   if(p.estadoKey==='rechazado'){return!!(g.rechazado_gestionado)||!!(g.rechazado_sin_gestion);}
   if(g.gestion_final)return true; // compatibilidad con versiones anteriores
@@ -3108,7 +3108,10 @@ function crearCard(p,est,esGest){
       '</div>';
     } else {
       if(est.key==='reparto'){
-        html+='<button id="btn-ggh-'+p.id+'" onclick="marcarGuiaReportada('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:'+(g.guia_reportada?'#1d4ed8':'transparent')+';color:'+(g.guia_reportada?'white':'#2563eb')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;transition:all .25s;">'+(g.guia_reportada?'✅ Guía Reportada/Gestionada':'📋 Guía Reportada/Gestionada')+'</button>';
+        html+='<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px;">'+
+          '<button onclick="marcarGuiaReportada('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:'+(g.guia_reportada?'#1d4ed8':'transparent')+';color:'+(g.guia_reportada?'white':'#2563eb')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .25s;">'+(g.guia_reportada?'✅ Guía Reportada/Gestionada':'📋 Guía Reportada/Gestionada')+'</button>'+
+          '<button onclick="marcarGuiaGeneradaHoy('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #0891b2;background:'+(g.guia_generada_hoy&&!g.guia_reportada?'#0e7490':'transparent')+';color:'+(g.guia_generada_hoy&&!g.guia_reportada?'white':'#0891b2')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .25s;">'+(g.guia_generada_hoy&&!g.guia_reportada?'📦 Guía generada hoy — marcada':'📦 Guía generada hoy')+'</button>'+
+        '</div>';
       }
       html+=btnLlamarHtml(p.id,p.telefono);
       html+=llamadaRowHtml(p.id);
@@ -3615,11 +3618,21 @@ function marcarGuiaReportada(id, btn){
   ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].guia_reportada=true;
-  gestiones[id].guia_generada_hoy=true; // compatibilidad con estaCompleta
+  gestiones[id].guia_generada_hoy=true;
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);
   animarCompletado(id,()=>renderAll(),'✅');
   toast('✅ Guía reportada y gestionada');
+}
+
+function marcarGuiaGeneradaHoy(id, btn){
+  ultimaGestion=Date.now();
+  if(!gestiones[id])gestiones[id]={};
+  gestiones[id].guia_generada_hoy=true;
+  gestiones[id]._ts=Date.now();
+  guardar();_fbSyncGestion(id);
+  animarCompletado(id,()=>renderAll(),'📦');
+  toast('📦 Guía generada hoy — movida a gestionados');
 }
 
 function marcarTransitoGestionado(id, btn){
