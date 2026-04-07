@@ -2270,7 +2270,8 @@ function _cargarArchivo(file){
     const recuperadas=Object.keys(gestiones).filter(k=>gestiones[k].notas&&gestiones[k].notas.length).length;
 
     waCounters=waCounters||{reparto:0,oficina:0,transito:0,novedad:0};
-    if(!sesionInicio)sesionInicio=Date.now();
+    sesionInicio=Date.now(); // Siempre desde el momento en que se carga el archivo
+    tiemposPorSeccion={};
     // Resetear contadores al cargar nuevo archivo
     ultimaGestion=Date.now();
     contadorAlertasInactividad=0;
