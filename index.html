@@ -2617,13 +2617,7 @@ function renderCards(){
   }
 
   (filtroActivo?ESTADOS.filter(e=>e.key===filtroActivo):ESTADOS.filter(e=>!estadosDesactivados.has(e.key))).forEach(est=>{
-    const gr=(()=>{
-      const base=pedidos.filter(p=>p.estadoKey===est.key&&(filtroTiendas.length===0||filtroTiendas.includes(p.tienda)));
-      if(est.key!=='novedad')return base;
-      // Incluir también pedidos de otras categorías que tengan novedad asignada
-      const extra=pedidos.filter(p=>p.estadoKey!=='novedad'&&p.novedad&&!sinAccion(p)&&(filtroTiendas.length===0||filtroTiendas.includes(p.tienda)));
-      return[...base,...extra];
-    })();if(!gr.length)return;
+    const gr=pedidos.filter(p=>p.estadoKey===est.key&&(filtroTiendas.length===0||filtroTiendas.includes(p.tienda)));if(!gr.length)return;
     const subFiltro=filtrosSeccion[est.key]||[];
     const grFiltrado=subFiltro.length>0?gr.filter(p=>subFiltro.includes(p.estadoRaw)):gr;
     const pendientes=grFiltrado.filter(p=>!estaCompleta(p));
