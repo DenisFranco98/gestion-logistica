@@ -364,6 +364,11 @@ header h1{font-size:1.05rem;font-weight:700;}
 #alerta-inac p{font-size:.73rem;opacity:.75;margin-top:3px;font-weight:400;}
 #alerta-inac button{margin-top:10px;background:#f59e0b;color:#1e293b;border:none;
   padding:5px 16px;border-radius:7px;font-size:.76rem;font-weight:700;cursor:pointer;}
+/* BOTÓN PAUSA */
+.btn-pausa{display:inline-flex;align-items:center;gap:5px;background:#f59e0b;color:#1e293b;border:none;padding:6px 13px;border-radius:7px;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;line-height:1;transition:all .2s;}
+.btn-pausa:hover{opacity:.88;}
+.btn-pausa.pausado{background:#dc2626;color:white;animation:pulsePausa 1.8s infinite;}
+@keyframes pulsePausa{0%,100%{opacity:1;}50%{opacity:.7;}}
 /* TOGGLE ESTADO */
 .bv-toggle{position:relative;width:34px;height:20px;flex-shrink:0;}
 .bv-toggle input{opacity:0;width:0;height:0;position:absolute;}
@@ -993,6 +998,7 @@ header h1{font-size:1.05rem;font-weight:700;}
         <button class="btn-vista" data-vista="grid" onclick="setVista('grid')" title="Vista cuadrícula">⊞ Cuadros</button>
         <button class="btn-vista" data-vista="lista" onclick="setVista('lista')" title="Vista lista">☰ Lista</button>
       </div>
+      <button class="btn-pausa" id="btn-pausa" onclick="togglePausa()">⏸ Pausar actividad</button>
       <button class="btn-topbar" onclick="toggleBuscador()">🔍 Buscar</button>
       <button class="btn-topbar" onclick="generarPDF()">📋 Informe</button>
       <div id="btn-reportes-wrap" style="display:none;position:relative;">
@@ -1296,6 +1302,7 @@ const LS_NOTES='dropi_notas_v1'; // notas guardadas por guía (clave estable)
 let sesionInicio=null, tiemposPorSeccion={};
 let ultimaGestion=Date.now(), contadorAlertasInactividad=0;
 let _inactTimer=null;
+let pausaActiva=false, pausaInicio=null, totalPausadoMs=0, contadorPausas=0;
 
 // ── CONFIGURACIÓN ─────────────────────────────────────────────────────────
 // CFG.tiendas      → [{nombre, tel, color}]  — las tiendas con sus datos
@@ -2155,7 +2162,7 @@ function estaCompleta(p){
 // ── STORAGE ────────────────────────────────────────────────────────────
 function guardar(){
   try{
-    localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,ts:Date.now()}));
+    localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,ts:Date.now()}));
     const now=new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('save-st').textContent='💾 '+now;
   }catch(e){}
@@ -2184,6 +2191,8 @@ function restaurar(){
     waCounters=d.waCounters||{reparto:0,oficina:0,transito:0,novedad:0};
     sesionInicio=d.sesionInicio||Date.now();
     tiemposPorSeccion=d.tiemposPorSeccion||{};
+    totalPausadoMs=d.totalPausadoMs||0;
+    contadorPausas=d.contadorPausas||0;
     document.getElementById('restore-banner').style.display='none';
     document.getElementById('upload-zone').style.display='none';
     document.getElementById('main').style.display='block';
@@ -2263,9 +2272,12 @@ function _cargarArchivo(file){
 
     waCounters=waCounters||{reparto:0,oficina:0,transito:0,novedad:0};
     if(!sesionInicio)sesionInicio=Date.now();
-    // Resetear contador de inactividad al cargar nuevo archivo
+    // Resetear contadores al cargar nuevo archivo
     ultimaGestion=Date.now();
     contadorAlertasInactividad=0;
+    pausaActiva=false;pausaInicio=null;totalPausadoMs=0;contadorPausas=0;
+    const _btnP=document.getElementById('btn-pausa');
+    if(_btnP){_btnP.classList.remove('pausado');_btnP.textContent='⏸ Pausar actividad';}
     document.getElementById('alerta-inac').classList.remove('show');
     document.getElementById('restore-banner').style.display='none';
     document.getElementById('upload-zone').style.display='none';
@@ -4205,7 +4217,9 @@ function generarInformeInicial(){
 function generarPDF(){
   if(!pedidos.length)return;
   const ahora=Date.now();
-  const durTotal=sesionInicio?ahora-sesionInicio:0;
+  // Tiempo real trabajado = total transcurrido − tiempo pausado acumulado
+  const pausadoAcumulado=totalPausadoMs+(pausaActiva&&pausaInicio?ahora-pausaInicio:0);
+  const durTotal=sesionInicio?Math.max(0,(ahora-sesionInicio)-pausadoAcumulado):0;
   const hoy=new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const horaInicio=sesionInicio?new Date(sesionInicio).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'—';
   const horaFin=new Date(ahora).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
@@ -4242,7 +4256,9 @@ function generarPDF(){
         <div class="pdf-stat"><div class="val" style="color:#374151">${chatepro}</div><div class="lbl">${CFG.bot||'Bot'}</div></div>
         <div class="pdf-stat"><div class="val" style="color:#334155">${finalizados}</div><div class="lbl">NC Finalizados</div></div>
         <div class="pdf-stat"><div class="val" style="color:#64748b">${autoSinNovedad}</div><div class="lbl">Transito OK</div></div>
-        <div class="pdf-stat"><div class="val" style="color:#374151">${fmtMin(durTotal)}</div><div class="lbl">Tiempo total</div></div>
+        <div class="pdf-stat"><div class="val" style="color:#374151">${fmtMin(durTotal)}</div><div class="lbl">Tiempo activo</div></div>
+        <div class="pdf-stat"><div class="val" style="color:#d97706">${contadorPausas}</div><div class="lbl">Pausas usadas</div></div>
+        <div class="pdf-stat"><div class="val" style="color:#d97706">${fmtMin(totalPausadoMs+(pausaActiva&&pausaInicio?Date.now()-pausaInicio:0))}</div><div class="lbl">Tiempo pausado</div></div>
         <div class="pdf-stat"><div class="val" style="color:#92400e">${contadorAlertasInactividad}</div><div class="lbl">Alertas inactividad</div></div>
       </div>
     </div>
@@ -4315,6 +4331,9 @@ function limpiarApp(){
   pedidos=[];gestiones={};filtroActivo=null;filtrosSeccion={};filtroTiendas=[];
   waCounters={reparto:0,oficina:0,transito:0,novedad:0,rechazado:0};
   sesionInicio=null;tiemposPorSeccion={};
+  pausaActiva=false;pausaInicio=null;totalPausadoMs=0;contadorPausas=0;
+  const btnP=document.getElementById('btn-pausa');
+  if(btnP){btnP.classList.remove('pausado');btnP.textContent='⏸ Pausar actividad';}
   document.getElementById('upload-zone').style.display='flex';
   document.getElementById('main').style.display='none';
   document.getElementById('right-panel').style.display='none';
@@ -4399,10 +4418,11 @@ function iniciarTimerInactividad(){
   if(_inactTimer)clearInterval(_inactTimer);
   _inactTimer=setInterval(()=>{
     if(!pedidos.length)return;
+    if(pausaActiva)return; // ← no alertar si está en pausa
     const mins=Math.round((Date.now()-ultimaGestion)/60000);
     if(mins>=10){
       contadorAlertasInactividad++;
-      ultimaGestion=Date.now(); // resetear para que el próximo aviso sea en otros 10 min
+      ultimaGestion=Date.now();
       const el=document.getElementById('alerta-inac');
       document.getElementById('alerta-inac-cnt').textContent=
         'Alerta #'+contadorAlertasInactividad+' · '+mins+' min sin actividad';
@@ -4410,6 +4430,33 @@ function iniciarTimerInactividad(){
       setTimeout(()=>el.classList.remove('show'),30000);
     }
   },60000);
+}
+
+// ── PAUSA DE ACTIVIDAD ─────────────────────────────────────────────────
+function togglePausa(){
+  const btn=document.getElementById('btn-pausa');
+  if(!pausaActiva){
+    // Iniciar pausa
+    pausaActiva=true;
+    pausaInicio=Date.now();
+    contadorPausas++;
+    btn.classList.add('pausado');
+    btn.textContent='▶ Reanudar actividad';
+    // Ocultar alerta de inactividad si estaba visible
+    document.getElementById('alerta-inac').classList.remove('show');
+    toast('⏸ Actividad pausada — no se registrarán alertas de inactividad');
+  } else {
+    // Terminar pausa
+    pausaActiva=false;
+    if(pausaInicio){
+      totalPausadoMs+=Date.now()-pausaInicio;
+      pausaInicio=null;
+    }
+    ultimaGestion=Date.now(); // reiniciar contador de inactividad al reanudar
+    btn.classList.remove('pausado');
+    btn.textContent='⏸ Pausar actividad';
+    toast('▶ Actividad reanudada');
+  }
 }
 cfgCheckPrimerUso();
 
