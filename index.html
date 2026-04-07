@@ -2161,7 +2161,7 @@ function estaCompleta(p){
 // ── STORAGE ────────────────────────────────────────────────────────────
 function guardar(){
   try{
-    localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,ts:Date.now()}));
+    localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,contadorAlertasInactividad,ts:Date.now()}));
     const now=new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('save-st').textContent='💾 '+now;
   }catch(e){}
@@ -2192,6 +2192,8 @@ function restaurar(){
     tiemposPorSeccion=d.tiemposPorSeccion||{};
     totalPausadoMs=d.totalPausadoMs||0;
     contadorPausas=d.contadorPausas||0;
+    contadorAlertasInactividad=d.contadorAlertasInactividad||0;
+    ultimaGestion=Date.now(); // al restaurar reiniciamos el contador de inactividad
     document.getElementById('restore-banner').style.display='none';
     document.getElementById('upload-zone').style.display='none';
     document.getElementById('main').style.display='block';
@@ -2264,7 +2266,7 @@ function _cargarArchivo(file){
       delete g.llamada; delete g.llamada_fecha; delete g.llamada_ts;
       delete g.wa_enviado; delete g.gestion_final; delete g.mensajes_listos;
       delete g.chatepro; delete g.nueva_entrega; delete g.nov_solucionada;
-      delete g.intentos; delete g.wa_nov_enviado;
+      delete g.intentos; delete g.wa_nov_enviado; delete g.wa_nov_idx;
       // g.notas, g.nota, g.devolucion, g.rechazado_gestionado, g.rechazado_sin_gestion se conservan
     });
     const recuperadas=Object.keys(gestiones).filter(k=>gestiones[k].notas&&gestiones[k].notas.length).length;
@@ -4337,6 +4339,10 @@ function limpiarApp(){
   pedidos=[];gestiones={};filtroActivo=null;filtrosSeccion={};filtroTiendas=[];
   waCounters={reparto:0,oficina:0,transito:0,novedad:0,rechazado:0};
   sesionInicio=null;tiemposPorSeccion={};
+  ultimaGestion=Date.now();contadorAlertasInactividad=0;
+  estadosDesactivados=new Set();ordenSecciones=[];
+  _cardFocus=null;document.getElementById('kb-hint')?.classList.remove('show');
+  if(_inactTimer){clearInterval(_inactTimer);_inactTimer=null;}
   pausaActiva=false;pausaInicio=null;totalPausadoMs=0;contadorPausas=0;
   const btnP=document.getElementById('btn-pausa');
   if(btnP){btnP.style.background='rgba(245,158,11,.25)';btnP.style.borderColor='rgba(245,158,11,.4)';btnP.style.color='#fcd34d';btnP.textContent='⏸ Pausa';}
