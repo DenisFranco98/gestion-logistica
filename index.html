@@ -1085,7 +1085,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     <div class="seg-header" style="background:#991b1b;">
       <h3>⏳ Clientes sin guía</h3>
       <div class="seg-header-right">
-        <label style="font-size:.75rem;color:#fca5a5;display:flex;align-items:center;gap:5px;">Exportar desde <input type="number" id="singuia-min-horas" value="1" min="1" max="999" style="width:46px;padding:3px 6px;border-radius:6px;border:1px solid #7f1d1d;background:#7f1d1d;color:white;font-size:.78rem;text-align:center;"> horas</label>
+        <label style="font-size:.75rem;color:#fca5a5;display:flex;align-items:center;gap:5px;">Exportar desde <input type="number" id="singuia-min-horas" value="1" min="1" max="999" style="width:46px;padding:3px 6px;border-radius:6px;border:1px solid #7f1d1d;background:#7f1d1d;color:white;font-size:.78rem;text-align:center;"> días</label>
         <button class="btn-seg-export" onclick="exportarSinGuia()">📤 Exportar Excel</button>
         <button class="btn-seg-close" onclick="cerrarSinGuia()">✕ Cerrar</button>
       </div>
@@ -3090,29 +3090,24 @@ function crearCard(p,est,esGest){
       btnExp.onclick=exportarPendientes;
       sec.appendChild(btnExp);
     } else if(est.key==='transito'){
-      html+='<div style="display:flex;gap:8px;margin-bottom:8px;">'+
-        '<button id="btn-tg-'+p.id+'" onclick="marcarTransitoGestionado('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #16a34a;background:transparent;color:#16a34a;cursor:pointer;transition:all .25s;">✅ Gestionado</button>'+
-        '<button id="btn-tsg-'+p.id+'" onclick="marcarTransitoSinGestion('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #0891b2;background:transparent;color:#0891b2;cursor:pointer;transition:all .25s;">🚚 Sin novedad</button>'+
-      '</div>';
       const wi=getWAInfo(p,est.key);
       html+=waBoton(p,est.key,wi,g.wa_enviado);
       if(g.wa_enviado&&!g.mensajes_listos&&!g.gestion_final){
         html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#374151;color:white;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
       }
       html+=notaWidgetHtml(p.id);
+      html+='<div style="display:flex;gap:8px;margin-top:8px;">'+
+        '<button id="btn-tg-'+p.id+'" onclick="marcarTransitoGestionado('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #16a34a;background:transparent;color:#16a34a;cursor:pointer;transition:all .25s;">✅ Gestionado</button>'+
+        '<button id="btn-tsg-'+p.id+'" onclick="marcarTransitoSinGestion('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #0891b2;background:transparent;color:#0891b2;cursor:pointer;transition:all .25s;">🚚 Sin novedad</button>'+
+      '</div>';
     } else if(est.key==='rechazado'){
       html+=notaWidgetHtml(p.id);
       html+='<div style="display:flex;gap:8px;margin-top:8px;">'+
         '<button id="btn-rg-'+p.id+'" onclick="marcarRechazadoGestionado('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #16a34a;background:transparent;color:#16a34a;cursor:pointer;transition:all .25s;">✅ Pedido gestionado</button>'+
         '<button id="btn-rsg-'+p.id+'" onclick="marcarRechazadoSinGestion('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #be123c;background:transparent;color:#be123c;cursor:pointer;transition:all .25s;">🚫 Rechazado sin gestión</button>'+
-      '</div>';
+      '</div>'+
+      '<button onclick="copiarDatosCliente('+p.id+')" style="width:100%;padding:8px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #7c3aed;background:transparent;color:#7c3aed;cursor:pointer;margin-top:6px;">📋 Copiar datos del cliente</button>';
     } else {
-      if(est.key==='reparto'){
-        html+='<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px;">'+
-          '<button onclick="marcarGuiaReportada('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:'+(g.guia_reportada?'#1d4ed8':'transparent')+';color:'+(g.guia_reportada?'white':'#2563eb')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .25s;">'+(g.guia_reportada?'✅ Guía Reportada/Gestionada':'📋 Guía Reportada/Gestionada')+'</button>'+
-          '<button onclick="marcarGuiaGeneradaHoy('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #0891b2;background:'+(g.guia_generada_hoy&&!g.guia_reportada?'#0e7490':'transparent')+';color:'+(g.guia_generada_hoy&&!g.guia_reportada?'white':'#0891b2')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .25s;">'+(g.guia_generada_hoy&&!g.guia_reportada?'📦 Guía generada hoy — marcada':'📦 Guía generada hoy')+'</button>'+
-        '</div>';
-      }
       html+=btnLlamarHtml(p.id,p.telefono);
       html+=llamadaRowHtml(p.id);
       if(g.llamada==='contestó'){
@@ -3150,6 +3145,12 @@ function crearCard(p,est,esGest){
       // Sin estado de llamada: mostrar nota siempre
       if(!g.llamada){
         html+=notaWidgetHtml(p.id);
+      }
+      if(est.key==='reparto'){
+        html+='<div style="display:flex;flex-direction:column;gap:7px;margin-top:8px;">'+
+          '<button onclick="marcarGuiaReportada('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:'+(g.guia_reportada?'#1d4ed8':'transparent')+';color:'+(g.guia_reportada?'white':'#2563eb')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .25s;">'+(g.guia_reportada?'✅ Guía Reportada/Gestionada':'📋 Guía Reportada/Gestionada')+'</button>'+
+          '<button onclick="marcarGuiaGeneradaHoy('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #0891b2;background:'+(g.guia_generada_hoy&&!g.guia_reportada?'#0e7490':'transparent')+';color:'+(g.guia_generada_hoy&&!g.guia_reportada?'white':'#0891b2')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .25s;">'+(g.guia_generada_hoy&&!g.guia_reportada?'📦 Guía generada hoy — marcada':'📦 Guía generada hoy')+'</button>'+
+        '</div>';
       }
     }
     // Botón devolución — visible en todas las categorías excepto rechazados
@@ -3356,9 +3357,9 @@ function crearCardPendiente(p,color){
 
   let urgTxt='', urgStyle='';
   if(horas===null){urgTxt='Sin fecha';urgStyle='background:#f1f5f9;color:#64748b';}
-  else if(horas<24){urgTxt='🟢 '+horas+'h — normal';urgStyle='background:#f3f4f6;color:#525252';}
-  else if(horas<48){urgTxt='⚠️ '+horas+'h — revisar';urgStyle='background:#fafaf9;color:#78716c';}
-  else{urgTxt='🚨 '+horas+'h — escalar YA';urgStyle='background:#fee2e2;color:#b91c1c;font-weight:700';}
+  else if(horas<24){urgTxt='🟢 Hoy — normal';urgStyle='background:#f3f4f6;color:#525252';}
+  else if(horas<48){urgTxt='⚠️ 1 día — revisar';urgStyle='background:#fafaf9;color:#78716c';}
+  else{const dias=Math.floor(horas/24);urgTxt='🚨 '+dias+' día'+(dias===1?'':'s')+' — escalar YA';urgStyle='background:#fee2e2;color:#b91c1c;font-weight:700';}
 
   const prodSimple=getProductoSimple(p.productos);
 
@@ -3710,6 +3711,20 @@ function marcarRechazadoSinGestion(id, btn){
     toast('🚫 Marcado como rechazado sin gestión');
   };
   if(btn) _animarBtnRechazo(btn,'#be123c',_do); else _do();
+}
+
+function copiarDatosCliente(id){
+  const p=pedidos.find(x=>x.id===id);
+  if(!p)return;
+  const tel=(p.telefono||'').replace(/^57/,'');
+  const partes=[
+    p.nombre||'',
+    p.ciudad||'',
+    p.depto||'',
+    p.direccion||'',
+    tel,
+  ].filter(Boolean);
+  navigator.clipboard.writeText(partes.join('\n')).then(()=>toast('📋 Datos del cliente copiados'));
 }
 
 function marcarFinalizado(id){ultimaGestion=Date.now();
@@ -5038,9 +5053,9 @@ function abrirSinGuia(){
       '<div style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</div>';
     resumen.appendChild(d);
   };
-  mkPill('🟢','Menos de 24h',ok.length,'#f3f4f6','#525252');
-  mkPill('⚠️','Entre 24h y 48h',warn.length,'#fefce8','#a16207');
-  mkPill('🚨','Más de 48h — Escalar',urg.length,'#fef2f2','#b91c1c');
+  mkPill('🟢','Menos de 1 día',ok.length,'#f3f4f6','#525252');
+  mkPill('⚠️','1 día — Revisar',warn.length,'#fefce8','#a16207');
+  mkPill('🚨','Más de 2 días — Escalar',urg.length,'#fef2f2','#b91c1c');
   body.appendChild(resumen);
 
   // Tabla
@@ -5048,7 +5063,7 @@ function abrirSinGuia(){
   const wrap=document.createElement('div');wrap.style.cssText='overflow-x:auto;';
   const tbl=document.createElement('table');tbl.className='seg-table';
   tbl.innerHTML='<thead><tr>'+
-    '<th>ID Orden</th><th>Cliente</th><th>Teléfono</th><th>Producto</th><th>Tienda</th><th>Ciudad</th><th>Horas sin guía</th><th>Urgencia</th>'+
+    '<th>ID Orden</th><th>Cliente</th><th>Teléfono</th><th>Producto</th><th>Tienda</th><th>Ciudad</th><th>Días sin guía</th><th>Urgencia</th>'+
   '</tr></thead>';
   const tbody=document.createElement('tbody');
   sorted.forEach(p=>{
@@ -5063,7 +5078,7 @@ function abrirSinGuia(){
       '<td>'+getProductoSimple(p.productos)+'</td>'+
       '<td>'+(p.tienda||'—')+'</td>'+
       '<td>'+(p.ciudad||'—')+'</td>'+
-      '<td style="text-align:center;font-weight:700">'+h+'h</td>'+
+      '<td style="text-align:center;font-weight:700">'+(h<24?'Hoy':Math.floor(h/24)+(Math.floor(h/24)===1?' día':' días'))+'</td>'+
       '<td class="'+urgClass+'">'+urgLabel+'</td>';
     tbody.appendChild(tr);
   });
@@ -5080,12 +5095,13 @@ function cerrarSinGuia(){
 function exportarSinGuia(){
   const lista = _sinGuiaPedidos();
   if(!lista.length){toast('No hay pedidos sin guía');return;}
-  const minHoras=parseInt(document.getElementById('singuia-min-horas').value)||1;
-  const filtrada=lista.filter(p=>(horasDesde(p.fechaOrden)||0)>=minHoras);
-  if(!filtrada.length){toast('No hay pedidos con '+minHoras+'+ horas sin guía');return;}
+  const minDias=parseInt(document.getElementById('singuia-min-horas').value)||1;
+  const filtrada=lista.filter(p=>Math.floor((horasDesde(p.fechaOrden)||0)/24)>=minDias);
+  if(!filtrada.length){toast('No hay pedidos con '+minDias+'+ días sin guía');return;}
   const hoy=new Date().toLocaleDateString('es-CO').replace(/\//g,'-');
   const filas=[...filtrada].sort((a,b)=>(horasDesde(b.fechaOrden)||0)-(horasDesde(a.fechaOrden)||0)).map(p=>{
     const h=horasDesde(p.fechaOrden)||0;
+    const d=Math.floor(h/24);
     return {
       'ID Orden':p.dropiId,
       'Cliente':p.nombre,
@@ -5096,14 +5112,14 @@ function exportarSinGuia(){
       'Ciudad':p.ciudad||'',
       'Departamento':p.depto||'',
       'Dirección':p.direccion||'',
-      'Horas sin guía':h,
-      'Urgencia':h>=48?'ESCALAR YA':'Revisar',
+      'Días sin guía':d,
+      'Urgencia':d>=2?'ESCALAR YA':'Revisar',
     };
   });
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.json_to_sheet(filas);
   ws['!cols']=[14,24,13,26,14,14,16,16,32,12,12].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb,ws,'Sin Guía +'+minHoras+'h');
+  XLSX.utils.book_append_sheet(wb,ws,'Sin Guía +'+minDias+'d');
   XLSX.writeFile(wb,'SinGuia_'+hoy+'.xlsx');
   toast('📤 Exportado: SinGuia_'+hoy+'.xlsx');
 }
