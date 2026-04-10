@@ -2818,9 +2818,8 @@ function renderCards(){
         sec.appendChild(barML);sec.appendChild(listML);
       }
     } else if(est.key==='transito'){
-      // Excluir pedidos con novedad — esos van a su propia sección
-      const conNovedad=pendientes.filter(p=>!sinAccion(p)&&p.novedad);
-      const conAcc=pendientes.filter(p=>!sinAccion(p)&&!p.novedad);
+      // Mostrar todos los activos juntos (incluidos los que tienen novedad en tránsito)
+      const conAcc=pendientes.filter(p=>!sinAccion(p));
       const msgPend=conAcc.filter(p=>histPuedeMensaje(p.guia));
       const msgEnv=conAcc.filter(p=>!histPuedeMensaje(p.guia));
       if(msgPend.length){
@@ -2846,18 +2845,6 @@ function renderCards(){
         list.appendChild(grid2);
         bar.onclick=()=>{list.classList.toggle('open');bar.querySelector('.ver').textContent=list.classList.contains('open')?'ocultar ‹':'ver ›';};
         sec.appendChild(bar);sec.appendChild(list);
-      }
-      // Pedidos con novedad — colapsados, solo informativo
-      if(conNovedad.length){
-        const barNov=document.createElement('div');barNov.className='gest-bar';
-        barNov.style.cssText='border-left:3px solid #f59e0b;background:#fef9ec;';
-        barNov.innerHTML='<span style="color:#92400e;font-weight:700">⚠️ '+conNovedad.length+' en tránsito con novedad — ver en sección Novedad</span><span class="ver">ver ›</span>';
-        const listNov=document.createElement('div');listNov.className='gest-list';
-        const gridNov=_mkGrid();
-        conNovedad.forEach(p=>{const card=_mkCardEl(p,est,false);card.style.opacity='.45';card.style.pointerEvents='none';gridNov.appendChild(card);});
-        listNov.appendChild(gridNov);
-        barNov.onclick=()=>{listNov.classList.toggle('open');barNov.querySelector('.ver').textContent=listNov.classList.contains('open')?'ocultar ‹':'ver ›';};
-        sec.appendChild(barNov);sec.appendChild(listNov);
       }
     } else {
       // Solo se mueven al fondo los que tienen mensajes_listos (botón explícito)
@@ -3318,10 +3305,10 @@ function crearCardNovedad(p){
         (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
 
     } else {
-      // SIN SELECCIÓN: llamar + contestó/no contestó + notas si ya hay historial
-      html+=btnLlamarHtml(p.id,p.telefono);
-      html+=llamadaRowHtml(p.id);
+      // SIN SELECCIÓN: mostrar nota primero, luego llamar + contestó/no contestó
       html+=notaWidgetHtml(p.id);
+      html+=btnLlamarHtml(p.id,p.telefono);
+      html+=llamadaRowNovHtml(p.id);
       html+='<button class="btn-finalizar" onclick="marcarFinalizadoNov('+p.id+')" style="margin-top:4px">'+
         (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
     }
@@ -3533,6 +3520,38 @@ function animarCompletado(id, callback, emoji='✅'){
 
 // ── ACCIONES ───────────────────────────────────────────────────────────
 function registrarClick(id){if(!gestiones[id])gestiones[id]={};gestiones[id].intentos=(gestiones[id].intentos||0)+1;guardar();}
+
+// Versión de setLlamada para novedades: exige nota antes de marcar
+function setLlamadaNov(id,resultado){
+  const g=gestiones[id]||{};
+  // Si está deshaciendo la selección actual, siempre permitir
+  if(g.llamada===resultado){setLlamada(id,resultado);return;}
+  // Verificar que haya una nota registrada hoy
+  const hoy=new Date().toLocaleDateString('es-CO');
+  const notas=g.notas||(g.nota?[{texto:g.nota,fecha:hoy}]:[]);
+  const hayNota=notas.some(n=>n.fecha===hoy&&(n.texto||'').trim().length>2);
+  if(!hayNota){
+    const ta=document.querySelector('#card-'+id+' .nota-input-row textarea');
+    if(ta){ta.classList.add('nota-req-shake');ta.focus();const o=ta.placeholder;ta.placeholder='✏️ Escribe la novedad antes de marcar...';setTimeout(()=>{ta.classList.remove('nota-req-shake');ta.placeholder=o;},1600);}
+    toast('📝 Debes registrar una nota de la novedad antes de marcar la llamada');
+    return;
+  }
+  setLlamada(id,resultado);
+}
+
+function llamadaRowNovHtml(id){
+  const g=gestiones[id]||{};
+  const hoy=new Date().toLocaleDateString('es-CO');
+  const fecha=g.llamada_fecha||'';
+  const esMismoDia=fecha===hoy;
+  const fechaLabel=fecha?(esMismoDia?'hoy':'el '+fecha):'';
+  const labelC='✔ Contestó'+(g.llamada==='contestó'&&fechaLabel?' · '+fechaLabel:'');
+  const labelNC='📵 No contestó'+(g.llamada==='no_contestó'&&fechaLabel?' · '+fechaLabel:'');
+  return '<div class="llamada-row">'+
+    '<button class="btn-a ba-c'+(g.llamada==='contestó'?' sel':'')+'" onclick="setLlamadaNov('+id+',\'contestó\')">'+labelC+'</button>'+
+    '<button class="btn-a ba-nc'+(g.llamada==='no_contestó'?' sel':'')+'" onclick="setLlamadaNov('+id+',\'no_contestó\')">'+labelNC+'</button>'+
+  '</div>';
+}
 
 function setLlamada(id,resultado){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
@@ -4458,6 +4477,19 @@ function iniciarTimerInactividad(){
     }
   },60000);
 }
+// Resetear inactividad con cualquier interacción en la página
+(function(){
+  let _lastInteract=0;
+  function _onInteract(){
+    const now=Date.now();
+    if(now-_lastInteract<30000)return; // throttle: máximo una actualización cada 30s
+    _lastInteract=now;
+    if(pedidos.length&&!pausaActiva)ultimaGestion=now;
+  }
+  document.addEventListener('click',_onInteract,true);
+  document.addEventListener('keydown',_onInteract,true);
+  document.addEventListener('scroll',_onInteract,true);
+})();
 
 // ── PAUSA DE ACTIVIDAD ─────────────────────────────────────────────────
 function togglePausa(){
@@ -5729,7 +5761,7 @@ function _admCargarDashboard(){
 
       usuarios.forEach(u => {
         const p = presencia[u.username] || {};
-        const isOnline = !!p.online;
+        const isOnline = !!p.online && (Date.now()-(p.lastSeen||0))<120000; // offline si lastSeen >2min
         const totalGestUser = p.sessionGestiones || 0;
         const tiempoActivo = isOnline&&p.loginTime ? _fmtDuracion(Date.now()-p.loginTime) : null;
 
