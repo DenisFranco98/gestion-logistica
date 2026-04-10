@@ -2184,6 +2184,7 @@ function checkSesion(){
 function restaurar(){
   try{
     const d=JSON.parse(localStorage.getItem(LS_KEY));
+    if(!d||!Array.isArray(d.pedidos)||!d.pedidos.length){alert('No se pudo restaurar: datos inválidos o vacíos.');return;}
     pedidos=d.pedidos;gestiones=d.gestiones||{};
     // Limpiar mensajes_listos al restaurar — la cola se controla manualmente cada sesión
     Object.values(gestiones).forEach(g=>{ delete g.mensajes_listos; });
@@ -2562,9 +2563,9 @@ function renderCards(){
           '<span style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</span>';
         antigBox.appendChild(d);
       };
-      mkAntig('🟢','Menos de 24h',  p_ok.length,  '#f3f4f6','#525252');
-      mkAntig('⚠️','Entre 24h y 48h',p_warn.length,'#fefce8','#a16207');
-      mkAntig('🚨','Más de 48h — Escalar YA',p_urg.length,'#fef2f2','#b91c1c');
+      mkAntig('🟢','Menos de 1 día',  p_ok.length,  '#f3f4f6','#525252');
+      mkAntig('⚠️','1 día — Revisar',p_warn.length,'#fefce8','#a16207');
+      mkAntig('🚨','Más de 2 días — Escalar YA',p_urg.length,'#fef2f2','#b91c1c');
       sec.appendChild(antigBox);
 
       // ── Resumen por producto ──
@@ -2589,9 +2590,9 @@ function renderCards(){
       tbl.innerHTML='<thead><tr style="background:#f8fafc">'+
         '<th style="padding:8px 12px;text-align:left;color:#334155;font-weight:700;border-bottom:1px solid #e2e8f0">Producto</th>'+
         '<th style="padding:8px 10px;text-align:center;color:#334155;font-weight:700;border-bottom:1px solid #e2e8f0">Total</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#525252;font-weight:700;border-bottom:1px solid #e2e8f0">🟢 &lt;24h</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#a16207;font-weight:700;border-bottom:1px solid #e2e8f0">⚠️ 24-48h</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#b91c1c;font-weight:700;border-bottom:1px solid #e2e8f0">🚨 +48h</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#525252;font-weight:700;border-bottom:1px solid #e2e8f0">🟢 Hoy</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#a16207;font-weight:700;border-bottom:1px solid #e2e8f0">⚠️ 1 día</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#b91c1c;font-weight:700;border-bottom:1px solid #e2e8f0">🚨 +2 días</th>'+
       '</tr></thead>';
       const tbody=document.createElement('tbody');
       Object.entries(byProd).sort((a,b)=>b[1].urg-a[1].urg||b[1].warn-a[1].warn).forEach(([prod,v],i)=>{
@@ -2678,8 +2679,12 @@ function renderCards(){
           };
           dd.appendChild(item);
         });
-        btn.onclick=(e)=>{e.stopPropagation();btn.classList.toggle('open');dd.classList.toggle('open');};
-        document.addEventListener('click',()=>{btn.classList.remove('open');dd.classList.remove('open');},{once:true});
+        btn.onclick=(e)=>{
+          e.stopPropagation();
+          const opening=!btn.classList.contains('open');
+          btn.classList.toggle('open');dd.classList.toggle('open');
+          if(opening){document.addEventListener('click',()=>{btn.classList.remove('open');dd.classList.remove('open');},{once:true});}
+        };
         wrap.appendChild(btn);wrap.appendChild(dd);
         filaFiltros.appendChild(wrap);
       }
@@ -2716,8 +2721,12 @@ function renderCards(){
           };
           dd2.appendChild(item);
         });
-        btn2.onclick=(e)=>{e.stopPropagation();btn2.classList.toggle('open');dd2.classList.toggle('open');};
-        document.addEventListener('click',()=>{btn2.classList.remove('open');dd2.classList.remove('open');},{once:true});
+        btn2.onclick=(e)=>{
+          e.stopPropagation();
+          const opening2=!btn2.classList.contains('open');
+          btn2.classList.toggle('open');dd2.classList.toggle('open');
+          if(opening2){document.addEventListener('click',()=>{btn2.classList.remove('open');dd2.classList.remove('open');},{once:true});}
+        };
         wrap2.appendChild(btn2);wrap2.appendChild(dd2);
         filaFiltros.appendChild(wrap2);
       }
@@ -2739,9 +2748,9 @@ function renderCards(){
           '<span style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</span>';
         antigBox2.appendChild(d);
       };
-      mkA('🟢','Menos de 24h',  p_ok2.length,  '#f3f4f6','#525252');
-      mkA('⚠️','Entre 24h y 48h',p_warn2.length,'#fefce8','#a16207');
-      mkA('🚨','Más de 48h — Escalar YA',p_urg2.length,'#fef2f2','#b91c1c');
+      mkA('🟢','Menos de 1 día',  p_ok2.length,  '#f3f4f6','#525252');
+      mkA('⚠️','1 día — Revisar',p_warn2.length,'#fefce8','#a16207');
+      mkA('🚨','Más de 2 días — Escalar YA',p_urg2.length,'#fef2f2','#b91c1c');
       sec.appendChild(antigBox2);
       // ── Resumen por producto ──
       const byProd2={};
@@ -2763,9 +2772,9 @@ function renderCards(){
       tbl2.innerHTML='<thead><tr style="background:#f8fafc">'+
         '<th style="padding:8px 12px;text-align:left;color:#334155;font-weight:700;border-bottom:1px solid #e2e8f0">Producto</th>'+
         '<th style="padding:8px 10px;text-align:center;color:#334155;font-weight:700;border-bottom:1px solid #e2e8f0">Total</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#525252;font-weight:700;border-bottom:1px solid #e2e8f0">🟢 &lt;24h</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#a16207;font-weight:700;border-bottom:1px solid #e2e8f0">⚠️ 24-48h</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#b91c1c;font-weight:700;border-bottom:1px solid #e2e8f0">🚨 +48h</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#525252;font-weight:700;border-bottom:1px solid #e2e8f0">🟢 Hoy</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#a16207;font-weight:700;border-bottom:1px solid #e2e8f0">⚠️ 1 día</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#b91c1c;font-weight:700;border-bottom:1px solid #e2e8f0">🚨 +2 días</th>'+
       '</tr></thead>';
       const tbody2=document.createElement('tbody');
       Object.entries(byProd2).sort((a,b)=>b[1].urg-a[1].urg||b[1].warn-a[1].warn).forEach(([prod,v],i)=>{
@@ -3043,9 +3052,9 @@ function crearCard(p,est,esGest){
           '<span style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</span>';
         antigBox2.appendChild(d);
       };
-      mkA('🟢','Menos de 24h',  p_ok2.length,  '#f3f4f6','#525252');
-      mkA('⚠️','Entre 24h y 48h',p_warn2.length,'#fefce8','#a16207');
-      mkA('🚨','Más de 48h — Escalar YA',p_urg2.length,'#fef2f2','#b91c1c');
+      mkA('🟢','Menos de 1 día',  p_ok2.length,  '#f3f4f6','#525252');
+      mkA('⚠️','1 día — Revisar',p_warn2.length,'#fefce8','#a16207');
+      mkA('🚨','Más de 2 días — Escalar YA',p_urg2.length,'#fef2f2','#b91c1c');
       sec.appendChild(antigBox2);
       // ── Resumen por producto ──
       const byProd2={};
@@ -3067,9 +3076,9 @@ function crearCard(p,est,esGest){
       tbl2.innerHTML='<thead><tr style="background:#f8fafc">'+
         '<th style="padding:8px 12px;text-align:left;color:#334155;font-weight:700;border-bottom:1px solid #e2e8f0">Producto</th>'+
         '<th style="padding:8px 10px;text-align:center;color:#334155;font-weight:700;border-bottom:1px solid #e2e8f0">Total</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#525252;font-weight:700;border-bottom:1px solid #e2e8f0">🟢 &lt;24h</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#a16207;font-weight:700;border-bottom:1px solid #e2e8f0">⚠️ 24-48h</th>'+
-        '<th style="padding:8px 10px;text-align:center;color:#b91c1c;font-weight:700;border-bottom:1px solid #e2e8f0">🚨 +48h</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#525252;font-weight:700;border-bottom:1px solid #e2e8f0">🟢 Hoy</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#a16207;font-weight:700;border-bottom:1px solid #e2e8f0">⚠️ 1 día</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:#b91c1c;font-weight:700;border-bottom:1px solid #e2e8f0">🚨 +2 días</th>'+
       '</tr></thead>';
       const tbody2=document.createElement('tbody');
       Object.entries(byProd2).sort((a,b)=>b[1].urg-a[1].urg||b[1].warn-a[1].warn).forEach(([prod,v],i)=>{
@@ -3422,13 +3431,13 @@ function exportarPendientes(){
       'Direccion':p.direccion,
       'Producto':getProductoSimple(p.productos),
       'Tienda':p.tienda,
-      'Horas sin guia':horasDesde(p.fechaOrden)||'',
+      'Días sin guía':Math.floor((horasDesde(p.fechaOrden)||0)/24),
       'Urgencia':( (horasDesde(p.fechaOrden)||0)<24?'Normal':
                    (horasDesde(p.fechaOrden)||0)<48?'Revisar':'ESCALAR YA'),
       'Novedad':p.novedad||'',
     }));
     // Ordenar de más urgente a menos
-    filas.sort((a,b)=>(b['Horas sin guia']||0)-(a['Horas sin guia']||0));
+    filas.sort((a,b)=>(b['Días sin guía']||0)-(a['Días sin guía']||0));
     const ws=XLSX.utils.json_to_sheet(filas);
     ws['!cols']=[14,22,13,16,14,28,24,12,14,12,20].map(w=>({wch:w}));
     // Nombre de hoja máx 31 chars
