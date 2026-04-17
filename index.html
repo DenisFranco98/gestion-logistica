@@ -272,27 +272,31 @@ header h1{font-size:1.05rem;font-weight:700;}
 .btn-pdf-close{background:#f1f5f9;border:1px solid #e2e8f0;color:#64748b;padding:8px 18px;border-radius:8px;font-size:.82rem;cursor:pointer;}
 @media(max-width:540px){.upload-box{padding:34px 18px;}#right-panel{right:8px;bottom:8px;}.topbar-actions{width:100%;}}
 /* HISTORIAL CLIENTE */
-#historial-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
-#historial-modal.open{display:flex;}
-.hist-box{background:white;border-radius:16px;max-width:500px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);margin:auto;}
-.hist-header{background:#1e293b;color:white;padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+#historial-modal{display:none;position:fixed;inset:0;z-index:500;pointer-events:none;}
+#historial-modal.open{display:block;pointer-events:auto;}
+.hist-overlay{position:fixed;inset:0;background:rgba(15,23,42,.18);opacity:0;transition:opacity .22s;pointer-events:auto;}
+#historial-modal.open .hist-overlay{opacity:1;}
+.hist-box{position:fixed;top:10px;right:-400px;width:330px;max-width:calc(100vw - 20px);max-height:calc(100vh - 20px);background:white;border-radius:14px;box-shadow:0 8px 36px rgba(0,0,0,.24);overflow:hidden;display:flex;flex-direction:column;transition:right .28s cubic-bezier(.4,0,.2,1);pointer-events:auto;}
+#historial-modal.open .hist-box{right:10px;}
+.hist-header{background:#1e293b;color:white;padding:11px 15px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-shrink:0;}
 .hist-header-info{flex:1;min-width:0;}
-.hist-header h3{font-size:.9rem;font-weight:800;margin:0;}
-.hist-header-sub{font-size:.68rem;opacity:.6;margin-top:3px;}
-.btn-hist-close{background:rgba(255,255,255,.12);border:none;color:white;padding:5px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+.hist-header h3{font-size:.84rem;font-weight:800;margin:0;}
+.hist-header-sub{font-size:.64rem;opacity:.6;margin-top:2px;}
+.btn-hist-close{background:rgba(255,255,255,.12);border:none;color:white;padding:4px 10px;border-radius:6px;font-size:.68rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .btn-hist-close:hover{background:rgba(255,255,255,.22);}
-.hist-body{padding:16px 18px;max-height:72vh;overflow-y:auto;}
-.hist-sec-title{font-size:.65rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #f1f5f9;}
+.hist-body{padding:13px 14px;overflow-y:auto;flex:1;}
+.hist-sec-title{font-size:.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin:11px 0 7px;padding-bottom:4px;border-bottom:1px solid #f1f5f9;}
 .hist-sec-title:first-child{margin-top:0;}
-.hist-nota-item{background:#f8fafc;border-radius:8px;padding:9px 11px;margin-bottom:6px;border-left:3px solid #3b82f6;}
-.hist-nota-fecha{font-size:.63rem;color:#94a3b8;font-weight:700;margin-bottom:3px;}
-.hist-nota-texto{font-size:.79rem;color:#1e293b;line-height:1.45;}
-.hist-evento{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #f8fafc;font-size:.77rem;color:#334155;}
+.hist-nota-item{background:#f8fafc;border-radius:7px;padding:8px 10px;margin-bottom:5px;border-left:3px solid #3b82f6;}
+.hist-nota-fecha{font-size:.61rem;color:#94a3b8;font-weight:700;margin-bottom:2px;}
+.hist-nota-texto{font-size:.76rem;color:#1e293b;line-height:1.42;}
+.hist-evento{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f8fafc;font-size:.75rem;color:#334155;}
 .hist-evento:last-child{border-bottom:none;}
-.hist-evento-ico{font-size:.95rem;width:22px;text-align:center;flex-shrink:0;}
-.hist-vacio{color:#b0bec5;font-size:.76rem;text-align:center;padding:14px 0;}
+.hist-evento-ico{font-size:.9rem;width:20px;text-align:center;flex-shrink:0;}
+.hist-vacio{color:#b0bec5;font-size:.75rem;text-align:center;padding:20px 0;}
 .btn-ver-hist{width:100%;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;cursor:pointer;margin-top:7px;text-align:center;transition:background .15s;}
 .btn-ver-hist:hover{background:#e2e8f0;color:#334155;}
+.hist-dot{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#ef4444;border:2px solid white;pointer-events:none;}
 /* SEGUIMIENTO PROVEEDORES */
 #seg-modal,#transp-modal,#singuia-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
 #seg-modal.open,#transp-modal.open,#singuia-modal.open{display:flex;}
@@ -1118,6 +1122,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 
 <!-- MODAL HISTORIAL CLIENTE -->
 <div id="historial-modal">
+  <div class="hist-overlay" onclick="cerrarHistorial()"></div>
   <div class="hist-box">
     <div class="hist-header">
       <div class="hist-header-info">
@@ -3069,7 +3074,7 @@ function crearCard(p,est,esGest){
       html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
-    html+='<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')" style="width:100%;margin-top:6px;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1.5px solid #6366f1;background:transparent;color:#6366f1;cursor:pointer;">🕐 Ver historial del cliente</button>';
+    html+=_btnHistHtml(p);
   }
 
   if(!esGest){
@@ -3204,7 +3209,7 @@ function crearCard(p,est,esGest){
       html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
-    html+='<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')" style="width:100%;margin-top:6px;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1.5px solid #6366f1;background:transparent;color:#6366f1;cursor:pointer;">🕐 Ver historial del cliente</button>';
+    html+=_btnHistHtml(p);
     html+='</div>';
   }
   card.innerHTML=html;
@@ -3372,7 +3377,7 @@ function crearCardNovedad(p){
     '</div>';
     html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
       (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
-    html+='<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')" style="width:100%;margin-top:6px;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1.5px solid #6366f1;background:transparent;color:#6366f1;cursor:pointer;">🕐 Ver historial del cliente</button>';
+    html+=_btnHistHtml(p);
     html+='</div>';
   }
   card.innerHTML=html;
@@ -3807,6 +3812,23 @@ function copiarDatosCliente(id){
   navigator.clipboard.writeText(partes.join('\n')).then(()=>toast('📋 Datos del cliente copiados'));
 }
 
+function _histTieneRegistros(p){
+  try{
+    const lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
+    if(p.guia&&lsN[p.guia]&&lsN[p.guia].length)return true;
+    const lsH=JSON.parse(localStorage.getItem(LS_HIST)||'{}');
+    if(p.guia&&lsH[p.guia]&&lsH[p.guia].length)return true;
+  }catch(e){}
+  const g=gestiones[p.id]||{};
+  return !!(g.notas&&g.notas.length);
+}
+function _btnHistHtml(p){
+  const hay=_histTieneRegistros(p);
+  return '<div style="position:relative;margin-top:6px;">'+
+    '<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')">🕐 Ver historial del cliente</button>'+
+    (hay?'<span class="hist-dot"></span>':'')+
+  '</div>';
+}
 function abrirHistorial(id){
   const p=pedidos.find(x=>x.id===id);
   if(!p)return;
