@@ -296,7 +296,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 .hist-vacio{color:#b0bec5;font-size:.75rem;text-align:center;padding:20px 0;}
 .btn-ver-hist{width:100%;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;cursor:pointer;margin-top:7px;text-align:center;transition:background .15s;}
 .btn-ver-hist:hover{background:#e2e8f0;color:#334155;}
-.hist-dot{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#ef4444;border:2px solid white;pointer-events:none;}
+.hist-dot{display:inline-block;background:#ef4444;color:white;font-size:.58rem;font-weight:800;line-height:1;padding:2px 6px;border-radius:20px;margin-left:6px;vertical-align:middle;letter-spacing:.02em;}
 /* SEGUIMIENTO PROVEEDORES */
 #seg-modal,#transp-modal,#singuia-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
 #seg-modal.open,#transp-modal.open,#singuia-modal.open{display:flex;}
@@ -3824,10 +3824,8 @@ function _histTieneRegistros(p){
 }
 function _btnHistHtml(p){
   const hay=_histTieneRegistros(p);
-  return '<div style="position:relative;margin-top:6px;">'+
-    '<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')">🕐 Ver historial del cliente</button>'+
-    (hay?'<span class="hist-dot"></span>':'')+
-  '</div>';
+  const badge=hay?'<span class="hist-dot">● Tiene historial</span>':'';
+  return '<button class="btn-ver-hist" style="margin-top:6px;" onclick="abrirHistorial('+p.id+')">🕐 Ver historial del cliente'+badge+'</button>';
 }
 function abrirHistorial(id){
   const p=pedidos.find(x=>x.id===id);
