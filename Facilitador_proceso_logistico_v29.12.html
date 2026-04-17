@@ -271,6 +271,28 @@ header h1{font-size:1.05rem;font-weight:700;}
 .btn-pdf-print{background:#1e293b;color:white;border:none;padding:8px 20px;border-radius:8px;font-size:.82rem;cursor:pointer;font-weight:600;}
 .btn-pdf-close{background:#f1f5f9;border:1px solid #e2e8f0;color:#64748b;padding:8px 18px;border-radius:8px;font-size:.82rem;cursor:pointer;}
 @media(max-width:540px){.upload-box{padding:34px 18px;}#right-panel{right:8px;bottom:8px;}.topbar-actions{width:100%;}}
+/* HISTORIAL CLIENTE */
+#historial-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
+#historial-modal.open{display:flex;}
+.hist-box{background:white;border-radius:16px;max-width:500px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);margin:auto;}
+.hist-header{background:#1e293b;color:white;padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.hist-header-info{flex:1;min-width:0;}
+.hist-header h3{font-size:.9rem;font-weight:800;margin:0;}
+.hist-header-sub{font-size:.68rem;opacity:.6;margin-top:3px;}
+.btn-hist-close{background:rgba(255,255,255,.12);border:none;color:white;padding:5px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+.btn-hist-close:hover{background:rgba(255,255,255,.22);}
+.hist-body{padding:16px 18px;max-height:72vh;overflow-y:auto;}
+.hist-sec-title{font-size:.65rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid #f1f5f9;}
+.hist-sec-title:first-child{margin-top:0;}
+.hist-nota-item{background:#f8fafc;border-radius:8px;padding:9px 11px;margin-bottom:6px;border-left:3px solid #3b82f6;}
+.hist-nota-fecha{font-size:.63rem;color:#94a3b8;font-weight:700;margin-bottom:3px;}
+.hist-nota-texto{font-size:.79rem;color:#1e293b;line-height:1.45;}
+.hist-evento{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #f8fafc;font-size:.77rem;color:#334155;}
+.hist-evento:last-child{border-bottom:none;}
+.hist-evento-ico{font-size:.95rem;width:22px;text-align:center;flex-shrink:0;}
+.hist-vacio{color:#b0bec5;font-size:.76rem;text-align:center;padding:14px 0;}
+.btn-ver-hist{width:100%;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;cursor:pointer;margin-top:7px;text-align:center;transition:background .15s;}
+.btn-ver-hist:hover{background:#e2e8f0;color:#334155;}
 /* SEGUIMIENTO PROVEEDORES */
 #seg-modal,#transp-modal,#singuia-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
 #seg-modal.open,#transp-modal.open,#singuia-modal.open{display:flex;}
@@ -1091,6 +1113,20 @@ header h1{font-size:1.05rem;font-weight:700;}
       </div>
     </div>
     <div class="seg-body" id="singuia-body"></div>
+  </div>
+</div>
+
+<!-- MODAL HISTORIAL CLIENTE -->
+<div id="historial-modal">
+  <div class="hist-box">
+    <div class="hist-header">
+      <div class="hist-header-info">
+        <h3 id="hist-title">📋 Historial del cliente</h3>
+        <div class="hist-header-sub" id="hist-sub"></div>
+      </div>
+      <button class="btn-hist-close" onclick="cerrarHistorial()">✕ Cerrar</button>
+    </div>
+    <div class="hist-body" id="hist-body"></div>
   </div>
 </div>
 
@@ -2271,6 +2307,19 @@ function _cargarArchivo(file){
       delete g.guia_reportada; delete g.guia_generada_hoy;
       // g.notas, g.nota, g.devolucion, g.rechazado_gestionado, g.rechazado_sin_gestion se conservan
     });
+    // Restaurar notas históricas desde LS_NOTES (clave estable por guía)
+    try{
+      const _lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
+      pedidos.forEach(p=>{
+        if(!p.guia)return;
+        const notasEst=_lsN[p.guia];
+        if(!notasEst||!notasEst.length)return;
+        if(!gestiones[p.id])gestiones[p.id]={};
+        if(!gestiones[p.id].notas||!gestiones[p.id].notas.length){
+          gestiones[p.id].notas=notasEst;
+        }
+      });
+    }catch(e){}
     const recuperadas=Object.keys(gestiones).filter(k=>gestiones[k].notas&&gestiones[k].notas.length).length;
 
     waCounters=waCounters||{reparto:0,oficina:0,transito:0,novedad:0};
@@ -3020,6 +3069,7 @@ function crearCard(p,est,esGest){
       html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
+    html+='<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')" style="width:100%;margin-top:6px;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1.5px solid #6366f1;background:transparent;color:#6366f1;cursor:pointer;">🕐 Ver historial del cliente</button>';
   }
 
   if(!esGest){
@@ -3154,6 +3204,7 @@ function crearCard(p,est,esGest){
       html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
+    html+='<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')" style="width:100%;margin-top:6px;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1.5px solid #6366f1;background:transparent;color:#6366f1;cursor:pointer;">🕐 Ver historial del cliente</button>';
     html+='</div>';
   }
   card.innerHTML=html;
@@ -3321,6 +3372,7 @@ function crearCardNovedad(p){
     '</div>';
     html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
       (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
+    html+='<button class="btn-ver-hist" onclick="abrirHistorial('+p.id+')" style="width:100%;margin-top:6px;padding:6px;border-radius:8px;font-size:.7rem;font-weight:700;border:1.5px solid #6366f1;background:transparent;color:#6366f1;cursor:pointer;">🕐 Ver historial del cliente</button>';
     html+='</div>';
   }
   card.innerHTML=html;
@@ -3753,6 +3805,69 @@ function copiarDatosCliente(id){
     tel,
   ].filter(Boolean);
   navigator.clipboard.writeText(partes.join('\n')).then(()=>toast('📋 Datos del cliente copiados'));
+}
+
+function abrirHistorial(id){
+  const p=pedidos.find(x=>x.id===id);
+  if(!p)return;
+  const g=gestiones[id]||{};
+  // Recopilar notas: primero de LS_NOTES (histórico), luego de sesión actual
+  let notasHist=[];
+  try{
+    const _lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
+    notasHist=(p.guia&&_lsN[p.guia])||[];
+  }catch(e){}
+  const notasSesion=g.notas||[];
+  // Unir y deduplicar por texto+fecha
+  const mapaNotas={};
+  [...notasHist,...notasSesion].forEach(n=>{
+    const k=(n.fecha||'')+'|'+(n.texto||'').trim();
+    if(k!=='|')mapaNotas[k]=n;
+  });
+  const todasNotas=Object.values(mapaNotas).sort((a,b)=>(b.ts||0)-(a.ts||0)||(b.fecha||'').localeCompare(a.fecha||''));
+  // Historial de llamadas/WA
+  let histEvt=[];
+  try{
+    const _lsH=JSON.parse(localStorage.getItem(LS_HIST)||'{}');
+    histEvt=(p.guia&&_lsH[p.guia])||[];
+  }catch(e){}
+  // Título
+  document.getElementById('hist-title').textContent='📋 Historial: '+(p.nombre||p.guia||'Cliente');
+  document.getElementById('hist-sub').textContent=(p.guia?'Guía: '+p.guia:'')+(p.ciudad?' · '+p.ciudad:'');
+  // Construir cuerpo
+  let html='';
+  if(todasNotas.length){
+    html+='<div style="padding:14px 16px 6px;font-size:.7rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;">Notas registradas</div>';
+    todasNotas.forEach(n=>{
+      html+='<div class="hist-nota-item" style="margin:0 14px 8px;">';
+      html+='<div class="hist-nota-fecha">'+(n.fecha||'')+'</div>';
+      html+='<div class="hist-nota-texto">'+(n.texto||'').replace(/</g,'&lt;')+'</div>';
+      html+='</div>';
+    });
+  }
+  if(histEvt.length){
+    html+='<div style="padding:12px 16px 4px;font-size:.7rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;">Historial de contacto</div>';
+    [...histEvt].reverse().forEach(ev=>{
+      const iconos={llamada_contestada:'📞✅',llamada_no_contestada:'📞❌',wa_enviado:'💬',finalizado:'🏁',devolucion:'📦'};
+      const etiq={llamada_contestada:'Llamada contestada',llamada_no_contestada:'No contestó',wa_enviado:'WA enviado',finalizado:'Gestionado/Finalizado',devolucion:'Devolución registrada'};
+      const ico=iconos[ev.tipo]||'•';
+      const lbl=etiq[ev.tipo]||ev.tipo||'Evento';
+      const fecha=ev.fecha||'';
+      html+='<div class="hist-evento" style="padding:7px 16px;">';
+      html+='<span style="font-size:1rem;">'+ico+'</span>';
+      html+='<div style="flex:1;min-width:0;"><div style="font-size:.76rem;color:#1e293b;font-weight:600;">'+lbl+'</div>';
+      if(fecha)html+='<div style="font-size:.63rem;color:#94a3b8;">'+fecha+'</div>';
+      html+='</div></div>';
+    });
+  }
+  if(!todasNotas.length&&!histEvt.length){
+    html='<div style="padding:32px 16px;text-align:center;color:#94a3b8;font-size:.82rem;">Sin notas ni historial registrado para este cliente.</div>';
+  }
+  document.getElementById('hist-body').innerHTML=html;
+  document.getElementById('historial-modal').classList.add('open');
+}
+function cerrarHistorial(){
+  document.getElementById('historial-modal').classList.remove('open');
 }
 
 function marcarFinalizado(id){ultimaGestion=Date.now();
