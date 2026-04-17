@@ -1999,12 +1999,17 @@ function formatValor(v){
 // ── HISTORIAL WA ───────────────────────────────────────────────────────
 function histCargar(){try{return JSON.parse(localStorage.getItem(LS_HIST))||{};}catch(e){return{};}}
 function histGuardar(h){try{localStorage.setItem(LS_HIST,JSON.stringify(h));}catch(e){}}
+function _evtFbPush(guia,tipo){
+  if(typeof _db==='undefined'||!window._currentUsername||!guia)return;
+  _db.ref('evt_hist/'+window._currentUsername).push({tipo,guia,ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')});
+}
 function histRegistrar(guia){
   if(!guia)return;
   const h=histCargar();
   if(!h[guia])h[guia]={};
   h[guia].wa={ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')};
   histGuardar(h);
+  _evtFbPush(guia,'wa_enviado');
 }
 
 function histRegistrarContacto(guia, resultado){
@@ -2013,6 +2018,8 @@ function histRegistrarContacto(guia, resultado){
   if(!h[guia])h[guia]={};
   h[guia].llamada={ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO'),resultado};
   histGuardar(h);
+  const tipo=resultado==='contestó'?'llamada_contestada':'llamada_no_contestada';
+  _evtFbPush(guia,tipo);
 }
 
 function histRegistrarFin(guia){
@@ -2021,6 +2028,7 @@ function histRegistrarFin(guia){
   if(!h[guia])h[guia]={};
   h[guia].fin={ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')};
   histGuardar(h);
+  _evtFbPush(guia,'finalizado');
 }
 
 function histGetInfo(guia){
@@ -3827,64 +3835,83 @@ function _btnHistHtml(p){
   const badge=hay?'<span class="hist-dot">● Tiene historial</span>':'';
   return '<button class="btn-ver-hist" style="margin-top:6px;" onclick="abrirHistorial('+p.id+')">🕐 Ver historial del cliente'+badge+'</button>';
 }
-function abrirHistorial(id){
-  const p=pedidos.find(x=>x.id===id);
-  if(!p)return;
-  const g=gestiones[id]||{};
-  // Recopilar notas: primero de LS_NOTES (histórico), luego de sesión actual
-  let notasHist=[];
-  try{
-    const _lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
-    notasHist=(p.guia&&_lsN[p.guia])||[];
-  }catch(e){}
-  const notasSesion=g.notas||[];
-  // Unir y deduplicar por texto+fecha
-  const mapaNotas={};
-  [...notasHist,...notasSesion].forEach(n=>{
-    const k=(n.fecha||'')+'|'+(n.texto||'').trim();
-    if(k!=='|')mapaNotas[k]=n;
-  });
-  const todasNotas=Object.values(mapaNotas).sort((a,b)=>(b.ts||0)-(a.ts||0)||(b.fecha||'').localeCompare(a.fecha||''));
-  // Historial de llamadas/WA
-  let histEvt=[];
-  try{
-    const _lsH=JSON.parse(localStorage.getItem(LS_HIST)||'{}');
-    histEvt=(p.guia&&_lsH[p.guia])||[];
-  }catch(e){}
-  // Título
-  document.getElementById('hist-title').textContent='📋 Historial: '+(p.nombre||p.guia||'Cliente');
-  document.getElementById('hist-sub').textContent=(p.guia?'Guía: '+p.guia:'')+(p.ciudad?' · '+p.ciudad:'');
-  // Construir cuerpo
+function _renderHistorial(todasNotas, todosEvt){
+  const iconos={llamada_contestada:'📞✅',llamada_no_contestada:'📞❌',wa_enviado:'💬',finalizado:'🏁',devolucion:'📦'};
+  const etiq={llamada_contestada:'Llamada contestada',llamada_no_contestada:'No contestó',wa_enviado:'WA enviado',finalizado:'Gestionado/Finalizado',devolucion:'Devolución registrada'};
   let html='';
   if(todasNotas.length){
-    html+='<div style="padding:14px 16px 6px;font-size:.7rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;">Notas registradas</div>';
+    html+='<div class="hist-sec-title">Notas registradas</div>';
     todasNotas.forEach(n=>{
-      html+='<div class="hist-nota-item" style="margin:0 14px 8px;">';
+      html+='<div class="hist-nota-item">';
       html+='<div class="hist-nota-fecha">'+(n.fecha||'')+'</div>';
       html+='<div class="hist-nota-texto">'+(n.texto||'').replace(/</g,'&lt;')+'</div>';
       html+='</div>';
     });
   }
-  if(histEvt.length){
-    html+='<div style="padding:12px 16px 4px;font-size:.7rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;">Historial de contacto</div>';
-    [...histEvt].reverse().forEach(ev=>{
-      const iconos={llamada_contestada:'📞✅',llamada_no_contestada:'📞❌',wa_enviado:'💬',finalizado:'🏁',devolucion:'📦'};
-      const etiq={llamada_contestada:'Llamada contestada',llamada_no_contestada:'No contestó',wa_enviado:'WA enviado',finalizado:'Gestionado/Finalizado',devolucion:'Devolución registrada'};
-      const ico=iconos[ev.tipo]||'•';
-      const lbl=etiq[ev.tipo]||ev.tipo||'Evento';
-      const fecha=ev.fecha||'';
-      html+='<div class="hist-evento" style="padding:7px 16px;">';
-      html+='<span style="font-size:1rem;">'+ico+'</span>';
-      html+='<div style="flex:1;min-width:0;"><div style="font-size:.76rem;color:#1e293b;font-weight:600;">'+lbl+'</div>';
-      if(fecha)html+='<div style="font-size:.63rem;color:#94a3b8;">'+fecha+'</div>';
+  if(todosEvt.length){
+    html+='<div class="hist-sec-title">Historial de contacto</div>';
+    todosEvt.forEach(ev=>{
+      html+='<div class="hist-evento">';
+      html+='<span class="hist-evento-ico">'+(iconos[ev.tipo]||'•')+'</span>';
+      html+='<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:.75rem;">'+(etiq[ev.tipo]||ev.tipo||'Evento')+'</div>';
+      if(ev.fecha)html+='<div style="font-size:.63rem;color:#94a3b8;">'+ev.fecha+'</div>';
       html+='</div></div>';
     });
   }
-  if(!todasNotas.length&&!histEvt.length){
-    html='<div style="padding:32px 16px;text-align:center;color:#94a3b8;font-size:.82rem;">Sin notas ni historial registrado para este cliente.</div>';
+  if(!todasNotas.length&&!todosEvt.length){
+    html='<div class="hist-vacio">Sin notas ni historial registrado para este cliente.</div>';
   }
   document.getElementById('hist-body').innerHTML=html;
+}
+function abrirHistorial(id){
+  const p=pedidos.find(x=>x.id===id);
+  if(!p)return;
+  const g=gestiones[id]||{};
+  const guia=p.guia||'';
+  document.getElementById('hist-title').textContent='📋 Historial: '+(p.nombre||p.guia||'Cliente');
+  document.getElementById('hist-sub').textContent=(guia?'Guía: '+guia:'')+(p.ciudad?' · '+p.ciudad:'');
+  document.getElementById('hist-body').innerHTML='<div style="padding:28px;text-align:center;color:#94a3b8;font-size:.78rem;">Cargando historial...</div>';
   document.getElementById('historial-modal').classList.add('open');
+  // Datos locales (fallback si no hay Firebase)
+  let notasLocal=[];
+  try{
+    const lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
+    notasLocal=guia?(lsN[guia]||[]):[];
+  }catch(e){}
+  [...(g.notas||[])].forEach(n=>{notasLocal.push(n);});
+  let evtLocal=[];
+  try{
+    const lsH=JSON.parse(localStorage.getItem(LS_HIST)||'{}');
+    const hg=guia?lsH[guia]||{}:{};
+    if(hg.wa)evtLocal.push({tipo:'wa_enviado',ts:hg.wa.ts,fecha:hg.wa.fecha});
+    if(hg.llamada){const t=hg.llamada.resultado==='contestó'?'llamada_contestada':'llamada_no_contestada';evtLocal.push({tipo:t,ts:hg.llamada.ts,fecha:hg.llamada.fecha});}
+    if(hg.fin)evtLocal.push({tipo:'finalizado',ts:hg.fin.ts,fecha:hg.fin.fecha});
+  }catch(e){}
+  if(typeof _db==='undefined'||!window._currentUsername||!guia){
+    const mn={};notasLocal.forEach(n=>{const k=(n.fecha||'')+'|'+(n.texto||'').trim();if(k!=='|')mn[k]=n;});
+    _renderHistorial(Object.values(mn).sort((a,b)=>(b.ts||0)-(a.ts||0)),evtLocal.sort((a,b)=>(b.ts||0)-(a.ts||0)));
+    return;
+  }
+  // Fetch desde Firebase
+  Promise.all([
+    _db.ref('notes/'+window._currentUsername+'/history').orderByChild('guia').equalTo(guia).once('value'),
+    _db.ref('evt_hist/'+window._currentUsername).orderByChild('guia').equalTo(guia).once('value')
+  ]).then(([snapN,snapE])=>{
+    const notasFb=[];snapN.forEach(c=>{const v=c.val();if(v)notasFb.push(v);});
+    const evtFb=[];snapE.forEach(c=>{const v=c.val();if(v)evtFb.push(v);});
+    // Deduplicar notas
+    const mn={};
+    [...notasLocal,...notasFb].forEach(n=>{const k=(n.fecha||'')+'|'+(n.texto||'').trim();if(k!=='|')mn[k]=n;});
+    const todasNotas=Object.values(mn).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    // Deduplicar eventos
+    const me={};
+    [...evtLocal,...evtFb].forEach(ev=>{const k=(ev.tipo||'')+'|'+(ev.fecha||'')+'|'+(ev.ts||'');me[k]=ev;});
+    const todosEvt=Object.values(me).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    _renderHistorial(todasNotas,todosEvt);
+  }).catch(()=>{
+    const mn={};notasLocal.forEach(n=>{const k=(n.fecha||'')+'|'+(n.texto||'').trim();if(k!=='|')mn[k]=n;});
+    _renderHistorial(Object.values(mn).sort((a,b)=>(b.ts||0)-(a.ts||0)),evtLocal.sort((a,b)=>(b.ts||0)-(a.ts||0)));
+  });
 }
 function cerrarHistorial(){
   document.getElementById('historial-modal').classList.remove('open');
