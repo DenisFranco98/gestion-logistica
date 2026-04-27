@@ -9,6 +9,7 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{--bg:#f4f3f1;--border:#d6d2cc;}
@@ -541,101 +542,167 @@ header h1{font-size:1.05rem;font-weight:700;}
 .btn-pdf-copy:disabled{opacity:.6;cursor:wait;}
 
 /* ===== ADMIN PANEL ===== */
-#admin-panel{display:none;position:fixed;inset:0;z-index:9998;background:#0f172a;overflow-y:auto;font-family:'Segoe UI',sans-serif;}
+/* ===== ADMIN PANEL — CENTRO DE OPERACIONES ===== */
+#admin-panel{display:none;position:fixed;inset:0;z-index:9998;background:#060b14;overflow:hidden;font-family:'Segoe UI',sans-serif;}
 #admin-panel.visible{display:block;}
-.adm-header{background:#1e293b;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1.5px solid #334155;position:sticky;top:0;z-index:10;}
-.adm-header h1{color:white;font-size:1.1rem;font-weight:800;}
-.adm-logout{background:#dc2626;color:white;border:none;padding:7px 16px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;}
-.adm-body{padding:24px 28px;max-width:1100px;margin:0 auto;}
-/* ===== ADMIN LAYOUT CON SIDEBAR ===== */
-.adm-layout{display:flex;min-height:calc(100vh - 58px);}
-.adm-sidebar{width:190px;background:#080f1a;border-right:1.5px solid #1e293b;flex-shrink:0;padding:20px 10px;display:flex;flex-direction:column;gap:4px;}
-.adm-sidebar-label{color:#334155;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:6px 12px 2px;}
-.adm-nav-item{width:100%;background:none;border:none;color:#64748b;padding:10px 14px;border-radius:10px;font-size:.78rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:9px;text-align:left;transition:all .15s;border-left:3px solid transparent;}
-.adm-nav-item:hover{background:#1e293b;color:#cbd5e1;}
-.adm-nav-item.active{background:#1e293b;color:white;border-left-color:#3b82f6;}
-.adm-nav-icon{font-size:1rem;width:18px;text-align:center;}
-.adm-main{flex:1;padding:24px 28px;overflow-y:auto;background:#0d1623;}
-.adm-stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px;}
-/* ===== USER LIST (tab usuarios) ===== */
-.adm-user-list{display:flex;flex-direction:column;gap:8px;}
-.adm-user-row{background:#1e293b;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid #334155;transition:border-color .15s;}
-.adm-user-row.online{border-color:#16a34a;}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(1.4);}}
+@keyframes fadein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+/* Header */
+.adm-header{background:linear-gradient(90deg,#08111f 0%,#0d1a2e 100%);padding:0 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #122033;position:sticky;top:0;z-index:10;height:56px;flex-shrink:0;}
+.adm-header-left{display:flex;align-items:center;gap:12px;}
+.adm-header-logo{width:30px;height:30px;background:linear-gradient(135deg,#2563eb,#4f46e5);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;box-shadow:0 0 12px #2563eb40;}
+.adm-header-title{color:white;font-size:.95rem;font-weight:800;letter-spacing:-.3px;}
+.adm-header-sub{color:#1e3a5f;font-size:.62rem;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+.adm-header-right{display:flex;align-items:center;gap:10px;}
+.adm-live-badge{background:#10b98115;border:1px solid #10b98130;color:#10b981;font-size:.6rem;font-weight:700;padding:3px 9px;border-radius:20px;display:flex;align-items:center;gap:5px;letter-spacing:.5px;}
+.adm-live-dot{width:5px;height:5px;border-radius:50%;background:#10b981;display:inline-block;animation:pulse-dot 1.4s ease infinite;}
+.adm-logout{background:transparent;color:#1e3a5f;border:1px solid #122033;padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;transition:all .15s;}
+.adm-logout:hover{background:#122033;color:#64748b;}
+/* Layout */
+.adm-layout{display:flex;height:calc(100vh - 56px);}
+/* Sidebar */
+.adm-sidebar{width:200px;background:#040810;border-right:1px solid #0e1c2e;flex-shrink:0;padding:14px 8px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;}
+.adm-sidebar-label{color:#0e1c2e;font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;padding:10px 12px 4px;}
+.adm-nav-item{width:100%;background:none;border:none;color:#1e3a5f;padding:9px 12px;border-radius:9px;font-size:.77rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:9px;text-align:left;transition:all .15s;border-left:2px solid transparent;}
+.adm-nav-item:hover{background:#080f1c;color:#475569;}
+.adm-nav-item.active{background:linear-gradient(90deg,#0f2040,#091830);color:#e2e8f0;border-left-color:#2563eb;}
+.adm-nav-icon{font-size:.9rem;width:16px;text-align:center;flex-shrink:0;}
+.adm-sidebar-footer{margin-top:auto;padding:14px 12px;border-top:1px solid #0e1c2e;}
+.adm-sidebar-user{font-size:.68rem;color:#0e1c2e;font-weight:600;}
+/* Main */
+.adm-main{flex:1;overflow-y:auto;background:#060b14;padding:20px 24px;}
+/* Command bar — 4 stat cards siempre visibles */
+.adm-cmdbar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+.adm-cmd-card{background:#0a1220;border-radius:12px;padding:16px 18px;border:1px solid #0e1c2e;position:relative;overflow:hidden;transition:border-color .2s;}
+.adm-cmd-card:hover{border-color:#1a2e4a;}
+.adm-cmd-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.adm-cmd-card.blue::before{background:linear-gradient(90deg,#2563eb,#4f46e5);}
+.adm-cmd-card.green::before{background:linear-gradient(90deg,#10b981,#059669);}
+.adm-cmd-card.amber::before{background:linear-gradient(90deg,#f59e0b,#d97706);}
+.adm-cmd-card.purple::before{background:linear-gradient(90deg,#8b5cf6,#6366f1);}
+.adm-cmd-icon{font-size:1.1rem;margin-bottom:8px;opacity:.7;}
+.adm-cmd-val{font-size:2rem;font-weight:900;color:white;line-height:1;letter-spacing:-1px;}
+.adm-cmd-lbl{font-size:.62rem;color:#1e3a5f;font-weight:700;margin-top:4px;text-transform:uppercase;letter-spacing:.5px;}
+/* Section header */
+.adm-sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.adm-sec-title{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1e3a5f;}
+/* === TAB EN VIVO === */
+.enlive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;animation:fadein .3s ease;}
+.enlive-card{background:#0a1220;border-radius:14px;padding:16px;border:1px solid #0e1c2e;transition:border-color .2s,transform .15s;}
+.enlive-card.online{border-color:#10b98125;}
+.enlive-card:hover{transform:translateY(-1px);border-color:#1a2e4a;}
+.enlive-card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;}
+.enlive-avatar{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.88rem;color:white;flex-shrink:0;letter-spacing:-.5px;}
+.enlive-name{font-weight:700;font-size:.85rem;color:#e2e8f0;line-height:1.2;}
+.enlive-tienda{font-size:.65rem;color:#1e3a5f;margin-top:2px;}
+.enlive-status{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;}
+.enlive-online-pill{background:#10b98112;border:1px solid #10b98125;color:#10b981;font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:10px;display:flex;align-items:center;gap:4px;white-space:nowrap;letter-spacing:.3px;}
+.enlive-offline-pill{background:#0e1c2e;color:#1e3a5f;font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;}
+.enlive-time{font-size:.58rem;color:#1e3a5f;text-align:right;}
+.enlive-score{font-size:1.2rem;font-weight:900;line-height:1;text-align:right;}
+.enlive-score-lbl{font-size:.52rem;color:#1e3a5f;font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
+.enlive-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;}
+.enlive-metric{background:#060b14;border-radius:7px;padding:7px 4px;text-align:center;}
+.enlive-metric-val{font-size:1rem;font-weight:800;color:white;line-height:1;}
+.enlive-metric-lbl{font-size:.55rem;color:#1e3a5f;font-weight:600;margin-top:2px;text-transform:uppercase;}
+.enlive-bars{display:flex;flex-direction:column;gap:5px;}
+.enlive-bar-row{display:flex;align-items:center;gap:7px;}
+.enlive-bar-lbl{font-size:.58rem;color:#1e3a5f;font-weight:600;width:72px;flex-shrink:0;}
+.enlive-bar-track{flex:1;height:4px;background:#0e1c2e;border-radius:3px;overflow:hidden;}
+.enlive-bar-fill{height:100%;border-radius:3px;transition:width .6s ease;}
+.enlive-bar-val{font-size:.6rem;font-weight:700;width:30px;text-align:right;flex-shrink:0;}
+.enlive-actions{display:flex;gap:5px;margin-top:12px;padding-top:10px;border-top:1px solid #0e1c2e;}
+.enlive-btn{flex:1;background:#060b14;border:1px solid #0e1c2e;color:#1e3a5f;border-radius:7px;padding:5px 4px;font-size:.62rem;font-weight:700;cursor:pointer;transition:all .15s;text-align:center;}
+.enlive-btn:hover{background:#0e1c2e;color:#64748b;}
+.enlive-btn.danger:hover{background:#7f1d1d15;color:#f87171;border-color:#7f1d1d30;}
+/* === EQUIPO (user management) === */
+.equipo-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+.equipo-search{background:#0a1220;border:1px solid #0e1c2e;border-radius:9px;padding:8px 14px;color:#e2e8f0;font-size:.78rem;outline:none;width:220px;transition:border-color .15s;}
+.equipo-search::placeholder{color:#1e3a5f;}
+.equipo-search:focus{border-color:#1a3060;}
+.adm-user-list{display:flex;flex-direction:column;gap:6px;animation:fadein .3s ease;}
+.adm-user-row{background:#0a1220;border-radius:11px;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid #0e1c2e;transition:border-color .2s;}
+.adm-user-row.online{border-color:#10b98120;}
+.adm-online-dot{width:8px;height:8px;border-radius:50%;background:#0e1c2e;flex-shrink:0;}
+.adm-online-dot.on{background:#10b981;box-shadow:0 0 6px #10b98170;animation:pulse-dot 1.8s ease infinite;}
 .adm-user-row-info{flex:1;min-width:0;}
-.adm-user-row-name{color:#f1f5f9;font-size:.85rem;font-weight:700;}
-.adm-user-row-meta{color:#64748b;font-size:.68rem;margin-top:2px;}
-.adm-user-row-status{font-size:.68rem;font-weight:600;white-space:nowrap;}
+.adm-user-row-name{color:#e2e8f0;font-size:.83rem;font-weight:700;}
+.adm-user-row-meta{color:#1e3a5f;font-size:.67rem;margin-top:2px;}
 .adm-user-row-actions{display:flex;gap:5px;flex-shrink:0;}
-.adm-row-btn{background:#334155;color:#94a3b8;border:none;border-radius:7px;padding:5px 10px;font-size:.7rem;font-weight:700;cursor:pointer;transition:all .15s;}
-.adm-row-btn:hover{background:#475569;color:white;}
-.adm-row-btn.danger{background:#7f1d1d;color:#fca5a5;}
-.adm-row-btn.danger:hover{background:#991b1b;color:white;}
-/* ===== ANALÍTICA ===== */
-.anl-filters{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;}
-.anl-select{background:#1e293b;color:#e2e8f0;border:1.5px solid #334155;border-radius:8px;padding:8px 12px;font-size:.78rem;cursor:pointer;outline:none;}
-.anl-select:focus{border-color:#3b82f6;}
-.anl-filter-label{color:#64748b;font-size:.72rem;font-weight:700;}
-.anl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.adm-row-btn{background:#060b14;color:#1e3a5f;border:1px solid #0e1c2e;border-radius:7px;padding:5px 10px;font-size:.68rem;font-weight:700;cursor:pointer;transition:all .15s;}
+.adm-row-btn:hover{background:#0e1c2e;color:#64748b;}
+.adm-row-btn.danger:hover{background:#7f1d1d15;color:#f87171;border-color:#7f1d1d30;}
+.adm-add-btn{background:linear-gradient(135deg,#1d4ed8,#4f46e5);color:white;border:none;padding:8px 16px;border-radius:9px;font-size:.76rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s;white-space:nowrap;box-shadow:0 4px 14px #1d4ed830;}
+.adm-add-btn:hover{opacity:.88;}
+/* === RANKING === */
+.rnk-header{display:flex;align-items:flex-end;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+.rnk-period{background:#0a1220;border:1px solid #0e1c2e;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:.76rem;cursor:pointer;outline:none;}
+.rnk-period:focus{border-color:#1a3060;}
+.rnk-podio{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.rnk-podio-card{background:#0a1220;border-radius:14px;padding:18px 14px;border:1px solid #0e1c2e;text-align:center;position:relative;overflow:hidden;transition:transform .2s;}
+.rnk-podio-card:hover{transform:translateY(-2px);}
+.rnk-podio-card.gold{border-color:#f59e0b25;background:linear-gradient(180deg,#140e00,#0a1220);}
+.rnk-podio-card.silver{border-color:#94a3b820;}
+.rnk-podio-card.bronze{border-color:#b4530920;}
+.rnk-medal{font-size:1.8rem;display:block;margin-bottom:6px;}
+.rnk-podio-name{font-weight:800;color:#e2e8f0;font-size:.88rem;}
+.rnk-podio-tienda{color:#1e3a5f;font-size:.65rem;margin-top:2px;}
+.rnk-podio-score{font-size:1.8rem;font-weight:900;margin-top:10px;line-height:1;letter-spacing:-1px;}
+.rnk-podio-score-lbl{font-size:.58rem;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;margin-top:3px;}
+.rnk-podio-stats{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap;}
+.rnk-mini-stat{font-size:.6rem;color:#1e3a5f;background:#060b14;border-radius:6px;padding:3px 7px;}
+.rnk-table-wrap{background:#0a1220;border-radius:14px;border:1px solid #0e1c2e;overflow:hidden;}
+.rnk-table{width:100%;border-collapse:collapse;font-size:.76rem;}
+.rnk-table th{color:#1e3a5f;font-weight:700;padding:10px 12px;border-bottom:1px solid #0e1c2e;text-align:center;font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;background:#060b14;}
+.rnk-table th:first-child{text-align:left;width:32px;}
+.rnk-table th:nth-child(2){text-align:left;}
+.rnk-table td{padding:11px 12px;border-bottom:1px solid #080f1a;color:#475569;text-align:center;}
+.rnk-table td:first-child{text-align:left;}
+.rnk-table td:nth-child(2){text-align:left;}
+.rnk-table tr:last-child td{border-bottom:none;}
+.rnk-table tr:hover td{background:#080f1a;}
+.rnk-rank-num{font-weight:800;color:#1e3a5f;font-size:.85rem;}
+.rnk-rank-name{font-weight:700;color:#cbd5e1;font-size:.82rem;}
+.rnk-rank-tienda{color:#1e3a5f;font-size:.63rem;}
+.rnk-score-pill{display:inline-block;padding:3px 10px;border-radius:7px;font-weight:800;font-size:.73rem;}
+.rnk-empty{color:#0e1c2e;font-size:.8rem;text-align:center;padding:40px;}
+/* === ANALÍTICA === */
+.anl-filters{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:flex-end;}
+.anl-select{background:#0a1220;color:#e2e8f0;border:1px solid #0e1c2e;border-radius:8px;padding:7px 12px;font-size:.76rem;cursor:pointer;outline:none;transition:border-color .15s;}
+.anl-select:focus{border-color:#1a3060;}
+.anl-filter-label{color:#1e3a5f;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+.anl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:16px;}
 @media(max-width:900px){.anl-grid{grid-template-columns:repeat(2,1fr);}}
-.anl-kpi{background:#1e293b;border-radius:12px;padding:16px;border:1.5px solid #334155;text-align:center;}
-.anl-kpi-val{font-size:1.6rem;font-weight:800;color:white;line-height:1;}
-.anl-kpi-lbl{color:#64748b;font-size:.65rem;font-weight:700;margin-top:5px;text-transform:uppercase;letter-spacing:.5px;}
-.anl-card{background:#1e293b;border-radius:14px;padding:20px;border:1.5px solid #334155;margin-bottom:16px;}
-.anl-card-title{color:#94a3b8;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px;}
-.anl-table{width:100%;border-collapse:collapse;font-size:.76rem;}
-.anl-table th{color:#64748b;font-weight:700;padding:8px 10px;border-bottom:1px solid #334155;text-align:center;white-space:nowrap;}
+.anl-kpi{background:#0a1220;border-radius:11px;padding:14px 12px;border:1px solid #0e1c2e;text-align:center;position:relative;overflow:hidden;}
+.anl-kpi-val{font-size:1.5rem;font-weight:800;color:white;line-height:1;}
+.anl-kpi-lbl{color:#1e3a5f;font-size:.6rem;font-weight:700;margin-top:5px;text-transform:uppercase;letter-spacing:.5px;}
+.anl-card{background:#0a1220;border-radius:13px;padding:18px;border:1px solid #0e1c2e;margin-bottom:12px;}
+.anl-card-title{color:#1e3a5f;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;}
+.anl-table{width:100%;border-collapse:collapse;font-size:.74rem;}
+.anl-table th{color:#1e3a5f;font-weight:700;padding:8px 10px;border-bottom:1px solid #0e1c2e;text-align:center;white-space:nowrap;}
 .anl-table th:first-child{text-align:left;}
-.anl-table td{padding:8px 10px;border-bottom:1px solid #0f172a;color:#cbd5e1;text-align:center;}
-.anl-table td:first-child{text-align:left;color:#94a3b8;font-weight:600;}
+.anl-table td{padding:8px 10px;border-bottom:1px solid #080f1a;color:#64748b;text-align:center;}
+.anl-table td:first-child{text-align:left;color:#334155;font-weight:600;}
 .anl-table tr:last-child td{border-bottom:none;}
-.anl-table tr:hover td{background:#334155;}
-.anl-empty{color:#475569;font-size:.8rem;text-align:center;padding:28px;}
-.adm-stat{background:#1e293b;border-radius:14px;padding:18px 22px;flex:1;min-width:140px;border:1.5px solid #334155;}
-.adm-stat .val{font-size:2rem;font-weight:800;color:white;}
-.adm-stat .lbl{font-size:.72rem;color:#94a3b8;font-weight:600;margin-top:3px;}
-.adm-section-title{color:#94a3b8;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
-.adm-users-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:28px;}
-.adm-user-card{background:#1e293b;border-radius:14px;padding:18px;border:1.5px solid #334155;position:relative;}
-.adm-user-card.online{border-color:#16a34a;}
-.adm-user-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
-.adm-online-dot{width:10px;height:10px;border-radius:50%;background:#334155;flex-shrink:0;}
-.adm-online-dot.on{background:#16a34a;box-shadow:0 0 6px #16a34a;}
-.adm-user-name{color:white;font-weight:700;font-size:.9rem;}
-.adm-user-tienda{color:#64748b;font-size:.72rem;}
-.adm-user-stats{display:flex;gap:10px;flex-wrap:wrap;}
-.adm-user-stat{background:#0f172a;border-radius:8px;padding:8px 12px;flex:1;min-width:80px;text-align:center;}
-.adm-user-stat .v{color:white;font-size:1.1rem;font-weight:800;}
-.adm-user-stat .l{color:#64748b;font-size:.65rem;font-weight:600;margin-top:2px;}
-.adm-user-meta{font-size:.68rem;color:#475569;margin-top:10px;}
-.adm-del-btn{position:absolute;top:12px;right:12px;background:#7f1d1d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:.65rem;cursor:pointer;opacity:.7;}
-.adm-del-btn:hover{opacity:1;}
-.adm-add-btn{background:#1d4ed8;color:white;border:none;padding:10px 20px;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;}
-.adm-add-btn:hover{background:#2563eb;}
-.adm-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10001;align-items:center;justify-content:center;}
+.anl-table tr:hover td{background:#080f1a;}
+.anl-empty{color:#0e1c2e;font-size:.8rem;text-align:center;padding:32px;border:1px dashed #0e1c2e;border-radius:10px;}
+/* Modales */
+.adm-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:10001;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .adm-modal-bg.open{display:flex;}
-.adm-modal{background:#1e293b;border-radius:16px;padding:28px;width:100%;max-width:380px;border:1.5px solid #334155;}
-.adm-modal h3{color:white;font-size:1rem;font-weight:800;margin-bottom:20px;}
-.adm-field{margin-bottom:14px;}
-.adm-field label{display:block;color:#94a3b8;font-size:.72rem;font-weight:600;margin-bottom:5px;}
-.adm-field input{width:100%;background:#0f172a;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;}
-.adm-field input:focus{outline:none;border-color:#3b82f6;}
-.adm-modal-btns{display:flex;gap:10px;margin-top:20px;}
-.adm-modal-btn{flex:1;padding:10px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:none;}
-.adm-modal-btn.primary{background:#1d4ed8;color:white;}
-.adm-modal-btn.cancel{background:#334155;color:#94a3b8;}
-.adm-empty{color:#475569;font-size:.85rem;text-align:center;padding:40px;}
-.adm-hist-btn{width:100%;margin-top:10px;background:#0f172a;color:#94a3b8;border:1.5px solid #334155;border-radius:8px;padding:7px 12px;font-size:.72rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;}
-.adm-hist-btn:hover{background:#1e293b;color:#e2e8f0;border-color:#475569;}
-.adm-hist-wrap{display:none;margin-top:10px;border-top:1px solid #334155;padding-top:10px;}
-.adm-hist-wrap.open{display:block;}
-.adm-hist-table{width:100%;border-collapse:collapse;font-size:.68rem;}
-.adm-hist-table th{color:#64748b;font-weight:700;text-align:center;padding:4px 3px;border-bottom:1px solid #334155;white-space:nowrap;}
-.adm-hist-table th:first-child{text-align:left;}
-.adm-hist-table td{text-align:center;padding:5px 3px;border-bottom:1px solid #1e293b;color:#cbd5e1;}
-.adm-hist-table td:first-child{text-align:left;color:#94a3b8;font-weight:600;}
-.adm-hist-table tr:hover td{background:#1e293b;}
-.adm-hist-table .gpm-cell{font-weight:700;}
-.adm-hist-loading{color:#475569;font-size:.72rem;text-align:center;padding:12px;}
+.adm-modal{background:#0a1220;border-radius:16px;padding:26px;width:100%;max-width:380px;border:1px solid #122033;}
+.adm-modal h3{color:white;font-size:.95rem;font-weight:800;margin-bottom:18px;}
+.adm-field{margin-bottom:13px;}
+.adm-field label{display:block;color:#1e3a5f;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.3px;}
+.adm-field input{width:100%;background:#060b14;border:1px solid #122033;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;transition:border-color .15s;}
+.adm-field input:focus{border-color:#2563eb;}
+.adm-modal-btns{display:flex;gap:10px;margin-top:18px;}
+.adm-modal-btn{flex:1;padding:9px;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;border:none;transition:opacity .15s;}
+.adm-modal-btn.primary{background:linear-gradient(135deg,#1d4ed8,#4f46e5);color:white;}
+.adm-modal-btn.primary:hover{opacity:.88;}
+.adm-modal-btn.cancel{background:#0e1c2e;color:#1e3a5f;border:1px solid #122033;}
+.adm-modal-btn.cancel:hover{background:#122033;color:#475569;}
+.adm-empty{color:#0e1c2e;font-size:.82rem;text-align:center;padding:40px;}
+.adm-section-title{color:#1e3a5f;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
 
 /* ===== LOGIN SCREEN ===== */
 #login-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;}
@@ -680,87 +747,175 @@ header h1{font-size:1.05rem;font-weight:700;}
 </head>
 <body>
 
-<!-- ===== ADMIN PANEL ===== -->
+<!-- ===== ADMIN PANEL — CENTRO DE OPERACIONES ===== -->
 <div id="admin-panel">
   <div class="adm-header">
-    <h1>🛡️ Panel de Administración</h1>
-    <button class="adm-logout" onclick="_admLogout()">Cerrar sesión</button>
+    <div class="adm-header-left">
+      <div class="adm-header-logo">🛡️</div>
+      <div>
+        <div class="adm-header-title">Centro de Operaciones</div>
+        <div class="adm-header-sub">Panel de Administración</div>
+      </div>
+    </div>
+    <div class="adm-header-right">
+      <div class="adm-live-badge"><span class="adm-live-dot"></span>EN VIVO</div>
+      <button class="adm-logout" onclick="_admLogout()">Salir</button>
+    </div>
   </div>
   <div class="adm-layout">
 
     <!-- Sidebar -->
     <div class="adm-sidebar">
-      <div class="adm-sidebar-label">Menú</div>
-      <button class="adm-nav-item active" id="tab-btn-usuarios" onclick="_admTab('usuarios')">
-        <span class="adm-nav-icon">👥</span> Usuarios
+      <div class="adm-sidebar-label">Operaciones</div>
+      <button class="adm-nav-item active" id="tab-btn-enlive" onclick="_admTab('enlive')">
+        <span class="adm-nav-icon">🔴</span> En vivo
       </button>
+      <button class="adm-nav-item" id="tab-btn-ranking" onclick="_admTab('ranking')">
+        <span class="adm-nav-icon">🏆</span> Ranking
+      </button>
+      <div class="adm-sidebar-label">Gestión</div>
+      <button class="adm-nav-item" id="tab-btn-equipo" onclick="_admTab('equipo')">
+        <span class="adm-nav-icon">👥</span> Equipo
+      </button>
+      <div class="adm-sidebar-label">Inteligencia</div>
       <button class="adm-nav-item" id="tab-btn-analitica" onclick="_admTab('analitica')">
         <span class="adm-nav-icon">📊</span> Analítica
       </button>
+      <div class="adm-sidebar-footer">
+        <div class="adm-sidebar-user">⚙️ Administrador</div>
+      </div>
     </div>
 
     <!-- Main content -->
     <div class="adm-main">
 
-      <!-- Stats siempre visibles -->
-      <div class="adm-stats">
-        <div class="adm-stat"><div class="val" id="adm-stat-total">0</div><div class="lbl">Usuarios registrados</div></div>
-        <div class="adm-stat"><div class="val" id="adm-stat-online" style="color:#16a34a">0</div><div class="lbl">En línea ahora</div></div>
-        <div class="adm-stat"><div class="val" id="adm-stat-gest">0</div><div class="lbl">Gestiones hoy</div></div>
+      <!-- Command bar — siempre visible -->
+      <div class="adm-cmdbar">
+        <div class="adm-cmd-card blue">
+          <div class="adm-cmd-icon">👥</div>
+          <div class="adm-cmd-val" id="adm-stat-total">0</div>
+          <div class="adm-cmd-lbl">Usuarios registrados</div>
+        </div>
+        <div class="adm-cmd-card green">
+          <div class="adm-cmd-icon">🟢</div>
+          <div class="adm-cmd-val" id="adm-stat-online" style="color:#10b981">0</div>
+          <div class="adm-cmd-lbl">En línea ahora</div>
+        </div>
+        <div class="adm-cmd-card amber">
+          <div class="adm-cmd-icon">⚡</div>
+          <div class="adm-cmd-val" id="adm-stat-gest">0</div>
+          <div class="adm-cmd-lbl">Gestiones esta sesión</div>
+        </div>
+        <div class="adm-cmd-card purple">
+          <div class="adm-cmd-icon">🏁</div>
+          <div class="adm-cmd-val" id="adm-stat-fin" style="color:#a78bfa">0</div>
+          <div class="adm-cmd-lbl">Finalizados en vivo</div>
+        </div>
       </div>
 
-      <!-- TAB: USUARIOS -->
-      <div id="adm-tab-usuarios">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <div class="adm-section-title">Usuarios registrados</div>
+      <!-- TAB: EN VIVO -->
+      <div id="adm-tab-enlive">
+        <div class="adm-sec-head">
+          <div class="adm-sec-title">Asesores conectados ahora</div>
+        </div>
+        <div class="enlive-grid" id="enlive-cards">
+          <div class="adm-empty" style="grid-column:1/-1;">Cargando...</div>
+        </div>
+        <div id="enlive-offline-section" style="display:none;margin-top:22px;">
+          <div class="adm-sec-head"><div class="adm-sec-title">Desconectados recientemente</div></div>
+          <div class="enlive-grid" id="enlive-offline-cards"></div>
+        </div>
+      </div>
+
+      <!-- TAB: RANKING -->
+      <div id="adm-tab-ranking" style="display:none;">
+        <div class="rnk-header">
+          <div class="adm-sec-title" style="flex:1;align-self:flex-end;">Leaderboard de rendimiento</div>
+          <div>
+            <div class="anl-filter-label">Tienda</div>
+            <select class="rnk-period" id="rnk-user-filter" onchange="_rnkCargar()">
+              <option value="">Todas las tiendas</option>
+            </select>
+          </div>
+          <div>
+            <div class="anl-filter-label">Período</div>
+            <select class="rnk-period" id="rnk-period-filter" onchange="_rnkCargar()">
+              <option value="today">Hoy</option>
+              <option value="7" selected>Últimos 7 días</option>
+              <option value="14">Últimos 14 días</option>
+              <option value="30">Últimos 30 días</option>
+            </select>
+          </div>
+        </div>
+        <div class="rnk-podio" id="rnk-podio"></div>
+        <div class="rnk-table-wrap">
+          <table class="rnk-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Asesor</th>
+                <th style="color:#4ade80">🏁 Final.</th>
+                <th style="color:#60a5fa">✅ Cont.</th>
+                <th style="color:#a78bfa">📱 WA</th>
+                <th style="color:#fb923c">↩️ Dev.</th>
+                <th>% Cierre</th><th>% Contacto</th><th>G/min</th><th>Score</th>
+              </tr>
+            </thead>
+            <tbody id="rnk-tbody">
+              <tr><td colspan="10" class="rnk-empty">Cargando ranking...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: EQUIPO -->
+      <div id="adm-tab-equipo" style="display:none;">
+        <div class="equipo-header">
+          <input class="equipo-search" id="equipo-search" placeholder="Buscar asesor o tienda..." oninput="_equiSearch(this.value)"/>
           <button class="adm-add-btn" onclick="_admAbrirAgregar()">+ Agregar usuario</button>
         </div>
         <div class="adm-user-list" id="adm-users-list">
-          <div class="adm-empty">Cargando usuarios...</div>
+          <div class="adm-empty">Cargando equipo...</div>
         </div>
       </div>
 
       <!-- TAB: ANALÍTICA -->
       <div id="adm-tab-analitica" style="display:none;">
-        <div style="margin-bottom:20px;">
-          <div class="adm-section-title" style="margin-bottom:14px;">Rendimiento por asesor</div>
-          <div class="anl-filters">
+        <div class="adm-sec-head" style="margin-bottom:16px;"><div class="adm-sec-title">Rendimiento histórico</div></div>
+        <div class="anl-filters">
+          <div>
+            <div class="anl-filter-label">Tienda</div>
+            <select class="anl-select" id="anl-user-filter" onchange="_anlUserChange()">
+              <option value="">Todas las tiendas</option>
+            </select>
+          </div>
+          <div id="anl-asesor-wrap" style="display:none;">
+            <div class="anl-filter-label">Asesor</div>
+            <select class="anl-select" id="anl-asesor-filter" onchange="_anlCargar()">
+              <option value="">Todos los asesores</option>
+            </select>
+          </div>
+          <div>
+            <div class="anl-filter-label">Período</div>
+            <select class="anl-select" id="anl-period-filter" onchange="_anlPeriodChange()">
+              <option value="today">Hoy</option>
+              <option value="yesterday">Ayer</option>
+              <option value="7">Últimos 7 días</option>
+              <option value="14" selected>Últimos 14 días</option>
+              <option value="30">Últimos 30 días</option>
+              <option value="custom">Rango personalizado</option>
+            </select>
+          </div>
+          <div id="anl-custom-range" style="display:none;gap:8px;align-items:flex-end;">
             <div>
-              <div class="anl-filter-label" style="margin-bottom:4px;">Tienda</div>
-              <select class="anl-select" id="anl-user-filter" onchange="_anlUserChange()">
-                <option value="">Todas las tiendas</option>
-              </select>
-            </div>
-            <div id="anl-asesor-wrap" style="display:none;">
-              <div class="anl-filter-label" style="margin-bottom:4px;">Asesor</div>
-              <select class="anl-select" id="anl-asesor-filter" onchange="_anlCargar()">
-                <option value="">Todos los asesores</option>
-              </select>
+              <div class="anl-filter-label">Desde</div>
+              <input type="date" class="anl-select" id="anl-date-from" onchange="_anlCargar()" style="cursor:text;"/>
             </div>
             <div>
-              <div class="anl-filter-label" style="margin-bottom:4px;">Período</div>
-              <select class="anl-select" id="anl-period-filter" onchange="_anlPeriodChange()">
-                <option value="today">Hoy</option>
-                <option value="yesterday">Ayer</option>
-                <option value="7">Últimos 7 días</option>
-                <option value="14" selected>Últimos 14 días</option>
-                <option value="30">Últimos 30 días</option>
-                <option value="custom">Rango personalizado</option>
-              </select>
-            </div>
-            <div id="anl-custom-range" style="display:none;display:flex;gap:8px;align-items:flex-end;">
-              <div>
-                <div class="anl-filter-label" style="margin-bottom:4px;">Desde</div>
-                <input type="date" class="anl-select" id="anl-date-from" onchange="_anlCargar()" style="cursor:text;"/>
-              </div>
-              <div>
-                <div class="anl-filter-label" style="margin-bottom:4px;">Hasta</div>
-                <input type="date" class="anl-select" id="anl-date-to" onchange="_anlCargar()" style="cursor:text;"/>
-              </div>
+              <div class="anl-filter-label">Hasta</div>
+              <input type="date" class="anl-select" id="anl-date-to" onchange="_anlCargar()" style="cursor:text;"/>
             </div>
           </div>
         </div>
-
         <!-- KPIs -->
         <div class="anl-grid">
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-fin">—</div><div class="anl-kpi-lbl" id="kpi-fin-lbl">Finalizados</div></div>
@@ -776,43 +931,33 @@ header h1{font-size:1.05rem;font-weight:700;}
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-rg" style="font-size:1.2rem;color:#86efac;">—</div><div class="anl-kpi-lbl">Rechazados Gestionados</div></div>
           <div class="anl-kpi"><div class="anl-kpi-val" id="kpi-rsg" style="font-size:1.2rem;color:#fda4af;">—</div><div class="anl-kpi-lbl">Rechazados Sin Gestión</div></div>
         </div>
-
-        <!-- Fila: Donut contacto + % cierre por día -->
-        <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-top:16px;">
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:12px;">
           <div class="anl-card" style="margin-bottom:0;">
             <div class="anl-card-title">Distribución de contacto</div>
-            <div style="display:flex;justify-content:center;padding:10px 0;">
-              <canvas id="anl-donut" style="max-height:200px;max-width:200px;"></canvas>
+            <div style="display:flex;justify-content:center;padding:8px 0;">
+              <canvas id="anl-donut" style="max-height:190px;max-width:190px;"></canvas>
             </div>
-            <div id="anl-donut-legend" style="display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:.7rem;"></div>
+            <div id="anl-donut-legend" style="display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:.68rem;"></div>
           </div>
           <div class="anl-card" style="margin-bottom:0;">
             <div class="anl-card-title" id="anl-cierre-title">% de cierre por día</div>
-            <canvas id="anl-cierre-chart" height="120"></canvas>
+            <canvas id="anl-cierre-chart" height="115"></canvas>
           </div>
         </div>
-
-        <!-- Barras comparativas por asesor -->
-        <div class="anl-card" style="margin-top:14px;" id="anl-comparativo-wrap">
-          <div class="anl-card-title">Comparativo de asesores — Tasa de contacto vs Tasa de cierre</div>
-          <canvas id="anl-comparativo-chart" height="80"></canvas>
+        <div class="anl-card" id="anl-comparativo-wrap">
+          <div class="anl-card-title">Comparativo — Tasa de contacto vs Cierre</div>
+          <canvas id="anl-comparativo-chart" height="78"></canvas>
         </div>
-
-        <!-- Chart gestiones por día -->
         <div class="anl-card">
           <div class="anl-card-title" id="anl-chart-title">Gestiones por día</div>
-          <canvas id="anl-chart" height="90"></canvas>
+          <canvas id="anl-chart" height="88"></canvas>
         </div>
-
-        <!-- Tabla resumen por asesor -->
         <div class="anl-card" id="anl-asesor-table-card" style="display:none;">
           <div id="anl-asesor-table-wrap"></div>
         </div>
-
-        <!-- Tabla historial -->
         <div class="anl-card">
           <div class="anl-card-title">Detalle día a día</div>
-          <div id="anl-table-wrap"><div class="anl-empty">Selecciona un usuario para ver el historial</div></div>
+          <div id="anl-table-wrap"><div class="anl-empty">Selecciona una tienda para ver el historial</div></div>
         </div>
       </div>
 
@@ -842,8 +987,8 @@ header h1{font-size:1.05rem;font-weight:700;}
     <h3>➕ Nuevo usuario</h3>
     <div class="adm-field"><label>Usuario</label><input type="text" id="adm-new-user" placeholder="ej: juan123" autocomplete="off"/></div>
     <div class="adm-field"><label>Contraseña</label><div style="position:relative;"><input type="password" id="adm-new-pass" placeholder="Contraseña" style="width:100%;padding-right:38px;"/><span onclick="const i=document.getElementById('adm-new-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁️':'🙈';" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁️</span></div></div>
-    <input type="hidden" id="adm-new-asesor"/>
-    <input type="hidden" id="adm-new-tienda"/>
+    <div class="adm-field"><label>Nombre del asesor <span style="color:#1e3a5f;font-weight:400;text-transform:none;">(opcional)</span></label><input type="text" id="adm-new-asesor" placeholder="Ej: Juan García" autocomplete="off"/></div>
+    <div class="adm-field"><label>Tienda <span style="color:#1e3a5f;font-weight:400;text-transform:none;">(opcional)</span></label><input type="text" id="adm-new-tienda" placeholder="Ej: Tienda Norte" autocomplete="off"/></div>
     <div class="adm-modal-btns">
       <button class="adm-modal-btn cancel" onclick="_admCerrarAgregar()">Cancelar</button>
       <button class="adm-modal-btn primary" onclick="_admGuardarUsuario()">Guardar</button>
@@ -5539,7 +5684,7 @@ const _fbApp = firebase.initializeApp({
 const _db = firebase.database();
 
 // ===== LOGIN =====
-(function(){
+function _initLogin(){
   const LOGIN_KEY = 'lgs_auth';
   const TIENDA_KEY = 'lgs_tienda';
   const ASESOR_KEY = 'lgs_asesor';
@@ -5568,10 +5713,13 @@ const _db = firebase.database();
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
     if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
     _heartbeatInterval = setInterval(()=>{ if(_currentUsername===username) ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
-    // Marcar offline si el usuario cierra o recarga la pestaña sin hacer logout
-    window.addEventListener('beforeunload', ()=>{
-      if(_currentUsername) _db.ref('presence/'+_currentUsername).update({ online: false, lastSeen: Date.now() });
-    });
+    // Marcar offline si el usuario cierra o recarga la pestaña sin hacer logout (solo registrar una vez)
+    if(!window._beforeunloadPresencia){
+      window._beforeunloadPresencia = true;
+      window.addEventListener('beforeunload', ()=>{
+        if(_currentUsername) _db.ref('presence/'+_currentUsername).update({ online: false, lastSeen: Date.now() });
+      });
+    }
     // Escuchar si el admin fuerza cierre de sesión
     ref.child('force_logout').on('value', snap=>{
       if(snap.val()===true){
@@ -5753,7 +5901,12 @@ const _db = firebase.database();
     const a = localStorage.getItem(ASESOR_KEY);
     if(u) _registrarPresencia(u, t, a);
   }
-})();
+}
+
+// Iniciar app solo después de que la autenticación anónima esté lista
+firebase.auth().signInAnonymously()
+  .then(() => _initLogin())
+  .catch(e => { console.warn('Firebase Auth anónimo falló:', e); _initLogin(); });
 
 // ===== FIREBASE SYNC GESTIONES =====
 function _fbKey(k){ return String(k).replace(/[.#$\[\]\/]/g,'_'); }
@@ -5885,112 +6038,189 @@ function _fbRestaurarRechazados(cb){
 // ===== ADMIN DASHBOARD =====
 let _anlChart = null, _anlDonut = null, _anlCierreChart = null, _anlCompChart = null;
 let _admUsuariosCache = [];
+let _admPresenceListener = null;
+let _admPresenciaCache = {};
 
 function _admTab(tab){
-  ['usuarios','analitica'].forEach(t=>{
+  ['enlive','ranking','equipo','analitica'].forEach(t=>{
     document.getElementById('adm-tab-'+t).style.display = t===tab ? 'block' : 'none';
     document.getElementById('tab-btn-'+t).classList.toggle('active', t===tab);
   });
   if(tab==='analitica') _anlInicializar();
+  if(tab==='ranking') _rnkInicializar();
 }
 
 function _admCargarDashboard(){
-  const list = document.getElementById('adm-users-list');
-  _db.ref('presence').on('value', snapPresence => {
+  if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener = null; }
+  _admPresenceListener = _db.ref('presence').on('value', snapPresence => {
     _db.ref('users').once('value', snapUsers => {
       const presencia = snapPresence.val() || {};
+      _admPresenciaCache = presencia;
       const usuarios = Object.values(snapUsers.val() || {});
       if(!usuarios.find(u=>u.username==='3D Company'))
         usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
-
       _admUsuariosCache = usuarios;
 
-      const online = Object.values(presencia).filter(p=>p.online).length;
+      const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
       const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
+      const totalFin = Object.values(presencia).reduce((s,p)=>s+(p.finalizados||0),0);
       document.getElementById('adm-stat-total').textContent = usuarios.length;
       document.getElementById('adm-stat-online').textContent = online;
       document.getElementById('adm-stat-gest').textContent = totalGest;
+      document.getElementById('adm-stat-fin').textContent = totalFin;
 
-      list.innerHTML = '';
-      if(!usuarios.length){ list.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
-
-      // Ordenar: online primero
       usuarios.sort((a,b)=>{
-        const ao = !!(presencia[a.username]||{}).online;
-        const bo = !!(presencia[b.username]||{}).online;
-        return bo - ao;
+        const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
+        const bo=!!(presencia[b.username]||{}).online&&(Date.now()-((presencia[b.username]||{}).lastSeen||0))<120000;
+        if(ao!==bo) return bo-ao;
+        return ((presencia[b.username]||{}).lastSeen||0)-((presencia[a.username]||{}).lastSeen||0);
       });
 
-      usuarios.forEach(u => {
-        const p = presencia[u.username] || {};
-        const isOnline = !!p.online && (Date.now()-(p.lastSeen||0))<120000; // offline si lastSeen >2min
-        const totalGestUser = p.sessionGestiones || 0;
-        const tiempoActivo = isOnline&&p.loginTime ? _fmtDuracion(Date.now()-p.loginTime) : null;
-
-        const cont  = p.contestaron||0;
-        const noCont= p.noContestaron||0;
-        const wa    = p.waEnviados||0;
-        const fin   = p.finalizados||0;
-        const dev   = p.devoluciones||0;
-        const gsg   = p.guiasSinGestion||0;
-        const tsg   = p.transitoSinGestion||0;
-        const rg    = p.rechazadosGestionados||0;
-        const rsg   = p.rechazadosSinGestion||0;
-
-        const statsHtml = isOnline
-          ? '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">'+
-              (cont  ?'<span style="background:#1e40af33;color:#60a5fa;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">✅ '+cont+' cont.</span>':'')+
-              (noCont?'<span style="background:#7f1d1d33;color:#f87171;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">❌ '+noCont+' no cont.</span>':'')+
-              (wa    ?'<span style="background:#4c1d9533;color:#a78bfa;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">📱 '+wa+' WA</span>':'')+
-              (fin   ?'<span style="background:#14532d33;color:#4ade80;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">🏁 '+fin+' final.</span>':'')+
-              (dev   ?'<span style="background:#7c2d1233;color:#fb923c;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">↩️ '+dev+' dev.</span>':'')+
-              (gsg   ?'<span style="background:#1e3a8a33;color:#93c5fd;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">📦 '+gsg+' s/gest.</span>':'')+
-              (tsg   ?'<span style="background:#164e6333;color:#67e8f9;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">🚚 '+tsg+' tránsito ok</span>':'')+
-              (rg    ?'<span style="background:#14532d33;color:#86efac;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">✅ '+rg+' rech. gest.</span>':'')+
-              (rsg   ?'<span style="background:#4c0519;color:#fda4af;border-radius:5px;padding:2px 7px;font-size:.65rem;font-weight:700;">🚫 '+rsg+' rech. s/g</span>':'')+
-              (!cont&&!noCont&&!wa&&!fin&&!gsg&&!tsg&&!rg&&!rsg?'<span style="color:#475569;font-size:.65rem;">Sin gestiones aún</span>':'')+
-            '</div>'
-          : '';
-
-        const row = document.createElement('div');
-        row.className = 'adm-user-row' + (isOnline ? ' online' : '');
-        row.innerHTML =
-          '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
-          '<div class="adm-user-row-info" style="flex:1;">'+
-            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
-              '<div>'+
-                '<div class="adm-user-row-name">'+
-                  (isOnline && p.asesor && p.asesor!==u.username
-                    ? p.asesor+'<span style="color:#64748b;font-size:.7rem;font-weight:400;margin-left:6px;">('+u.username+')</span>'
-                    : (u.asesor||u.username)
-                  )+
-                '</div>'+
-                '<div class="adm-user-row-meta">'+
-                  (isOnline && p.tienda ? '🏪 '+p.tienda : (u.tienda ? '🏪 '+u.tienda : '@'+u.username))+
-                '</div>'+
-              '</div>'+
-              '<div style="text-align:right;flex-shrink:0;">'+
-                '<div style="color:'+(isOnline?'#4ade80':'#475569')+';font-size:.68rem;font-weight:600;">'+
-                  (isOnline
-                    ? '🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:'')
-                    : (p.lastSeen ? '⚫ '+_fmtTiempo(p.lastSeen) : '⚫ Sin conexión')
-                  )+
-                '</div>'+
-              '</div>'+
-            '</div>'+
-            statsHtml+
-          '</div>'+
-          '<div class="adm-user-row-actions">'+
-            (isOnline ? '<button class="adm-row-btn" style="background:#78350f;color:#fcd34d;" onclick="_admForzarLogout(\''+u.username+'\')" title="Cerrar sesión">⏻</button>' : '')+
-            (u.username!=='3D Company'
-              ? '<button class="adm-row-btn" onclick="_admAbrirEditar(\''+u.username+'\',\''+(u.asesor||'')+'\',\''+(u.tienda||'')+'\')" title="Editar">✏️</button>'+
-                '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+u.username+'\')" title="Eliminar">✕</button>'
-              : '')+
-          '</div>'
-        list.appendChild(row);
-      });
+      _buildEnliveCards(usuarios, presencia);
+      _buildEquipoList(usuarios, presencia);
     });
   });
+}
+
+function _avatarColor(name){
+  const cols=['#2563eb','#7c3aed','#db2777','#059669','#d97706','#0891b2','#4f46e5','#dc2626'];
+  let h=0; for(let i=0;i<(name||'').length;i++) h=(name.charCodeAt(i)+((h<<5)-h))|0;
+  return cols[Math.abs(h)%cols.length];
+}
+function _avatarInitials(name){
+  const w=(name||'?').trim().split(/\s+/);
+  return w.length>=2?(w[0][0]+w[1][0]).toUpperCase():(name||'?').slice(0,2).toUpperCase();
+}
+
+function _buildEnliveCards(usuarios, presencia){
+  const grid=document.getElementById('enlive-cards');
+  const offGrid=document.getElementById('enlive-offline-cards');
+  const offSec=document.getElementById('enlive-offline-section');
+  grid.innerHTML=''; offGrid.innerHTML='';
+  const on=[], off=[];
+  usuarios.forEach(u=>{
+    const p=presencia[u.username]||{};
+    const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
+    if(isOnline) on.push({u,p}); else if(p.lastSeen) off.push({u,p});
+  });
+  if(!on.length) grid.innerHTML='<div class="adm-empty" style="grid-column:1/-1;border:1px dashed #0e1c2e;border-radius:10px;">Ningún asesor conectado en este momento</div>';
+  on.forEach(({u,p})=>grid.appendChild(_mkEnliveCard(u,p,true)));
+  if(off.length){ offSec.style.display='block'; off.forEach(({u,p})=>offGrid.appendChild(_mkEnliveCard(u,p,false))); }
+  else offSec.style.display='none';
+}
+
+function _mkEnliveCard(u, p, isOnline){
+  const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.username);
+  const tienda=isOnline&&p.tienda?p.tienda:(u.tienda||'—');
+  const color=_avatarColor(name);
+  const initials=_avatarInitials(name);
+  const cont=p.contestaron||0, noCont=p.noContestaron||0, wa=p.waEnviados||0;
+  const fin=p.finalizados||0, dev=p.devoluciones||0;
+  const total=cont+noCont+wa;
+  const tCierre=total>0?Math.round(fin/total*100):0;
+  const tContacto=total>0?Math.round(cont/total*100):0;
+  const score=Math.max(0,fin*3+cont-dev*2);
+  const scoreColor=score>=15?'#4ade80':score>=5?'#fbbf24':'#f87171';
+  const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
+  const barCont=Math.min(100,tContacto), barCierre=Math.min(100,tCierre);
+  const barDev=fin>0?Math.min(100,Math.round(dev/fin*100)):0;
+  const cC=tContacto>=70?'#3b82f6':tContacto>=50?'#f59e0b':'#ef4444';
+  const cCi=tCierre>=60?'#10b981':tCierre>=40?'#f59e0b':'#ef4444';
+  const cDev=barDev<=5?'#10b981':barDev<=15?'#f59e0b':'#ef4444';
+  const card=document.createElement('div');
+  card.className='enlive-card'+(isOnline?' online':'');
+  const safeU=u.username.replace(/'/g,"\\'");
+  const safeA=(u.asesor||'').replace(/'/g,"\\'");
+  const safeT=(u.tienda||'').replace(/'/g,"\\'");
+  card.innerHTML=
+    '<div class="enlive-card-top">'+
+      '<div class="enlive-avatar" style="background:'+color+'">'+initials+'</div>'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div class="enlive-name">'+name+'</div>'+
+        '<div class="enlive-tienda">🏪 '+tienda+'</div>'+
+      '</div>'+
+      '<div class="enlive-status">'+
+        (isOnline
+          ? '<div class="enlive-online-pill"><span class="adm-live-dot"></span>EN VIVO</div>'
+          : '<div class="enlive-offline-pill">Offline</div>')+
+        (tiempoActivo?'<div class="enlive-time">'+tiempoActivo+'</div>':(p.lastSeen?'<div class="enlive-time">'+_fmtTiempo(p.lastSeen)+'</div>':''))+
+        (isOnline?'<div class="enlive-score" style="color:'+scoreColor+'">'+score+'</div><div class="enlive-score-lbl">score</div>':'')+
+      '</div>'+
+    '</div>'+
+    (isOnline
+      ? '<div class="enlive-metrics">'+
+          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#4ade80">'+fin+'</div><div class="enlive-metric-lbl">Final.</div></div>'+
+          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#60a5fa">'+cont+'</div><div class="enlive-metric-lbl">Cont.</div></div>'+
+          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#a78bfa">'+wa+'</div><div class="enlive-metric-lbl">WA</div></div>'+
+        '</div>'+
+        '<div class="enlive-bars">'+
+          '<div class="enlive-bar-row"><div class="enlive-bar-lbl">Tasa contacto</div><div class="enlive-bar-track"><div class="enlive-bar-fill" style="width:'+barCont+'%;background:'+cC+'"></div></div><div class="enlive-bar-val" style="color:'+cC+'">'+tContacto+'%</div></div>'+
+          '<div class="enlive-bar-row"><div class="enlive-bar-lbl">Tasa cierre</div><div class="enlive-bar-track"><div class="enlive-bar-fill" style="width:'+barCierre+'%;background:'+cCi+'"></div></div><div class="enlive-bar-val" style="color:'+cCi+'">'+tCierre+'%</div></div>'+
+          (fin>0?'<div class="enlive-bar-row"><div class="enlive-bar-lbl">Dev.</div><div class="enlive-bar-track"><div class="enlive-bar-fill" style="width:'+barDev+'%;background:'+cDev+'"></div></div><div class="enlive-bar-val" style="color:'+cDev+'">'+barDev+'%</div></div>':'')+
+        '</div>'
+      : '')+
+    '<div class="enlive-actions">'+
+      (isOnline&&u.username!=='3D Company'?'<button class="enlive-btn danger" onclick="_admForzarLogout(\''+safeU+'\')">⏻ Cerrar sesión</button>':'')+
+      (u.username!=='3D Company'
+        ? '<button class="enlive-btn" onclick="_admAbrirEditar(\''+safeU+'\',\''+safeA+'\',\''+safeT+'\')">✏️ Editar</button>'+
+          '<button class="enlive-btn danger" onclick="_admEliminarUsuario(\''+safeU+'\')">✕</button>'
+        : '')+
+    '</div>';
+  return card;
+}
+
+function _buildEquipoList(usuarios, presencia){
+  const list=document.getElementById('adm-users-list');
+  const q=((document.getElementById('equipo-search')||{}).value||'').toLowerCase();
+  list.innerHTML='';
+  if(!usuarios.length){list.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>';return;}
+  let visible=0;
+  usuarios.forEach(u=>{
+    const p=presencia[u.username]||{};
+    const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
+    const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.username);
+    const tienda=isOnline&&p.tienda?p.tienda:(u.tienda||'');
+    if(q&&!name.toLowerCase().includes(q)&&!tienda.toLowerCase().includes(q)&&!u.username.toLowerCase().includes(q)) return;
+    visible++;
+    const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
+    const cont=p.contestaron||0,noCont=p.noContestaron||0,wa=p.waEnviados||0,fin=p.finalizados||0;
+    const statsHtml=isOnline
+      ? '<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">'+
+          (cont?'<span style="background:#1e40af15;color:#60a5fa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">✅ '+cont+'</span>':'')+
+          (noCont?'<span style="background:#7f1d1d15;color:#f87171;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">❌ '+noCont+'</span>':'')+
+          (wa?'<span style="background:#4c1d9515;color:#a78bfa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">📱 '+wa+'</span>':'')+
+          (fin?'<span style="background:#14532d15;color:#4ade80;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">🏁 '+fin+'</span>':'')+
+          (!cont&&!noCont&&!wa&&!fin?'<span style="color:#0e1c2e;font-size:.6rem;">Sin gestiones</span>':'')+
+        '</div>'
+      : '';
+    const safeU=u.username.replace(/'/g,"\\'");
+    const safeA=(u.asesor||'').replace(/'/g,"\\'");
+    const safeT=(u.tienda||'').replace(/'/g,"\\'");
+    const row=document.createElement('div');
+    row.className='adm-user-row'+(isOnline?' online':'');
+    row.innerHTML=
+      '<div class="adm-online-dot'+(isOnline?' on':'')+'"></div>'+
+      '<div class="adm-user-row-info" style="flex:1;">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+          '<div>'+
+            '<div class="adm-user-row-name">'+name+(name!==u.username?'<span style="color:#0e1c2e;font-size:.65rem;font-weight:400;margin-left:6px;">@'+u.username+'</span>':'')+'</div>'+
+            '<div class="adm-user-row-meta">'+(tienda?'🏪 '+tienda:'')+'</div>'+
+          '</div>'+
+          '<div style="font-size:.63rem;font-weight:600;color:'+(isOnline?'#10b981':'#0e1c2e')+'">'+
+            (isOnline?'🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:''):(p.lastSeen?'⚫ '+_fmtTiempo(p.lastSeen):''))+
+          '</div>'+
+        '</div>'+statsHtml+
+      '</div>'+
+      '<div class="adm-user-row-actions">'+
+        (isOnline&&u.username!=='3D Company'?'<button class="adm-row-btn" style="color:#f59e0b;border-color:#78350f20;" onclick="_admForzarLogout(\''+safeU+'\')">⏻</button>':'')+
+        (u.username!=='3D Company'
+          ?'<button class="adm-row-btn" onclick="_admAbrirEditar(\''+safeU+'\',\''+safeA+'\',\''+safeT+'\')">✏️</button>'+
+           '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+safeU+'\')">✕</button>'
+          :'')+
+      '</div>';
+    list.appendChild(row);
+  });
+  if(!visible) list.innerHTML='<div class="adm-empty">Sin resultados para "'+q+'"</div>';
 }
 
 // ===== ANALÍTICA =====
@@ -6006,6 +6236,20 @@ function _anlInicializar(){
     sel.appendChild(opt);
   });
   _anlCargar();
+}
+
+function _rnkInicializar(){
+  const sel = document.getElementById('rnk-user-filter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todas las tiendas</option>';
+  _admUsuariosCache.forEach(u=>{
+    const opt = document.createElement('option');
+    opt.value = u.username;
+    opt.textContent = u.tienda || u.asesor || u.username;
+    if(u.username===current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  _rnkCargar();
 }
 
 function _anlUserChange(){
@@ -6244,7 +6488,7 @@ function _anlCargar(){
     ).join('');
 
     // ── LÍNEA: % de cierre por día ──
-    document.getElementById('anl-cierre-title').textContent = '% de cierre diario — '+userName;
+    document.getElementById('anl-cierre-title').textContent = '% de cierre diario — '+(asesorName||tiendaName);
     const ctxC = document.getElementById('anl-cierre-chart').getContext('2d');
     if(_anlCierreChart) _anlCierreChart.destroy();
     const cierrePorDia = fechas.map(f=>{
@@ -6539,6 +6783,109 @@ function _admEliminarUsuario(username){
   if(!confirm('¿Eliminar usuario "'+username+'"?')) return;
   _db.ref('users').orderByChild('username').equalTo(username).once('value', snap=>{ snap.forEach(c=>c.ref.remove()); });
   _db.ref('presence/'+username).remove();
+}
+
+function _equiSearch(q){
+  document.querySelectorAll('#adm-users-list .adm-user-row').forEach(row=>{
+    row.style.display=!q||row.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';
+  });
+}
+
+function _rnkCargar(){
+  const userFilter=document.getElementById('rnk-user-filter').value;
+  const period=document.getElementById('rnk-period-filter').value;
+  const tbody=document.getElementById('rnk-tbody');
+  const podio=document.getElementById('rnk-podio');
+  tbody.innerHTML='<tr><td colspan="10" class="rnk-empty">Cargando ranking...</td></tr>';
+  podio.innerHTML='';
+  const fechas=[];
+  if(period==='today'){
+    fechas.push(new Date().toISOString().slice(0,10));
+  } else {
+    const dias=parseInt(period);
+    for(let i=dias-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);fechas.push(d.toISOString().slice(0,10));}
+  }
+  const users=userFilter?[userFilter]:_admUsuariosCache.map(u=>u.username);
+  const promises=users.map(u=>_db.ref('historial_diario/'+u).once('value').then(s=>({u,data:s.val()||{},obj:_admUsuariosCache.find(x=>x.username===u)||{username:u}})));
+  Promise.all(promises).then(results=>{
+    const asesores=[];
+    results.forEach(({data,obj})=>{
+      const keys=Object.keys(data);
+      const isNew=keys.length>0&&!keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
+      if(isNew){
+        Object.entries(data).forEach(([ak,fd])=>{
+          let cont=0,noCont=0,wa=0,fin=0,dev=0,min=0;
+          const nombre=fd[Object.keys(fd)[0]]?.asesorNombre||ak;
+          fechas.forEach(f=>{const d=fd[f]||{};cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;});
+          const total=cont+noCont+wa;
+          if(!total&&!fin) return;
+          const tCierre=total>0?Math.round(fin/total*100):0;
+          const tContacto=total>0?Math.round(cont/total*100):0;
+          const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
+          const score=Math.max(0,fin*3+cont+tCierre*2-dev*2);
+          asesores.push({nombre,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total});
+        });
+      } else {
+        let cont=0,noCont=0,wa=0,fin=0,dev=0,min=0;
+        Object.entries(data).forEach(([f,d])=>{if(!fechas.includes(f))return;cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;});
+        const total=cont+noCont+wa;
+        if(!total&&!fin) return;
+        const tCierre=total>0?Math.round(fin/total*100):0;
+        const tContacto=total>0?Math.round(cont/total*100):0;
+        const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
+        const score=Math.max(0,fin*3+cont+tCierre*2-dev*2);
+        asesores.push({nombre:obj.asesor||obj.username,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total});
+      }
+    });
+    asesores.sort((a,b)=>b.score-a.score);
+    const medals=['🥇','🥈','🥉'];
+    const podioColors=['gold','silver','bronze'];
+    const scoreColors=['#f59e0b','#94a3b8','#cd7c3a'];
+    const top3=asesores.slice(0,3);
+    while(top3.length<3) top3.push(null);
+    podio.innerHTML='';
+    top3.forEach((a,i)=>{
+      const div=document.createElement('div');
+      div.className='rnk-podio-card '+(podioColors[i]||'');
+      div.innerHTML=a
+        ? '<span class="rnk-medal">'+medals[i]+'</span>'+
+          '<div class="rnk-podio-name">'+a.nombre+'</div>'+
+          '<div class="rnk-podio-tienda">🏪 '+a.tienda+'</div>'+
+          '<div class="rnk-podio-score" style="color:'+scoreColors[i]+'">'+a.score+'</div>'+
+          '<div class="rnk-podio-score-lbl">puntos</div>'+
+          '<div class="rnk-podio-stats">'+
+            '<span class="rnk-mini-stat">🏁 '+a.fin+'</span>'+
+            '<span class="rnk-mini-stat">'+a.tCierre+'% cierre</span>'+
+            (a.gpm?'<span class="rnk-mini-stat">'+a.gpm+'/min</span>':'')+
+          '</div>'
+        : '<span class="rnk-medal" style="opacity:.2">'+medals[i]+'</span><div style="color:#0e1c2e;font-size:.75rem;margin-top:8px;">Sin datos</div>';
+      podio.appendChild(div);
+    });
+    if(!asesores.length){
+      tbody.innerHTML='<tr><td colspan="10" class="rnk-empty">Sin historial en este período</td></tr>';
+      return;
+    }
+    tbody.innerHTML=asesores.map((a,i)=>{
+      const sc=a.score>=50?'#4ade80':a.score>=20?'#fbbf24':'#f87171';
+      const sb=a.score>=50?'#14532d20':a.score>=20?'#451a0320':'#450a0a20';
+      const cc=a.tCierre>=60?'#4ade80':a.tCierre>=40?'#fbbf24':'#f87171';
+      const cco=a.tContacto>=70?'#4ade80':a.tContacto>=50?'#fbbf24':'#f87171';
+      const cg=a.gpm>=1?'#4ade80':a.gpm>=0.5?'#fbbf24':'#f87171';
+      const badge=i<3?medals[i]+'':'#'+(i+1);
+      return '<tr>'+
+        '<td><span class="rnk-rank-num">'+badge+'</span></td>'+
+        '<td><div class="rnk-rank-name">'+a.nombre+'</div><div class="rnk-rank-tienda">🏪 '+a.tienda+'</div></td>'+
+        '<td style="color:#4ade80;font-weight:700">'+a.fin+'</td>'+
+        '<td style="color:#60a5fa">'+a.cont+'</td>'+
+        '<td style="color:#a78bfa">'+a.wa+'</td>'+
+        '<td style="color:#fb923c">'+a.dev+'</td>'+
+        '<td style="color:'+cc+';font-weight:700">'+a.tCierre+'%</td>'+
+        '<td style="color:'+cco+'">'+a.tContacto+'%</td>'+
+        '<td style="color:'+cg+';font-weight:700">'+(a.gpm||'—')+'/m</td>'+
+        '<td><span class="rnk-score-pill" style="background:'+sb+';color:'+sc+'">'+a.score+'</span></td>'+
+      '</tr>';
+    }).join('');
+  });
 }
 </script>
 
