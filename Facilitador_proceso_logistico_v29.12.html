@@ -6052,33 +6052,45 @@ function _admTab(tab){
 
 function _admCargarDashboard(){
   if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener = null; }
-  _admPresenceListener = _db.ref('presence').on('value', snapPresence => {
-    _db.ref('users').once('value', snapUsers => {
-      const presencia = snapPresence.val() || {};
-      _admPresenciaCache = presencia;
-      const usuarios = Object.values(snapUsers.val() || {});
-      if(!usuarios.find(u=>u.username==='3D Company'))
-        usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
-      _admUsuariosCache = usuarios;
 
-      const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
-      const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
-      const totalFin = Object.values(presencia).reduce((s,p)=>s+(p.finalizados||0),0);
-      document.getElementById('adm-stat-total').textContent = usuarios.length;
-      document.getElementById('adm-stat-online').textContent = online;
-      document.getElementById('adm-stat-gest').textContent = totalGest;
-      document.getElementById('adm-stat-fin').textContent = totalFin;
-
-      usuarios.sort((a,b)=>{
-        const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
-        const bo=!!(presencia[b.username]||{}).online&&(Date.now()-((presencia[b.username]||{}).lastSeen||0))<120000;
-        if(ao!==bo) return bo-ao;
-        return ((presencia[b.username]||{}).lastSeen||0)-((presencia[a.username]||{}).lastSeen||0);
-      });
-
-      _buildEnliveCards(usuarios, presencia);
-      _buildEquipoList(usuarios, presencia);
+  function _procesarDatos(presencia, usuarios){
+    _admPresenciaCache = presencia;
+    if(!usuarios.find(u=>u.username==='3D Company'))
+      usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
+    _admUsuariosCache = usuarios;
+    const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
+    const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
+    const totalFin = Object.values(presencia).reduce((s,p)=>s+(p.finalizados||0),0);
+    document.getElementById('adm-stat-total').textContent = usuarios.length;
+    document.getElementById('adm-stat-online').textContent = online;
+    document.getElementById('adm-stat-gest').textContent = totalGest;
+    document.getElementById('adm-stat-fin').textContent = totalFin;
+    usuarios.sort((a,b)=>{
+      const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
+      const bo=!!(presencia[b.username]||{}).online&&(Date.now()-((presencia[b.username]||{}).lastSeen||0))<120000;
+      if(ao!==bo) return bo-ao;
+      return ((presencia[b.username]||{}).lastSeen||0)-((presencia[a.username]||{}).lastSeen||0);
     });
+    _buildEnliveCards(usuarios, presencia);
+    _buildEquipoList(usuarios, presencia);
+  }
+
+  function _cargarUsuarios(presencia){
+    _db.ref('users').once('value', snapUsers => {
+      const usuarios = Object.values(snapUsers.val() || {});
+      _procesarDatos(presencia, usuarios);
+    }, err => {
+      console.error('Error leyendo usuarios:', err.code, err.message);
+      const list = document.getElementById('adm-users-list');
+      if(list) list.innerHTML = '<div class="adm-empty" style="color:#ef4444;">⚠️ Sin acceso a Firebase. Ve a la consola de Firebase y actualiza las reglas de seguridad a:<br><br><code style="font-size:.7rem;background:#f1f5f9;padding:4px 8px;border-radius:5px;">{ "rules": { ".read": "auth != null", ".write": "auth != null" } }</code></div>';
+    });
+  }
+
+  _admPresenceListener = _db.ref('presence').on('value', snapPresence => {
+    _cargarUsuarios(snapPresence.val() || {});
+  }, err => {
+    console.error('Error leyendo presencia:', err.code, err.message);
+    _cargarUsuarios({});
   });
 }
 
@@ -6101,9 +6113,9 @@ function _buildEnliveCards(usuarios, presencia){
   usuarios.forEach(u=>{
     const p=presencia[u.username]||{};
     const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
-    if(isOnline) on.push({u,p}); else if(p.lastSeen) off.push({u,p});
+    if(isOnline) on.push({u,p}); else off.push({u,p});
   });
-  if(!on.length) grid.innerHTML='<div class="adm-empty" style="grid-column:1/-1;border:1px dashed #0e1c2e;border-radius:10px;">Ningún asesor conectado en este momento</div>';
+  if(!on.length) grid.innerHTML='<div class="adm-empty" style="grid-column:1/-1;border:1px dashed #d6d2cc;border-radius:10px;">Ningún asesor conectado en este momento</div>';
   on.forEach(({u,p})=>grid.appendChild(_mkEnliveCard(u,p,true)));
   if(off.length){ offSec.style.display='block'; off.forEach(({u,p})=>offGrid.appendChild(_mkEnliveCard(u,p,false))); }
   else offSec.style.display='none';
