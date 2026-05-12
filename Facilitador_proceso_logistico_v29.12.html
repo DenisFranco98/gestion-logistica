@@ -6065,16 +6065,29 @@ function _superAdmCargar(){
                   if(!emp) return;
                   const asesoresIds = Object.keys(empresaAsesores[empId]||{});
                   const asesoresList = asesoresIds.map(uname=>{
-                    const u = Object.values(users).find(x=>x.username===uname);
-                    return u ? (u.asesor||u.username) : uname;
+                    const u = Object.values(users).find(x=>x.username===uname || _fbKey(x.username)===uname);
+                    const nombre = u ? (u.asesor||u.username) : uname;
+                    const user = u ? u.username : uname;
+                    return {nombre, user};
                   });
                   empresasHtml += `
-                    <div style="padding:10px 20px;border-top:1px solid #f4f3f1;">
-                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <div style="padding:12px 20px;border-top:1px solid #f4f3f1;">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                         <span style="font-size:.78rem;font-weight:700;color:#1e293b;">🏢 ${emp.nombre}</span>
-                        <span style="background:#f1f5f9;color:#64748b;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;">${asesoresIds.length} asesores</span>
+                        <span style="background:#f1f5f9;color:#64748b;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;">${asesoresList.length} asesores</span>
                       </div>
-                      ${asesoresList.length ? '<div style="display:flex;flex-wrap:wrap;gap:5px;">'+asesoresList.map(n=>'<span style="background:#e0f2fe;color:#0369a1;font-size:.63rem;padding:2px 8px;border-radius:6px;">'+n+'</span>').join('')+'</div>' : '<div style="color:#94a3b8;font-size:.7rem;">Sin asesores asignados</div>'}
+                      ${asesoresList.length
+                        ? '<div style="display:flex;flex-direction:column;gap:5px;">'
+                          + asesoresList.map(a=>
+                            '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f8fafc;border-radius:8px;border:1px solid #e7e5e4;">'
+                            + '<div style="width:26px;height:26px;border-radius:7px;background:#1e293b;display:flex;align-items:center;justify-content:center;color:white;font-size:.65rem;font-weight:800;flex-shrink:0;">'+(a.nombre.slice(0,2).toUpperCase())+'</div>'
+                            + '<div><div style="font-size:.76rem;font-weight:700;color:#1e293b;">'+a.nombre+'</div>'
+                            + '<div style="font-size:.62rem;color:#94a3b8;">@'+a.user+'</div></div>'
+                            + '</div>'
+                          ).join('')
+                          + '</div>'
+                        : '<div style="color:#94a3b8;font-size:.7rem;font-style:italic;">Sin asesores asignados</div>'
+                      }
                     </div>`;
                 });
               }
@@ -6107,33 +6120,46 @@ function _showAdminGlobal(){
 
 // ===== MIGRACIÓN INICIAL =====
 function _migracionInicial(){
-  _db.ref('empresas').orderByChild('nombre').equalTo('3D Company').once('value', snapEmp=>{
-    if(snapEmp.exists()) return;
-    _db.ref('admins').orderByChild('username').equalTo('3DCompanyadmin').once('value', snapAdm=>{
-      let adminId;
-      const crearEmpresa = (aId)=>{
-        const empRef = _db.ref('empresas').push();
-        empRef.set({nombre:'3D Company', creadoPor:aId, createdAt:Date.now()}).then(()=>{
-          _db.ref('admin_empresas/'+aId+'/'+empRef.key).set(true);
-          _db.ref('users').once('value', snapUsers=>{
-            const batch = {};
-            Object.values(snapUsers.val()||{}).forEach(u=>{
-              if(u.username) batch[u.username] = true;
-            });
-            _db.ref('empresa_asesores/'+empRef.key).update(batch);
+  // Asegurar que el admin 3DCompanyadmin existe
+  _db.ref('admins').orderByChild('username').equalTo('3DCompanyadmin').once('value', snapAdm=>{
+    const _asignarUsuarios = (empresaId)=>{
+      // Siempre re-sincronizar todos los usuarios existentes a 3D Company
+      _db.ref('users').once('value', snapUsers=>{
+        const batch = {};
+        Object.values(snapUsers.val()||{}).forEach(u=>{
+          if(u.username) batch[_fbKey(u.username)] = true;
+        });
+        if(Object.keys(batch).length) _db.ref('empresa_asesores/'+empresaId).update(batch);
+      });
+    };
+
+    const _asegurarEmpresa = (adminId)=>{
+      _db.ref('admin_empresas/'+adminId).once('value', snapAE=>{
+        const misEmpresas = Object.keys(snapAE.val()||{});
+        if(misEmpresas.length){
+          // Empresa ya existe — solo sincronizar asesores
+          _asignarUsuarios(misEmpresas[0]);
+        } else {
+          // Crear empresa 3D Company
+          const empRef = _db.ref('empresas').push();
+          empRef.set({nombre:'3D Company', creadoPor:adminId, createdAt:Date.now()}).then(()=>{
+            _db.ref('admin_empresas/'+adminId+'/'+empRef.key).set(true);
+            _asignarUsuarios(empRef.key);
           });
-        });
-      };
-      if(snapAdm.exists()){
-        snapAdm.forEach(c=>{ adminId=c.key; });
-        crearEmpresa(adminId);
-      } else {
-        const admRef = _db.ref('admins').push();
-        admRef.set({username:'3DCompanyadmin', password:'3DCompanyadmin', createdAt:Date.now()}).then(()=>{
-          crearEmpresa(admRef.key);
-        });
-      }
-    });
+        }
+      });
+    };
+
+    if(snapAdm.exists()){
+      let adminId;
+      snapAdm.forEach(c=>{ adminId=c.key; });
+      _asegurarEmpresa(adminId);
+    } else {
+      const admRef = _db.ref('admins').push();
+      admRef.set({username:'3DCompanyadmin', password:'3DCompanyadmin', createdAt:Date.now()}).then(()=>{
+        _asegurarEmpresa(admRef.key);
+      });
+    }
   });
 }
 
