@@ -1025,17 +1025,45 @@ header h1{font-size:1.05rem;font-weight:700;}
       <div><div class="adm-header-title">Super Admin</div><div class="adm-header-sub">Registro Global</div></div>
     </div>
     <div class="adm-header-right">
+      <button onclick="_superAdmCargar()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🔄 Actualizar</button>
       <button class="adm-logout" onclick="_superAdmLogout()">Cerrar sesión</button>
     </div>
   </div>
   <div style="padding:24px;overflow-y:auto;height:calc(100vh - 56px);">
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px;">
+    <!-- Stats -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
       <div class="adm-cmd-card blue"><div class="adm-cmd-icon">👤</div><div class="adm-cmd-val" id="sa-stat-admins">0</div><div class="adm-cmd-lbl">Administradores</div></div>
       <div class="adm-cmd-card green"><div class="adm-cmd-icon">🏢</div><div class="adm-cmd-val" id="sa-stat-empresas">0</div><div class="adm-cmd-lbl">Empresas</div></div>
       <div class="adm-cmd-card amber"><div class="adm-cmd-icon">👥</div><div class="adm-cmd-val" id="sa-stat-asesores">0</div><div class="adm-cmd-lbl">Asesores totales</div></div>
+      <div class="adm-cmd-card purple"><div class="adm-cmd-icon">🟢</div><div class="adm-cmd-val" id="sa-stat-online">0</div><div class="adm-cmd-lbl">En línea ahora</div></div>
     </div>
-    <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:12px;">Registro de administradores y empresas</div>
-    <div id="sa-tree" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <!-- Barra de búsqueda y controles -->
+    <div style="background:white;border-radius:12px;border:1.5px solid #e7e5e4;padding:14px 16px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+      <div style="position:relative;flex:1;min-width:200px;">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.85rem;">🔍</span>
+        <input id="sa-search" type="text" placeholder="Buscar por admin, empresa o asesor..." oninput="_saFiltrar()"
+          style="width:100%;padding:8px 12px 8px 32px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.78rem;color:#1e293b;outline:none;background:#f8fafc;"/>
+      </div>
+      <select id="sa-sort" onchange="_saFiltrar()" style="background:white;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:.76rem;color:#1e293b;cursor:pointer;outline:none;">
+        <option value="reciente">Más reciente</option>
+        <option value="antiguo">Más antiguo</option>
+        <option value="az">A → Z</option>
+        <option value="za">Z → A</option>
+        <option value="mas-empresas">Más empresas</option>
+        <option value="mas-asesores">Más asesores</option>
+      </select>
+      <select id="sa-filtro" onchange="_saFiltrar()" style="background:white;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:.76rem;color:#1e293b;cursor:pointer;outline:none;">
+        <option value="todos">Todos los admins</option>
+        <option value="con-empresas">Con empresas</option>
+        <option value="sin-empresas">Sin empresas</option>
+        <option value="con-asesores">Con asesores</option>
+        <option value="sin-asesores">Sin asesores</option>
+      </select>
+      <button onclick="_saExpandirTodos(true)" style="background:#f1f5f9;border:1.5px solid #e2e8f0;color:#475569;border-radius:8px;padding:7px 12px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap;">↕ Expandir todo</button>
+      <button onclick="_saExpandirTodos(false)" style="background:#f1f5f9;border:1.5px solid #e2e8f0;color:#475569;border-radius:8px;padding:7px 12px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap;">↕ Colapsar todo</button>
+    </div>
+    <div id="sa-results-label" style="font-size:.63rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;"></div>
+    <div id="sa-tree" style="display:flex;flex-direction:column;gap:8px;"></div>
   </div>
 </div>
 
@@ -6027,88 +6055,216 @@ window._registrarAdmin = function(){
 };
 
 // ===== SUPER ADMIN CARGAR =====
+let _saData = null; // cache de datos cargados
+
 function _superAdmCargar(){
-  _db.ref('admins').once('value', snapAdmins=>{
-    _db.ref('empresas').once('value', snapEmpresas=>{
-      _db.ref('admin_empresas').once('value', snapAE=>{
-        _db.ref('empresa_asesores').once('value', snapEAs=>{
-          _db.ref('users').once('value', snapUsers=>{
-            const admins = snapAdmins.val()||{};
-            const empresas = snapEmpresas.val()||{};
-            const adminEmpresas = snapAE.val()||{};
-            const empresaAsesores = snapEAs.val()||{};
-            const users = snapUsers.val()||{};
+  const tree = document.getElementById('sa-tree');
+  tree.innerHTML = '<div class="adm-empty">Cargando...</div>';
 
-            document.getElementById('sa-stat-admins').textContent = Object.keys(admins).length;
-            document.getElementById('sa-stat-empresas').textContent = Object.keys(empresas).length;
-            document.getElementById('sa-stat-asesores').textContent = Object.keys(users).length;
+  Promise.all([
+    _db.ref('admins').once('value'),
+    _db.ref('empresas').once('value'),
+    _db.ref('admin_empresas').once('value'),
+    _db.ref('empresa_asesores').once('value'),
+    _db.ref('users').once('value'),
+    _db.ref('presence').once('value')
+  ]).then(([snapAdmins, snapEmpresas, snapAE, snapEAs, snapUsers, snapPresence])=>{
+    const admins         = snapAdmins.val()||{};
+    const empresas       = snapEmpresas.val()||{};
+    const adminEmpresas  = snapAE.val()||{};
+    const empresaAsesores= snapEAs.val()||{};
+    const users          = snapUsers.val()||{};
+    const presencia      = snapPresence.val()||{};
 
-            const tree = document.getElementById('sa-tree');
-            tree.innerHTML = '';
+    const totalOnline = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
+    document.getElementById('sa-stat-admins').textContent  = Object.keys(admins).length;
+    document.getElementById('sa-stat-empresas').textContent = Object.keys(empresas).length;
+    document.getElementById('sa-stat-asesores').textContent = Object.keys(users).length;
+    document.getElementById('sa-stat-online').textContent   = totalOnline;
 
-            if(!Object.keys(admins).length){
-              tree.innerHTML='<div class="adm-empty">No hay administradores registrados aún</div>';
-              return;
-            }
-
-            Object.entries(admins).forEach(([adminId, adminData])=>{
-              const misEmpresas = Object.keys(adminEmpresas[adminId]||{});
-              const card = document.createElement('div');
-              card.style.cssText='background:white;border-radius:14px;border:1.5px solid #e7e5e4;overflow:hidden;';
-
-              let empresasHtml = '';
-              if(!misEmpresas.length){
-                empresasHtml = '<div style="padding:10px 20px 14px;color:#94a3b8;font-size:.75rem;">Sin empresas asignadas</div>';
-              } else {
-                misEmpresas.forEach(empId=>{
-                  const emp = empresas[empId];
-                  if(!emp) return;
-                  const asesoresIds = Object.keys(empresaAsesores[empId]||{});
-                  const asesoresList = asesoresIds.map(uname=>{
-                    const u = Object.values(users).find(x=>x.username===uname || _fbKey(x.username)===uname);
-                    const nombre = u ? (u.asesor||u.username) : uname;
-                    const user = u ? u.username : uname;
-                    return {nombre, user};
-                  });
-                  empresasHtml += `
-                    <div style="padding:12px 20px;border-top:1px solid #f4f3f1;">
-                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                        <span style="font-size:.78rem;font-weight:700;color:#1e293b;">🏢 ${emp.nombre}</span>
-                        <span style="background:#f1f5f9;color:#64748b;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;">${asesoresList.length} asesores</span>
-                      </div>
-                      ${asesoresList.length
-                        ? '<div style="display:flex;flex-direction:column;gap:5px;">'
-                          + asesoresList.map(a=>
-                            '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f8fafc;border-radius:8px;border:1px solid #e7e5e4;">'
-                            + '<div style="width:26px;height:26px;border-radius:7px;background:#1e293b;display:flex;align-items:center;justify-content:center;color:white;font-size:.65rem;font-weight:800;flex-shrink:0;">'+(a.nombre.slice(0,2).toUpperCase())+'</div>'
-                            + '<div><div style="font-size:.76rem;font-weight:700;color:#1e293b;">'+a.nombre+'</div>'
-                            + '<div style="font-size:.62rem;color:#94a3b8;">@'+a.user+'</div></div>'
-                            + '</div>'
-                          ).join('')
-                          + '</div>'
-                        : '<div style="color:#94a3b8;font-size:.7rem;font-style:italic;">Sin asesores asignados</div>'
-                      }
-                    </div>`;
-                });
-              }
-
-              card.innerHTML = `
-                <div style="padding:14px 20px;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;">
-                  <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="width:34px;height:34px;background:#1e293b;border-radius:9px;display:flex;align-items:center;justify-content:center;color:white;font-size:.85rem;font-weight:800;">${(adminData.username||'?').slice(0,2).toUpperCase()}</div>
-                    <div>
-                      <div style="font-weight:700;color:#1e293b;font-size:.85rem;">@${adminData.username}</div>
-                      <div style="color:#94a3b8;font-size:.63rem;">Admin · ${misEmpresas.length} empresa${misEmpresas.length!==1?'s':''}</div>
-                    </div>
-                  </div>
-                </div>
-                ${empresasHtml}`;
-              tree.appendChild(card);
-            });
-          });
+    // Construir estructura de datos enriquecida
+    const usersArr = Object.values(users);
+    _saData = Object.entries(admins).map(([adminId, adminData])=>{
+      const misEmpresasIds = Object.keys(adminEmpresas[adminId]||{});
+      let totalAsesores = 0;
+      const misEmpresas = misEmpresasIds.map(empId=>{
+        const emp = empresas[empId];
+        if(!emp) return null;
+        const asesorKeys = Object.keys(empresaAsesores[empId]||{});
+        const asesores = asesorKeys.map(ukey=>{
+          const u = usersArr.find(x=>x.username===ukey||_fbKey(x.username)===ukey);
+          const online = !!(presencia[u?.username||ukey]||{}).online && (Date.now()-((presencia[u?.username||ukey]||{}).lastSeen||0))<120000;
+          return { nombre: u?(u.asesor||u.username):ukey, user: u?u.username:ukey, online };
         });
-      });
+        totalAsesores += asesores.length;
+        return { empId, nombre: emp.nombre, createdAt: emp.createdAt||0, asesores };
+      }).filter(Boolean);
+      return {
+        adminId,
+        username: adminData.username||'',
+        createdAt: adminData.createdAt||0,
+        empresas: misEmpresas,
+        totalEmpresas: misEmpresas.length,
+        totalAsesores
+      };
     });
+
+    _saFiltrar();
+  }).catch(err=>{
+    tree.innerHTML='<div class="adm-empty" style="color:#ef4444;">⚠️ Error cargando datos: '+err.message+'</div>';
+  });
+}
+
+function _saFiltrar(){
+  if(!_saData) return;
+  const q      = (document.getElementById('sa-search')||{value:''}).value.toLowerCase();
+  const sort   = (document.getElementById('sa-sort')||{value:'reciente'}).value;
+  const filtro = (document.getElementById('sa-filtro')||{value:'todos'}).value;
+
+  let lista = _saData.filter(a=>{
+    // Filtro de categoría
+    if(filtro==='con-empresas'  && a.totalEmpresas===0) return false;
+    if(filtro==='sin-empresas'  && a.totalEmpresas>0)   return false;
+    if(filtro==='con-asesores'  && a.totalAsesores===0) return false;
+    if(filtro==='sin-asesores'  && a.totalAsesores>0)   return false;
+    // Búsqueda de texto
+    if(q){
+      const matchAdmin = a.username.toLowerCase().includes(q);
+      const matchEmpresa = a.empresas.some(e=>e.nombre.toLowerCase().includes(q));
+      const matchAsesor = a.empresas.some(e=>e.asesores.some(as=>as.nombre.toLowerCase().includes(q)||as.user.toLowerCase().includes(q)));
+      if(!matchAdmin && !matchEmpresa && !matchAsesor) return false;
+    }
+    return true;
+  });
+
+  // Ordenamiento
+  lista.sort((a,b)=>{
+    if(sort==='reciente')    return b.createdAt - a.createdAt;
+    if(sort==='antiguo')     return a.createdAt - b.createdAt;
+    if(sort==='az')          return a.username.localeCompare(b.username);
+    if(sort==='za')          return b.username.localeCompare(a.username);
+    if(sort==='mas-empresas')return b.totalEmpresas - a.totalEmpresas;
+    if(sort==='mas-asesores')return b.totalAsesores - a.totalAsesores;
+    return 0;
+  });
+
+  const label = document.getElementById('sa-results-label');
+  if(label) label.textContent = lista.length+' administrador'+(lista.length!==1?'es':'')+' encontrado'+(lista.length!==1?'s':'');
+
+  const tree = document.getElementById('sa-tree');
+  tree.innerHTML = '';
+  if(!lista.length){
+    tree.innerHTML='<div class="adm-empty">No se encontraron resultados</div>';
+    return;
+  }
+  lista.forEach(a=>tree.appendChild(_saBuildCard(a, q)));
+}
+
+function _saBuildCard(a, q){
+  const card = document.createElement('div');
+  card.style.cssText='background:white;border-radius:14px;border:1.5px solid #e7e5e4;overflow:hidden;';
+  card.dataset.adminId = a.adminId;
+
+  const fechaReg = a.createdAt ? new Date(a.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}) : 'Sin fecha';
+  const initials = (a.username||'?').slice(0,2).toUpperCase();
+
+  // Header del admin (clickeable para expandir/colapsar)
+  const headerDiv = document.createElement('div');
+  headerDiv.style.cssText='padding:14px 20px;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;transition:background .15s;';
+  headerDiv.onmouseenter=()=>headerDiv.style.background='#f1f5f9';
+  headerDiv.onmouseleave=()=>headerDiv.style.background='#f8fafc';
+
+  const onlineAsesores = a.empresas.reduce((s,e)=>s+e.asesores.filter(x=>x.online).length,0);
+  headerDiv.innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:36px;height:36px;background:#1e293b;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:.88rem;font-weight:800;flex-shrink:0;">${initials}</div>
+      <div>
+        <div style="font-weight:800;color:#1e293b;font-size:.88rem;">@${a.username}</div>
+        <div style="color:#94a3b8;font-size:.62rem;margin-top:2px;">
+          🏢 ${a.totalEmpresas} empresa${a.totalEmpresas!==1?'s':''} &nbsp;·&nbsp; 👥 ${a.totalAsesores} asesor${a.totalAsesores!==1?'es':''}
+          ${onlineAsesores?'&nbsp;·&nbsp; <span style="color:#16a34a;font-weight:700;">🟢 '+onlineAsesores+' en línea</span>':''}
+          &nbsp;·&nbsp; Registrado ${fechaReg}
+        </div>
+      </div>
+    </div>
+    <div class="sa-chevron" style="color:#94a3b8;font-size:.9rem;transition:transform .2s;">▼</div>`;
+
+  // Body desplegable
+  const bodyDiv = document.createElement('div');
+  bodyDiv.style.cssText='display:none;';
+
+  if(!a.empresas.length){
+    bodyDiv.innerHTML='<div style="padding:12px 20px 14px;color:#94a3b8;font-size:.75rem;font-style:italic;">Sin empresas creadas</div>';
+  } else {
+    a.empresas.forEach(emp=>{
+      const empSection = document.createElement('div');
+      empSection.style.cssText='border-top:1px solid #f4f3f1;';
+
+      const empHeader = document.createElement('div');
+      empHeader.style.cssText='padding:10px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;';
+      empHeader.onmouseenter=()=>empHeader.style.background='#fafaf9';
+      empHeader.onmouseleave=()=>empHeader.style.background='';
+
+      const onlineEmp = emp.asesores.filter(x=>x.online).length;
+      empHeader.innerHTML=`
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:.8rem;font-weight:700;color:#1e293b;">🏢 ${emp.nombre}</span>
+          <span style="background:#f1f5f9;color:#64748b;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;">${emp.asesores.length}</span>
+          ${onlineEmp?'<span style="background:#dcfce7;color:#16a34a;font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:8px;">'+onlineEmp+' online</span>':''}
+        </div>
+        <span class="sa-emp-chevron" style="color:#94a3b8;font-size:.75rem;transition:transform .2s;">▸</span>`;
+
+      const empBody = document.createElement('div');
+      empBody.style.cssText='display:none;padding:8px 20px 12px;';
+
+      if(!emp.asesores.length){
+        empBody.innerHTML='<div style="color:#94a3b8;font-size:.72rem;font-style:italic;">Sin asesores asignados</div>';
+      } else {
+        empBody.innerHTML='<div style="display:flex;flex-direction:column;gap:5px;">'
+          +emp.asesores.map(as=>`
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8fafc;border-radius:8px;border:1px solid #e7e5e4;">
+              <div style="width:28px;height:28px;border-radius:8px;background:${as.online?'#16a34a':'#1e293b'};display:flex;align-items:center;justify-content:center;color:white;font-size:.66rem;font-weight:800;flex-shrink:0;">${as.nombre.slice(0,2).toUpperCase()}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:.77rem;font-weight:700;color:#1e293b;">${as.nombre}</div>
+                <div style="font-size:.63rem;color:#94a3b8;">@${as.user}</div>
+              </div>
+              ${as.online?'<span style="background:#dcfce7;color:#16a34a;font-size:.58rem;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap;">🟢 En línea</span>':''}
+            </div>`).join('')
+          +'</div>';
+      }
+
+      // Toggle empresa
+      empHeader.onclick=()=>{
+        const open = empBody.style.display==='block';
+        empBody.style.display = open?'none':'block';
+        empHeader.querySelector('.sa-emp-chevron').style.transform = open?'':'rotate(90deg)';
+      };
+
+      empSection.appendChild(empHeader);
+      empSection.appendChild(empBody);
+      bodyDiv.appendChild(empSection);
+    });
+  }
+
+  // Toggle admin card
+  headerDiv.onclick=()=>{
+    const open = bodyDiv.style.display==='block';
+    bodyDiv.style.display = open?'none':'block';
+    headerDiv.querySelector('.sa-chevron').style.transform = open?'':'rotate(180deg)';
+  };
+
+  card.appendChild(headerDiv);
+  card.appendChild(bodyDiv);
+  return card;
+}
+
+function _saExpandirTodos(expandir){
+  document.querySelectorAll('#sa-tree .sa-chevron').forEach(ch=>{
+    const header = ch.closest('div[style*="cursor:pointer"]');
+    const body   = header?.nextElementSibling;
+    if(!body) return;
+    body.style.display = expandir?'block':'none';
+    ch.style.transform  = expandir?'rotate(180deg)':'';
   });
 }
 
