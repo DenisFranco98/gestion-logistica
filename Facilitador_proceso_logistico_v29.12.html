@@ -1017,6 +1017,56 @@ header h1{font-size:1.05rem;font-weight:700;}
   </div>
 </div>
 
+<!-- ===== MODAL CONFIRM UNIVERSAL ===== -->
+<div class="adm-modal-bg" id="modal-confirm">
+  <div class="adm-modal">
+    <h3 id="modal-confirm-title">¿Confirmar acción?</h3>
+    <p id="modal-confirm-msg" style="color:#64748b;font-size:.82rem;line-height:1.6;margin-bottom:4px;"></p>
+    <div class="adm-modal-btns" style="margin-top:18px;">
+      <button class="adm-modal-btn cancel" onclick="_mConfirmCancel()">Cancelar</button>
+      <button class="adm-modal-btn primary" id="modal-confirm-ok" onclick="_mConfirmOk()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL CREAR EMPRESA ===== -->
+<div class="adm-modal-bg" id="modal-crear-empresa">
+  <div class="adm-modal">
+    <h3>🏢 Nueva empresa</h3>
+    <div class="adm-field">
+      <label>Nombre de la empresa</label>
+      <input type="text" id="modal-empresa-nombre" placeholder="Ej: Mi Empresa SAS" autocomplete="off"
+        onkeydown="if(event.key==='Enter')_mCrearEmpresaOk()"/>
+    </div>
+    <div id="modal-empresa-error" style="color:#f87171;font-size:.75rem;margin-top:-6px;display:none;"></div>
+    <div class="adm-modal-btns" style="margin-top:18px;">
+      <button class="adm-modal-btn cancel" onclick="_mCrearEmpresaCerrar()">Cancelar</button>
+      <button class="adm-modal-btn primary" onclick="_mCrearEmpresaOk()">Crear empresa</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL GESTIONAR ASESORES ===== -->
+<div class="adm-modal-bg" id="modal-gestionar-asesores">
+  <div class="adm-modal" style="max-width:500px;">
+    <h3>👥 <span id="mga-titulo">Gestionar asesores</span></h3>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:8px;">Asesores actuales</div>
+      <div id="mga-actuales" style="display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto;"></div>
+    </div>
+    <div>
+      <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin-bottom:8px;">Agregar asesor</div>
+      <input type="text" id="mga-search" placeholder="Buscar usuario disponible..." autocomplete="off" oninput="_mgaFiltrar(this.value)"
+        style="width:100%;background:#f8fafc;border:1.5px solid #d6d2cc;border-radius:8px;padding:8px 12px;color:#1e293b;font-size:.78rem;outline:none;margin-bottom:8px;"/>
+      <div id="mga-disponibles" style="display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto;"></div>
+      <div id="mga-sin-disponibles" style="color:#94a3b8;font-size:.76rem;font-style:italic;display:none;">Todos los usuarios ya están en esta empresa</div>
+    </div>
+    <div class="adm-modal-btns" style="margin-top:18px;">
+      <button class="adm-modal-btn cancel" onclick="document.getElementById('modal-gestionar-asesores').classList.remove('open')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== SUPER ADMIN PANEL ===== -->
 <div id="super-admin-panel">
   <div class="adm-header">
@@ -2470,7 +2520,7 @@ function checkSesion(){
 function restaurar(){
   try{
     const d=JSON.parse(localStorage.getItem(LS_KEY));
-    if(!d||!Array.isArray(d.pedidos)||!d.pedidos.length){alert('No se pudo restaurar: datos inválidos o vacíos.');return;}
+    if(!d||!Array.isArray(d.pedidos)||!d.pedidos.length){toast('⚠️ No se pudo restaurar: datos inválidos o vacíos.');return;}
     pedidos=d.pedidos;gestiones=d.gestiones||{};
     // Limpiar mensajes_listos al restaurar — la cola se controla manualmente cada sesión
     Object.values(gestiones).forEach(g=>{ delete g.mensajes_listos; });
@@ -2486,7 +2536,7 @@ function restaurar(){
     document.getElementById('main').style.display='block';
     document.getElementById('right-panel').style.display='flex';
     _fbRestaurarGestiones(()=>{renderAll();toast('✅ Sesión restaurada');});
-  }catch(e){alert('No se pudo restaurar.');}
+  }catch(e){toast('⚠️ No se pudo restaurar.');}
 }
 
 function descartar(){localStorage.removeItem(LS_KEY);document.getElementById('restore-banner').style.display='none';}
@@ -2511,7 +2561,7 @@ function _cargarArchivo(file){
   const reader=new FileReader();
   reader.onload=ev=>{
     const nuevosPedidos=parsear(new Uint8Array(ev.target.result));
-    if(!nuevosPedidos.length){alert('No se detectaron pedidos accionables.\n\nVerifica que sea el reporte "Órdenes Productos" de Dropi.');return;}
+    if(!nuevosPedidos.length){toast('⚠️ No se detectaron pedidos accionables. Verifica que sea el reporte "Órdenes Productos" de Dropi.');return;}
 
     // Preservar gestiones existentes: remap por dropiId (clave estable entre excels)
     const gestionesPrevias={};
@@ -4172,11 +4222,12 @@ function marcarDevolucion(id){
   if(!gestiones[id])gestiones[id]={};
   if(gestiones[id].devolucion){
     // Ya está marcado → pedir confirmación para desmarcar
-    if(!confirm('¿Seguro que quieres quitar la marca de devolución para este pedido?'))return;
-    gestiones[id].devolucion=false;
-    delete gestiones[id].devolucion_razon;
-    guardar();_fbSyncGestion(id);renderAll();
-    toast('↩️ Devolución desmarcada');
+    _mConfirm('¿Quitar devolución?','¿Seguro que quieres quitar la marca de devolución para este pedido?',()=>{
+      gestiones[id].devolucion=false;
+      delete gestiones[id].devolucion_razon;
+      guardar();_fbSyncGestion(id);renderAll();
+      toast('↩️ Devolución desmarcada');
+    });
     return;
   }
   // Validar que haya una nota de HOY
@@ -7313,15 +7364,19 @@ function _admGuardarEdicion(){
 }
 
 function _admForzarLogout(username){
-  if(!confirm('¿Cerrar la sesión de "'+username+'" remotamente?')) return;
-  _db.ref('presence/'+username).update({ force_logout: true, online: false, lastSeen: Date.now() });
-  toast('⏻ Sesión de '+username+' cerrada');
+  _mConfirm('¿Cerrar sesión remota?','Se cerrará la sesión activa de "'+username+'" de forma inmediata.',()=>{
+    _db.ref('presence/'+username).update({ force_logout: true, online: false, lastSeen: Date.now() });
+    toast('⏻ Sesión de '+username+' cerrada');
+  },'danger');
 }
 
 function _admEliminarUsuario(username){
-  if(!confirm('¿Eliminar usuario "'+username+'"?')) return;
-  _db.ref('users').orderByChild('username').equalTo(username).once('value', snap=>{ snap.forEach(c=>c.ref.remove()); });
-  _db.ref('presence/'+username).remove();
+  _mConfirm('¿Eliminar usuario?','Esta acción eliminará permanentemente a "'+username+'". No se puede deshacer.',()=>{
+    _db.ref('users').orderByChild('username').equalTo(username).once('value', snap=>{ snap.forEach(c=>c.ref.remove()); });
+    _db.ref('presence/'+username).remove();
+    _admCargarDashboard();
+    toast('🗑️ Usuario "'+username+'" eliminado');
+  },'danger');
 }
 
 function _equiSearch(q){
@@ -7465,45 +7520,134 @@ function _admCargarEmpresas(){
 }
 
 window._admAbrirCrearEmpresa = function(){
-  const nombre = prompt('Nombre de la nueva empresa:');
-  if(!nombre||!nombre.trim()) return;
+  const err = document.getElementById('modal-empresa-error');
+  err.style.display='none';
+  document.getElementById('modal-crear-empresa').classList.add('open');
+  setTimeout(()=>document.getElementById('modal-empresa-nombre').focus(),100);
+};
+window._mCrearEmpresaCerrar = function(){
+  document.getElementById('modal-crear-empresa').classList.remove('open');
+  document.getElementById('modal-empresa-nombre').value='';
+  document.getElementById('modal-empresa-error').style.display='none';
+};
+window._mCrearEmpresaOk = function(){
+  const nombre = document.getElementById('modal-empresa-nombre').value.trim();
+  const err = document.getElementById('modal-empresa-error');
+  if(!nombre){ err.textContent='Escribe el nombre de la empresa'; err.style.display='block'; return; }
   const adminId = localStorage.getItem('lgs_admin_id');
-  if(!adminId){alert('Error: sesión de admin no encontrada');return;}
+  if(!adminId){ err.textContent='Error: sesión no encontrada'; err.style.display='block'; return; }
   const ref = _db.ref('empresas').push();
-  ref.set({nombre:nombre.trim(), creadoPor:adminId, createdAt:Date.now()}).then(()=>{
+  ref.set({nombre, creadoPor:adminId, createdAt:Date.now()}).then(()=>{
     _db.ref('admin_empresas/'+adminId+'/'+ref.key).set(true).then(()=>{
+      _mCrearEmpresaCerrar();
       _admCargarEmpresas();
       _admCargarDashboard();
+      toast('🏢 Empresa "'+nombre+'" creada');
     });
   });
 };
 
+let _mgaEmpresaId = null;
+let _mgaDisponibles = [];
+
 window._admGestionarEmpresa = function(empresaId){
-  _db.ref('empresa_asesores/'+empresaId).once('value', snapEA=>{
-    _db.ref('users').once('value', snapUsers=>{
-      _db.ref('empresas/'+empresaId).once('value', snapEmp=>{
-        const asignados = Object.keys(snapEA.val()||{});
-        const todosUsers = Object.values(snapUsers.val()||{});
-        const empNombre = (snapEmp.val()||{}).nombre||'Empresa';
-        const disponibles = todosUsers.filter(u=>!asignados.includes(u.username));
-        let html = `Empresa: ${empNombre}\n\nAsesores actuales:\n${asignados.length?asignados.join(', '):'(ninguno)'}\n\nUsuarios disponibles para agregar:\n${disponibles.map((u,i)=>(i+1)+'. '+u.username+' ('+(u.asesor||u.username)+')').join('\n')}\n\nEscribe el número del usuario a agregar (o cancela):`;
-        const idx = prompt(html);
-        if(idx===null||idx==='') return;
-        const num = parseInt(idx)-1;
-        if(isNaN(num)||num<0||num>=disponibles.length){alert('Número inválido');return;}
-        const user = disponibles[num];
-        _db.ref('empresa_asesores/'+empresaId+'/'+user.username).set(true).then(()=>{
-          alert('✅ '+user.username+' agregado a '+empNombre);
-          _admCargarEmpresas();
-          _admCargarDashboard();
-        });
-      });
-    });
+  _mgaEmpresaId = empresaId;
+  Promise.all([
+    _db.ref('empresa_asesores/'+empresaId).once('value'),
+    _db.ref('users').once('value'),
+    _db.ref('empresas/'+empresaId).once('value')
+  ]).then(([snapEA, snapUsers, snapEmp])=>{
+    const asignados = Object.keys(snapEA.val()||{});
+    const todosUsers = Object.values(snapUsers.val()||{});
+    const empNombre = (snapEmp.val()||{}).nombre||'Empresa';
+    _mgaDisponibles = todosUsers.filter(u=>!asignados.includes(u.username));
+
+    document.getElementById('mga-titulo').textContent = empNombre;
+    document.getElementById('mga-search').value = '';
+
+    // Asesores actuales
+    const actDiv = document.getElementById('mga-actuales');
+    if(!asignados.length){
+      actDiv.innerHTML='<div style="color:#94a3b8;font-size:.75rem;font-style:italic;">Sin asesores asignados</div>';
+    } else {
+      actDiv.innerHTML = asignados.map(uname=>{
+        const u = todosUsers.find(x=>x.username===uname);
+        const nombre = u?(u.asesor||u.username):uname;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8fafc;border-radius:8px;border:1px solid #e7e5e4;">
+          <div style="width:26px;height:26px;border-radius:7px;background:#1e293b;display:flex;align-items:center;justify-content:center;color:white;font-size:.65rem;font-weight:800;flex-shrink:0;">${nombre.slice(0,2).toUpperCase()}</div>
+          <div style="flex:1;"><div style="font-size:.76rem;font-weight:700;color:#1e293b;">${nombre}</div><div style="font-size:.62rem;color:#94a3b8;">@${uname}</div></div>
+          <button onclick="_mgaQuitarAsesor('${uname}')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:3px 9px;font-size:.65rem;font-weight:700;cursor:pointer;">Quitar</button>
+        </div>`;
+      }).join('');
+    }
+
+    _mgaFiltrar('');
+    document.getElementById('modal-gestionar-asesores').classList.add('open');
+  });
+};
+
+window._mgaFiltrar = function(q){
+  const disDiv = document.getElementById('mga-disponibles');
+  const sinDiv = document.getElementById('mga-sin-disponibles');
+  const filtrados = q ? _mgaDisponibles.filter(u=>(u.asesor||u.username).toLowerCase().includes(q.toLowerCase())||u.username.toLowerCase().includes(q.toLowerCase())) : _mgaDisponibles;
+  if(!filtrados.length){
+    disDiv.innerHTML='';
+    sinDiv.style.display='block';
+    return;
+  }
+  sinDiv.style.display='none';
+  disDiv.innerHTML = filtrados.map(u=>{
+    const nombre = u.asesor||u.username;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
+      <div style="width:26px;height:26px;border-radius:7px;background:#16a34a;display:flex;align-items:center;justify-content:center;color:white;font-size:.65rem;font-weight:800;flex-shrink:0;">${nombre.slice(0,2).toUpperCase()}</div>
+      <div style="flex:1;"><div style="font-size:.76rem;font-weight:700;color:#1e293b;">${nombre}</div><div style="font-size:.62rem;color:#94a3b8;">@${u.username}</div></div>
+      <button onclick="_mgaAgregarAsesor('${u.username}')" style="background:#16a34a;color:white;border:none;border-radius:6px;padding:3px 9px;font-size:.65rem;font-weight:700;cursor:pointer;">+ Agregar</button>
+    </div>`;
+  }).join('');
+};
+
+window._mgaAgregarAsesor = function(username){
+  if(!_mgaEmpresaId) return;
+  _db.ref('empresa_asesores/'+_mgaEmpresaId+'/'+username).set(true).then(()=>{
+    toast('✅ '+username+' agregado a la empresa');
+    _admGestionarEmpresa(_mgaEmpresaId);
+    _admCargarEmpresas();
+    _admCargarDashboard();
+  });
+};
+
+window._mgaQuitarAsesor = function(username){
+  if(!_mgaEmpresaId) return;
+  _db.ref('empresa_asesores/'+_mgaEmpresaId+'/'+username).remove().then(()=>{
+    toast('↩️ '+username+' quitado de la empresa');
+    _admGestionarEmpresa(_mgaEmpresaId);
+    _admCargarEmpresas();
+    _admCargarDashboard();
   });
 };
 
 window._cambiarEmpresa = function(empresaId){
   localStorage.setItem('lgs_empresa_actual', empresaId);
+};
+
+// ===== MODALES UNIVERSALES =====
+let _mConfirmCallback = null;
+window._mConfirm = function(titulo, msg, cb, tipo){
+  _mConfirmCallback = cb;
+  document.getElementById('modal-confirm-title').textContent = titulo;
+  document.getElementById('modal-confirm-msg').textContent = msg;
+  const btn = document.getElementById('modal-confirm-ok');
+  btn.style.background = tipo==='danger' ? '#dc2626' : '#1e293b';
+  btn.textContent = tipo==='danger' ? 'Eliminar' : 'Confirmar';
+  document.getElementById('modal-confirm').classList.add('open');
+};
+window._mConfirmOk = function(){
+  document.getElementById('modal-confirm').classList.remove('open');
+  if(_mConfirmCallback){ _mConfirmCallback(); _mConfirmCallback=null; }
+};
+window._mConfirmCancel = function(){
+  document.getElementById('modal-confirm').classList.remove('open');
+  _mConfirmCallback = null;
 };
 </script>
 
