@@ -741,6 +741,11 @@ header h1{font-size:1.05rem;font-weight:700;}
 .inst-num{flex-shrink:0;width:22px;height:22px;background:#1e293b;color:white;border-radius:50%;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;}
 .inst-step p{font-size:.78rem;color:#475569;line-height:1.5;margin:0;padding-top:2px;}
 .inst-step p strong{color:#1e293b;}
+
+/* ===== SUPER ADMIN PANEL ===== */
+#super-admin-panel{display:none;position:fixed;inset:0;z-index:9998;background:#f4f3f1;overflow:hidden;font-family:'Segoe UI',sans-serif;}
+/* ===== REGISTRO ADMIN MODAL ===== */
+#registro-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:10002;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -776,6 +781,10 @@ header h1{font-size:1.05rem;font-weight:700;}
       <div class="adm-sidebar-label">Gestión</div>
       <button class="adm-nav-item" id="tab-btn-equipo" onclick="_admTab('equipo')">
         <span class="adm-nav-icon">👥</span> Equipo
+      </button>
+      <div class="adm-sidebar-label">Empresa</div>
+      <button class="adm-nav-item" id="tab-btn-empresas" onclick="_admTab('empresas')">
+        <span class="adm-nav-icon">🏢</span> Empresas
       </button>
       <div class="adm-sidebar-label">Inteligencia</div>
       <button class="adm-nav-item" id="tab-btn-analitica" onclick="_admTab('analitica')">
@@ -961,6 +970,17 @@ header h1{font-size:1.05rem;font-weight:700;}
         </div>
       </div>
 
+      <!-- TAB: EMPRESAS -->
+      <div id="adm-tab-empresas" style="display:none;">
+        <div class="adm-sec-head" style="margin-bottom:16px;">
+          <div class="adm-sec-title">Mis empresas</div>
+          <button class="adm-add-btn" onclick="_admAbrirCrearEmpresa()">+ Nueva empresa</button>
+        </div>
+        <div id="adm-empresas-list" style="display:flex;flex-direction:column;gap:8px;">
+          <div class="adm-empty">Cargando...</div>
+        </div>
+      </div>
+
     </div><!-- /adm-main -->
   </div><!-- /adm-layout -->
 </div>
@@ -997,6 +1017,28 @@ header h1{font-size:1.05rem;font-weight:700;}
   </div>
 </div>
 
+<!-- ===== SUPER ADMIN PANEL ===== -->
+<div id="super-admin-panel">
+  <div class="adm-header">
+    <div class="adm-header-left">
+      <div class="adm-header-logo">🛡️</div>
+      <div><div class="adm-header-title">Super Admin</div><div class="adm-header-sub">Registro Global</div></div>
+    </div>
+    <div class="adm-header-right">
+      <button class="adm-logout" onclick="_superAdmLogout()">Cerrar sesión</button>
+    </div>
+  </div>
+  <div style="padding:24px;overflow-y:auto;height:calc(100vh - 56px);">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px;">
+      <div class="adm-cmd-card blue"><div class="adm-cmd-icon">👤</div><div class="adm-cmd-val" id="sa-stat-admins">0</div><div class="adm-cmd-lbl">Administradores</div></div>
+      <div class="adm-cmd-card green"><div class="adm-cmd-icon">🏢</div><div class="adm-cmd-val" id="sa-stat-empresas">0</div><div class="adm-cmd-lbl">Empresas</div></div>
+      <div class="adm-cmd-card amber"><div class="adm-cmd-icon">👥</div><div class="adm-cmd-val" id="sa-stat-asesores">0</div><div class="adm-cmd-lbl">Asesores totales</div></div>
+    </div>
+    <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:12px;">Registro de administradores y empresas</div>
+    <div id="sa-tree" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
 <!-- ===== LOGIN SCREEN ===== -->
 <div id="login-screen">
   <div class="login-box">
@@ -1020,6 +1062,26 @@ header h1{font-size:1.05rem;font-weight:700;}
     <button class="login-btn" onclick="_loginCheck()">Ingresar</button>
     <div class="login-error" id="login-error">Usuario o contraseña incorrectos</div>
     <div class="login-error" id="login-error-campos" style="margin-top:6px;">Completa los campos requeridos</div>
+    <div style="text-align:center;margin-top:14px;">
+      <span style="color:#94a3b8;font-size:.76rem;">¿Eres administrador?</span>
+      <button onclick="_mostrarRegistro()" style="background:none;border:none;color:#60a5fa;font-size:.76rem;cursor:pointer;text-decoration:underline;margin-left:4px;">Crear cuenta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL REGISTRO ADMIN ===== -->
+<div id="registro-modal">
+  <div style="background:#0f172a;border-radius:16px;padding:28px;width:100%;max-width:380px;border:1.5px solid #1e293b;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+    <h3 style="color:white;font-size:.95rem;font-weight:800;margin-bottom:6px;">Crear cuenta de administrador</h3>
+    <p style="color:#64748b;font-size:.74rem;margin-bottom:20px;">Podrás crear empresas y gestionar tu equipo.</p>
+    <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Usuario</label><input type="text" id="reg-user" placeholder="ej: miempresa_admin" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
+    <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Contraseña</label><input type="password" id="reg-pass" placeholder="Contraseña" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
+    <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="Repite la contraseña" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
+    <div id="reg-error" style="color:#f87171;font-size:.75rem;margin-bottom:10px;display:none;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="_ocultarRegistro()" style="flex:1;padding:9px;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;background:#1e293b;color:#64748b;border:1.5px solid #334155;">Cancelar</button>
+      <button onclick="_registrarAdmin()" style="flex:1;padding:9px;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;background:#3b82f6;color:white;border:none;">Crear cuenta</button>
+    </div>
   </div>
 </div>
 
@@ -1095,7 +1157,9 @@ header h1{font-size:1.05rem;font-weight:700;}
 
 <header>
   <h1>🚚 Gestión Logística Diaria</h1>
-  <div class="hright"><span id="save-st"></span><div id="fecha"></div><button id="btn-pausa" onclick="togglePausa()" style="background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.4);color:#fcd34d;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:700;">⏸ Pausa</button><button onclick="abrirConfig()" style="background:rgba(255,255,255,.12);border:none;color:white;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⚙️</button><button onclick="_cerrarSesion()" title="Cerrar sesión" style="background:rgba(220,38,38,.25);border:1px solid rgba(220,38,38,.4);color:#fca5a5;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⏻ Salir</button></div>
+  <div class="hright"><span id="save-st"></span><div id="fecha"></div>
+  <div id="empresa-switcher" style="display:none;align-items:center;gap:8px;"><span style="font-size:.7rem;color:rgba(255,255,255,.5);">Empresa:</span><select id="empresa-select" onchange="_cambiarEmpresa(this.value)" style="background:#1e293b;color:white;border:1px solid #334155;border-radius:7px;padding:4px 10px;font-size:.74rem;cursor:pointer;outline:none;"></select></div>
+  <button id="btn-pausa" onclick="togglePausa()" style="background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.4);color:#fcd34d;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:700;">⏸ Pausa</button><button onclick="abrirConfig()" style="background:rgba(255,255,255,.12);border:none;color:white;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⚙️</button><button onclick="_cerrarSesion()" title="Cerrar sesión" style="background:rgba(220,38,38,.25);border:1px solid rgba(220,38,38,.4);color:#fca5a5;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⏻ Salir</button></div>
 </header>
 <div class="toast" id="toast"></div>
 <div class="kb-hint" id="kb-hint">⌨️ <strong>C</strong> Contestó &nbsp;·&nbsp; <strong>N</strong> No contestó &nbsp;·&nbsp; <strong>Tab</strong> siguiente</div>
@@ -5700,9 +5764,12 @@ function _initLogin(){
   function _loginShow(){
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('admin-panel').classList.remove('visible');
+    const sp = document.getElementById('super-admin-panel');
+    if(sp) sp.style.display='none';
   }
   function _loginHide(){ document.getElementById('login-screen').classList.add('hidden'); }
   function _showAdmin(){ document.getElementById('admin-panel').classList.add('visible'); _loginHide(); }
+  function _showSuperAdmin(){ document.getElementById('super-admin-panel').style.display='block'; _loginHide(); }
 
   // ── Presencia en Firebase ──
   function _registrarPresencia(username, tienda, asesor){
@@ -5841,28 +5908,42 @@ function _initLogin(){
     const p = document.getElementById('login-pass').value;
     const err = document.getElementById('login-error');
     err.classList.remove('show');
+    if(!u||!p){ document.getElementById('login-error-campos').classList.add('show'); setTimeout(()=>document.getElementById('login-error-campos').classList.remove('show'),3000); return; }
 
-    // Admin
+    // 1. Super Admin
     if(u === ADMIN_USER && p === ADMIN_PASS){
-      localStorage.setItem(LOGIN_KEY, 'admin');
-      _showAdmin(); _admCargarDashboard(); return;
+      localStorage.setItem(LOGIN_KEY, 'superadmin');
+      _showSuperAdmin(); _superAdmCargar(); return;
     }
 
-    // Buscar en Firebase
-    _db.ref('users').orderByChild('username').equalTo(u).once('value', snap => {
-      let found = false;
-      snap.forEach(child => {
-        found = true;
+    // 2. Admin registrado
+    _db.ref('admins').orderByChild('username').equalTo(u).once('value', snapAdm => {
+      let foundAdm = false;
+      snapAdm.forEach(child => {
+        foundAdm = true;
         const d = child.val();
         if(d.password !== p){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-        // Siempre preguntar quién trabaja hoy; si tiene tienda guardada la pre-llena
-        _pedirPerfil(u, d.tienda||'');
+        localStorage.setItem(LOGIN_KEY, 'admin');
+        localStorage.setItem('lgs_admin_id', child.key);
+        localStorage.setItem('lgs_admin_user', u);
+        _showAdmin(); _admCargarDashboard(); return;
       });
-      if(!found){
-        // Fallback hardcodeado
-        if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-        _pedirPerfil(u, '');
-      }
+      if(foundAdm) return;
+
+      // 3. Asesor en /users
+      _db.ref('users').orderByChild('username').equalTo(u).once('value', snap => {
+        let found = false;
+        snap.forEach(child => {
+          found = true;
+          const d = child.val();
+          if(d.password !== p){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
+          _pedirPerfil(u, d.tienda||'');
+        });
+        if(!found){
+          if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ err.classList.add('show'); document.getElementById('login-pass').value=''; return; }
+          _pedirPerfil(u, '');
+        }
+      });
     });
   };
 
@@ -5880,8 +5961,16 @@ function _initLogin(){
   };
   window._admLogout = function(){
     localStorage.removeItem(LOGIN_KEY);
+    localStorage.removeItem('lgs_admin_id');
+    localStorage.removeItem('lgs_admin_user');
+    localStorage.removeItem('lgs_empresa_actual');
     document.getElementById('admin-panel').classList.remove('visible');
     ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>document.getElementById(id).value='');
+    _loginShow(); document.getElementById('login-user').focus();
+  };
+  window._superAdmLogout = function(){
+    localStorage.removeItem(LOGIN_KEY);
+    document.getElementById('super-admin-panel').style.display='none';
     _loginShow(); document.getElementById('login-user').focus();
   };
 
@@ -5893,6 +5982,7 @@ function _initLogin(){
 
   const savedSession = localStorage.getItem(LOGIN_KEY);
   if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); }
+  else if(savedSession === 'superadmin'){ _showSuperAdmin(); _superAdmCargar(); }
   else if(savedSession === 'admin'){ _showAdmin(); _admCargarDashboard(); }
   else {
     _loginHide();
@@ -5903,9 +5993,153 @@ function _initLogin(){
   }
 }
 
+// ===== REGISTRO DE ADMIN =====
+window._mostrarRegistro = function(){
+  document.getElementById('registro-modal').style.display='flex';
+  document.getElementById('reg-user').focus();
+};
+window._ocultarRegistro = function(){
+  document.getElementById('registro-modal').style.display='none';
+  ['reg-user','reg-pass','reg-pass2'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('reg-error').style.display='none';
+};
+window._registrarAdmin = function(){
+  const u=document.getElementById('reg-user').value.trim();
+  const p=document.getElementById('reg-pass').value;
+  const p2=document.getElementById('reg-pass2').value;
+  const err=document.getElementById('reg-error');
+  err.style.display='none';
+  if(!u||!p||!p2){err.textContent='Completa todos los campos';err.style.display='block';return;}
+  if(p!==p2){err.textContent='Las contraseñas no coinciden';err.style.display='block';return;}
+  if(p.length<6){err.textContent='La contraseña debe tener al menos 6 caracteres';err.style.display='block';return;}
+  _db.ref('admins').orderByChild('username').equalTo(u).once('value', snap=>{
+    if(snap.exists()){err.textContent='Ese usuario ya existe';err.style.display='block';return;}
+    const ref = _db.ref('admins').push();
+    ref.set({username:u, password:p, createdAt:Date.now()}).then(()=>{
+      _ocultarRegistro();
+      localStorage.setItem('lgs_auth','admin');
+      localStorage.setItem('lgs_admin_id', ref.key);
+      localStorage.setItem('lgs_admin_user', u);
+      document.getElementById('login-screen').classList.add('hidden');
+      _showAdminGlobal(); _admCargarDashboard();
+    }).catch(e=>{err.textContent='Error al crear cuenta: '+e.message;err.style.display='block';});
+  });
+};
+
+// ===== SUPER ADMIN CARGAR =====
+function _superAdmCargar(){
+  _db.ref('admins').once('value', snapAdmins=>{
+    _db.ref('empresas').once('value', snapEmpresas=>{
+      _db.ref('admin_empresas').once('value', snapAE=>{
+        _db.ref('empresa_asesores').once('value', snapEAs=>{
+          _db.ref('users').once('value', snapUsers=>{
+            const admins = snapAdmins.val()||{};
+            const empresas = snapEmpresas.val()||{};
+            const adminEmpresas = snapAE.val()||{};
+            const empresaAsesores = snapEAs.val()||{};
+            const users = snapUsers.val()||{};
+
+            document.getElementById('sa-stat-admins').textContent = Object.keys(admins).length;
+            document.getElementById('sa-stat-empresas').textContent = Object.keys(empresas).length;
+            document.getElementById('sa-stat-asesores').textContent = Object.keys(users).length;
+
+            const tree = document.getElementById('sa-tree');
+            tree.innerHTML = '';
+
+            if(!Object.keys(admins).length){
+              tree.innerHTML='<div class="adm-empty">No hay administradores registrados aún</div>';
+              return;
+            }
+
+            Object.entries(admins).forEach(([adminId, adminData])=>{
+              const misEmpresas = Object.keys(adminEmpresas[adminId]||{});
+              const card = document.createElement('div');
+              card.style.cssText='background:white;border-radius:14px;border:1.5px solid #e7e5e4;overflow:hidden;';
+
+              let empresasHtml = '';
+              if(!misEmpresas.length){
+                empresasHtml = '<div style="padding:10px 20px 14px;color:#94a3b8;font-size:.75rem;">Sin empresas asignadas</div>';
+              } else {
+                misEmpresas.forEach(empId=>{
+                  const emp = empresas[empId];
+                  if(!emp) return;
+                  const asesoresIds = Object.keys(empresaAsesores[empId]||{});
+                  const asesoresList = asesoresIds.map(uname=>{
+                    const u = Object.values(users).find(x=>x.username===uname);
+                    return u ? (u.asesor||u.username) : uname;
+                  });
+                  empresasHtml += `
+                    <div style="padding:10px 20px;border-top:1px solid #f4f3f1;">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="font-size:.78rem;font-weight:700;color:#1e293b;">🏢 ${emp.nombre}</span>
+                        <span style="background:#f1f5f9;color:#64748b;font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;">${asesoresIds.length} asesores</span>
+                      </div>
+                      ${asesoresList.length ? '<div style="display:flex;flex-wrap:wrap;gap:5px;">'+asesoresList.map(n=>'<span style="background:#e0f2fe;color:#0369a1;font-size:.63rem;padding:2px 8px;border-radius:6px;">'+n+'</span>').join('')+'</div>' : '<div style="color:#94a3b8;font-size:.7rem;">Sin asesores asignados</div>'}
+                    </div>`;
+                });
+              }
+
+              card.innerHTML = `
+                <div style="padding:14px 20px;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:34px;height:34px;background:#1e293b;border-radius:9px;display:flex;align-items:center;justify-content:center;color:white;font-size:.85rem;font-weight:800;">${(adminData.username||'?').slice(0,2).toUpperCase()}</div>
+                    <div>
+                      <div style="font-weight:700;color:#1e293b;font-size:.85rem;">@${adminData.username}</div>
+                      <div style="color:#94a3b8;font-size:.63rem;">Admin · ${misEmpresas.length} empresa${misEmpresas.length!==1?'s':''}</div>
+                    </div>
+                  </div>
+                </div>
+                ${empresasHtml}`;
+              tree.appendChild(card);
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
+// Referencia global a _showAdmin para usar fuera de _initLogin
+function _showAdminGlobal(){
+  document.getElementById('admin-panel').classList.add('visible');
+  document.getElementById('login-screen').classList.add('hidden');
+}
+
+// ===== MIGRACIÓN INICIAL =====
+function _migracionInicial(){
+  _db.ref('empresas').orderByChild('nombre').equalTo('3D Company').once('value', snapEmp=>{
+    if(snapEmp.exists()) return;
+    _db.ref('admins').orderByChild('username').equalTo('3DCompanyadmin').once('value', snapAdm=>{
+      let adminId;
+      const crearEmpresa = (aId)=>{
+        const empRef = _db.ref('empresas').push();
+        empRef.set({nombre:'3D Company', creadoPor:aId, createdAt:Date.now()}).then(()=>{
+          _db.ref('admin_empresas/'+aId+'/'+empRef.key).set(true);
+          _db.ref('users').once('value', snapUsers=>{
+            const batch = {};
+            Object.values(snapUsers.val()||{}).forEach(u=>{
+              if(u.username) batch[u.username] = true;
+            });
+            _db.ref('empresa_asesores/'+empRef.key).update(batch);
+          });
+        });
+      };
+      if(snapAdm.exists()){
+        snapAdm.forEach(c=>{ adminId=c.key; });
+        crearEmpresa(adminId);
+      } else {
+        const admRef = _db.ref('admins').push();
+        admRef.set({username:'3DCompanyadmin', password:'3DCompanyadmin', createdAt:Date.now()}).then(()=>{
+          crearEmpresa(admRef.key);
+        });
+      }
+    });
+  });
+}
+
 // Iniciar app solo después de que la autenticación anónima esté lista
 firebase.auth().signInAnonymously()
-  .then(() => _initLogin())
+  .then(() => { _initLogin(); _migracionInicial(); })
   .catch(e => { console.warn('Firebase Auth anónimo falló:', e); _initLogin(); });
 
 // ===== FIREBASE SYNC GESTIONES =====
@@ -6042,17 +6276,130 @@ let _admPresenceListener = null;
 let _admPresenciaCache = {};
 
 function _admTab(tab){
-  ['enlive','ranking','equipo','analitica'].forEach(t=>{
-    document.getElementById('adm-tab-'+t).style.display = t===tab ? 'block' : 'none';
-    document.getElementById('tab-btn-'+t).classList.toggle('active', t===tab);
+  ['enlive','ranking','equipo','analitica','empresas'].forEach(t=>{
+    const el = document.getElementById('adm-tab-'+t);
+    if(el) el.style.display = t===tab ? 'block' : 'none';
+    const btn = document.getElementById('tab-btn-'+t);
+    if(btn) btn.classList.toggle('active', t===tab);
   });
   if(tab==='analitica') _anlInicializar();
   if(tab==='ranking') _rnkInicializar();
+  if(tab==='empresas') _admCargarEmpresas();
 }
 
 function _admCargarDashboard(){
-  if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener = null; }
+  const adminId = localStorage.getItem('lgs_admin_id');
 
+  if(!adminId){
+    _admCargarDashboardLegacy();
+    return;
+  }
+
+  _db.ref('admin_empresas/'+adminId).once('value', snapAE=>{
+    const misEmpresasIds = Object.keys(snapAE.val()||{});
+    if(!misEmpresasIds.length){
+      _admMostrarSinEmpresas();
+      return;
+    }
+    let empresaActual = localStorage.getItem('lgs_empresa_actual');
+    if(!empresaActual || !misEmpresasIds.includes(empresaActual)){
+      empresaActual = misEmpresasIds[0];
+      localStorage.setItem('lgs_empresa_actual', empresaActual);
+    }
+    _admCargarEmpresa(adminId, misEmpresasIds, empresaActual);
+  });
+}
+
+function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
+  Promise.all([
+    _db.ref('empresas').once('value'),
+    _db.ref('empresa_asesores/'+empresaActualId).once('value'),
+    _db.ref('users').once('value'),
+    _db.ref('presence').once('value')
+  ]).then(([snapEmpresas, snapAsesores, snapUsers, snapPresence])=>{
+    const todasEmpresas = snapEmpresas.val()||{};
+    const asesorUsernames = Object.keys(snapAsesores.val()||{});
+    const todosUsers = Object.values(snapUsers.val()||{});
+    const presencia = snapPresence.val()||{};
+
+    const usuarios = todosUsers.filter(u=>asesorUsernames.includes(u.username));
+
+    _admPresenciaCache = presencia;
+    _admUsuariosCache = usuarios;
+
+    _admActualizarSelectorEmpresa(adminId, empresasIds, todasEmpresas, empresaActualId);
+
+    const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
+    const totalGest = usuarios.reduce((s,u)=>s+(presencia[u.username]?.sessionGestiones||0),0);
+    const totalFin = usuarios.reduce((s,u)=>s+(presencia[u.username]?.finalizados||0),0);
+    document.getElementById('adm-stat-total').textContent = usuarios.length;
+    document.getElementById('adm-stat-online').textContent = online;
+    document.getElementById('adm-stat-gest').textContent = totalGest;
+    document.getElementById('adm-stat-fin').textContent = totalFin;
+
+    usuarios.sort((a,b)=>{
+      const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
+      const bo=!!(presencia[b.username]||{}).online&&(Date.now()-((presencia[b.username]||{}).lastSeen||0))<120000;
+      if(ao!==bo) return bo-ao;
+      return ((presencia[b.username]||{}).lastSeen||0)-((presencia[a.username]||{}).lastSeen||0);
+    });
+
+    _buildEnliveCards(usuarios, presencia);
+    _buildEquipoList(usuarios, presencia);
+  });
+
+  if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener=null; }
+  _admPresenceListener = _db.ref('presence').on('value', snapP=>{
+    _admPresenciaCache = snapP.val()||{};
+    const emp = localStorage.getItem('lgs_empresa_actual');
+    if(emp){
+      _db.ref('empresa_asesores/'+emp).once('value', snapEA=>{
+        const unames = Object.keys(snapEA.val()||{});
+        const usuarios = _admUsuariosCache.filter(u=>unames.includes(u.username));
+        _buildEnliveCards(usuarios, _admPresenciaCache);
+      });
+    }
+  });
+}
+
+function _admActualizarSelectorEmpresa(adminId, empresasIds, todasEmpresas, empresaActualId){
+  let sel = document.getElementById('adm-empresa-select');
+  if(!sel){
+    const hdr = document.querySelector('.adm-header-right');
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText='display:flex;align-items:center;gap:8px;';
+    wrapper.innerHTML='<span style="color:rgba(255,255,255,.5);font-size:.7rem;">Empresa:</span><select id="adm-empresa-select" onchange="_admCambiarEmpresa(this.value)" style="background:#1e293b;color:white;border:1px solid #334155;border-radius:7px;padding:4px 10px;font-size:.74rem;cursor:pointer;outline:none;max-width:160px;"></select>';
+    hdr.insertBefore(wrapper, hdr.firstChild);
+    sel = document.getElementById('adm-empresa-select');
+  }
+  sel.innerHTML = '';
+  empresasIds.forEach(empId=>{
+    const emp = todasEmpresas[empId];
+    if(!emp) return;
+    const opt = document.createElement('option');
+    opt.value = empId;
+    opt.textContent = emp.nombre;
+    opt.selected = empId===empresaActualId;
+    sel.appendChild(opt);
+  });
+}
+
+window._admCambiarEmpresa = function(empresaId){
+  localStorage.setItem('lgs_empresa_actual', empresaId);
+  _admCargarDashboard();
+};
+
+function _admMostrarSinEmpresas(){
+  const list = document.getElementById('adm-users-list');
+  if(list) list.innerHTML = '<div class="adm-empty" style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div>No tienes empresas creadas aún.</div><button onclick="_admAbrirCrearEmpresa()" style="background:#1e293b;color:white;border:none;padding:8px 20px;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;">+ Crear mi primera empresa</button></div>';
+  document.getElementById('adm-stat-total').textContent='0';
+  document.getElementById('adm-stat-online').textContent='0';
+  document.getElementById('adm-stat-gest').textContent='0';
+  document.getElementById('adm-stat-fin').textContent='0';
+}
+
+function _admCargarDashboardLegacy(){
+  if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener = null; }
   function _procesarDatos(presencia, usuarios){
     _admPresenciaCache = presencia;
     if(!usuarios.find(u=>u.username==='3D Company'))
@@ -6074,24 +6421,18 @@ function _admCargarDashboard(){
     _buildEnliveCards(usuarios, presencia);
     _buildEquipoList(usuarios, presencia);
   }
-
   function _cargarUsuarios(presencia){
-    _db.ref('users').once('value', snapUsers => {
-      const usuarios = Object.values(snapUsers.val() || {});
+    _db.ref('users').once('value', snapUsers=>{
+      const usuarios = Object.values(snapUsers.val()||{});
       _procesarDatos(presencia, usuarios);
-    }, err => {
-      console.error('Error leyendo usuarios:', err.code, err.message);
+    }, err=>{
       const list = document.getElementById('adm-users-list');
-      if(list) list.innerHTML = '<div class="adm-empty" style="color:#ef4444;">⚠️ Sin acceso a Firebase. Ve a la consola de Firebase y actualiza las reglas de seguridad a:<br><br><code style="font-size:.7rem;background:#f1f5f9;padding:4px 8px;border-radius:5px;">{ "rules": { ".read": "auth != null", ".write": "auth != null" } }</code></div>';
+      if(list) list.innerHTML='<div class="adm-empty" style="color:#ef4444;">⚠️ Sin acceso a Firebase.</div>';
     });
   }
-
-  _admPresenceListener = _db.ref('presence').on('value', snapPresence => {
-    _cargarUsuarios(snapPresence.val() || {});
-  }, err => {
-    console.error('Error leyendo presencia:', err.code, err.message);
-    _cargarUsuarios({});
-  });
+  _admPresenceListener = _db.ref('presence').on('value', snapPresence=>{
+    _cargarUsuarios(snapPresence.val()||{});
+  }, err=>{ _cargarUsuarios({}); });
 }
 
 function _avatarColor(name){
@@ -6751,7 +7092,11 @@ function _admGuardarUsuario(){
   if(!u||!p){ err.textContent='Usuario y contraseña son obligatorios'; err.style.display='block'; return; }
   _db.ref('users').orderByChild('username').equalTo(u).once('value', snap=>{
     if(snap.exists()){ err.textContent='Ese usuario ya existe'; err.style.display='block'; return; }
-    _db.ref('users').push().set({username:u,password:p,asesor:a||u,tienda:t||'',createdAt:Date.now()});
+    _db.ref('users').push().set({username:u,password:p,asesor:a||u,tienda:t||'',createdAt:Date.now()}).then(()=>{
+      // Asignar a la empresa actual del admin
+      const empresaActual = localStorage.getItem('lgs_empresa_actual');
+      if(empresaActual) _db.ref('empresa_asesores/'+empresaActual+'/'+u).set(true);
+    });
     _admCerrarAgregar();
   });
 }
@@ -6899,6 +7244,85 @@ function _rnkCargar(){
     }).join('');
   });
 }
+
+// ===== GESTIÓN DE EMPRESAS =====
+function _admCargarEmpresas(){
+  const adminId = localStorage.getItem('lgs_admin_id');
+  if(!adminId) return;
+  Promise.all([
+    _db.ref('admin_empresas/'+adminId).once('value'),
+    _db.ref('empresas').once('value'),
+    _db.ref('empresa_asesores').once('value'),
+    _db.ref('users').once('value')
+  ]).then(([snapAE, snapEmpresas, snapEAs, snapUsers])=>{
+    const misIds = Object.keys(snapAE.val()||{});
+    const todasEmpresas = snapEmpresas.val()||{};
+    const empresaAsesores = snapEAs.val()||{};
+    const todosUsers = Object.values(snapUsers.val()||{});
+    const list = document.getElementById('adm-empresas-list');
+    list.innerHTML='';
+    if(!misIds.length){list.innerHTML='<div class="adm-empty">No tienes empresas. Crea la primera.</div>';return;}
+    misIds.forEach(empId=>{
+      const emp = todasEmpresas[empId];
+      if(!emp) return;
+      const asesorUsernames = Object.keys(empresaAsesores[empId]||{});
+      const card = document.createElement('div');
+      card.style.cssText='background:white;border-radius:12px;border:1.5px solid #e7e5e4;padding:16px;';
+      card.innerHTML=`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-weight:800;color:#1e293b;font-size:.9rem;">🏢 ${emp.nombre}</div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="_admGestionarEmpresa('${empId}')" style="background:#f8fafc;color:#475569;border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;">Gestionar asesores</button>
+          </div>
+        </div>
+        <div style="font-size:.72rem;color:#94a3b8;">${asesorUsernames.length} asesor${asesorUsernames.length!==1?'es':''} asignado${asesorUsernames.length!==1?'s':''}</div>
+      `;
+      list.appendChild(card);
+    });
+  });
+}
+
+window._admAbrirCrearEmpresa = function(){
+  const nombre = prompt('Nombre de la nueva empresa:');
+  if(!nombre||!nombre.trim()) return;
+  const adminId = localStorage.getItem('lgs_admin_id');
+  if(!adminId){alert('Error: sesión de admin no encontrada');return;}
+  const ref = _db.ref('empresas').push();
+  ref.set({nombre:nombre.trim(), creadoPor:adminId, createdAt:Date.now()}).then(()=>{
+    _db.ref('admin_empresas/'+adminId+'/'+ref.key).set(true).then(()=>{
+      _admCargarEmpresas();
+      _admCargarDashboard();
+    });
+  });
+};
+
+window._admGestionarEmpresa = function(empresaId){
+  _db.ref('empresa_asesores/'+empresaId).once('value', snapEA=>{
+    _db.ref('users').once('value', snapUsers=>{
+      _db.ref('empresas/'+empresaId).once('value', snapEmp=>{
+        const asignados = Object.keys(snapEA.val()||{});
+        const todosUsers = Object.values(snapUsers.val()||{});
+        const empNombre = (snapEmp.val()||{}).nombre||'Empresa';
+        const disponibles = todosUsers.filter(u=>!asignados.includes(u.username));
+        let html = `Empresa: ${empNombre}\n\nAsesores actuales:\n${asignados.length?asignados.join(', '):'(ninguno)'}\n\nUsuarios disponibles para agregar:\n${disponibles.map((u,i)=>(i+1)+'. '+u.username+' ('+(u.asesor||u.username)+')').join('\n')}\n\nEscribe el número del usuario a agregar (o cancela):`;
+        const idx = prompt(html);
+        if(idx===null||idx==='') return;
+        const num = parseInt(idx)-1;
+        if(isNaN(num)||num<0||num>=disponibles.length){alert('Número inválido');return;}
+        const user = disponibles[num];
+        _db.ref('empresa_asesores/'+empresaId+'/'+user.username).set(true).then(()=>{
+          alert('✅ '+user.username+' agregado a '+empNombre);
+          _admCargarEmpresas();
+          _admCargarDashboard();
+        });
+      });
+    });
+  });
+};
+
+window._cambiarEmpresa = function(empresaId){
+  localStorage.setItem('lgs_empresa_actual', empresaId);
+};
 </script>
 
 </body>
