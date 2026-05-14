@@ -1072,6 +1072,68 @@ header h1{font-size:1.05rem;font-weight:700;}
   </div>
 </div>
 
+<!-- Modal detalle asesor en vivo -->
+<div class="adm-modal-bg" id="modal-asesor-live">
+  <div class="adm-modal" style="max-width:420px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+      <div id="mal-avatar" style="width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:800;color:white;flex-shrink:0;"></div>
+      <div style="flex:1;min-width:0;">
+        <div id="mal-nombre" style="font-weight:800;font-size:1rem;color:#1e293b;"></div>
+        <div id="mal-tienda" style="font-size:.72rem;color:#94a3b8;margin-top:2px;"></div>
+      </div>
+      <div id="mal-status"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+      <div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:1.05rem;font-weight:800;" id="mal-t-online">—</div>
+        <div style="font-size:.52rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:4px;">⏱ Tiempo en línea</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:1.05rem;font-weight:800;" id="mal-t-inactivo">—</div>
+        <div style="font-size:.52rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:4px;">💤 Sin actividad</div>
+      </div>
+    </div>
+    <div id="mal-ultima-accion" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;margin-bottom:14px;display:none;">
+      <div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#16a34a;margin-bottom:6px;">Última acción registrada</div>
+      <div id="mal-accion-label" style="font-size:.85rem;font-weight:700;color:#1e293b;"></div>
+      <div id="mal-accion-pedido" style="font-size:.74rem;color:#475569;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+      <div id="mal-accion-hace" style="font-size:.65rem;color:#94a3b8;margin-top:4px;"></div>
+    </div>
+    <div id="mal-sin-accion" style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:12px;margin-bottom:14px;text-align:center;font-size:.8rem;color:#854d0e;display:none;">
+      ⚠️ Sin acciones registradas aún en esta sesión
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:18px;">
+      <div style="background:#f8fafc;border-radius:8px;padding:9px 4px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:.95rem;font-weight:800;color:#64748b;" id="mal-m-total">—</div>
+        <div style="font-size:.5rem;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Total ped.</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:9px 4px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:.95rem;font-weight:800;color:#4ade80;" id="mal-m-fin">—</div>
+        <div style="font-size:.5rem;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Finalizados</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:9px 4px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:.95rem;font-weight:800;color:#1e293b;" id="mal-m-cierre">—</div>
+        <div style="font-size:.5rem;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">% Cierre</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:9px 4px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:.95rem;font-weight:800;color:#60a5fa;" id="mal-m-cont">—</div>
+        <div style="font-size:.5rem;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Contestaron</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:9px 4px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:.95rem;font-weight:800;color:#a78bfa;" id="mal-m-wa">—</div>
+        <div style="font-size:.5rem;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">WA enviados</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:9px 4px;text-align:center;border:1px solid #f1f5f9;">
+        <div style="font-size:.95rem;font-weight:800;color:#fb923c;" id="mal-m-dev">—</div>
+        <div style="font-size:.5rem;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Devoluciones</div>
+      </div>
+    </div>
+    <div class="adm-modal-btns">
+      <button class="adm-modal-btn cancel" onclick="_malCerrar()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== SUPER ADMIN PANEL ===== -->
 <div id="super-admin-panel">
   <div class="adm-header">
@@ -6392,6 +6454,15 @@ function _fbSyncGestion(id){
   delete g.mensajes_listos;
   g._ts=Date.now();
   _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
+  // Rastrear última actividad para monitoreo del admin
+  const g0=gestiones[id]||{};
+  let _actLabel='🔄 Gestionando pedido';
+  if(g0.gestion_final)_actLabel='🏁 Finalizó pedido';
+  else if(g0.devolucion)_actLabel='↩️ Marcó devolución';
+  else if(g0.llamada==='contestó')_actLabel='📞 Llamada contestada';
+  else if(g0.llamada==='no_contestó')_actLabel='📵 Sin respuesta';
+  else if(g0.wa_enviado)_actLabel='📱 WA enviado';
+  _db.ref('presence/'+window._currentUsername).update({lastActivity:Date.now(),lastActionLabel:_actLabel,lastActionPedido:p.nombre||(p.dropiId?'#'+p.dropiId:'')});
   _fbActualizarHistorial();
   // Actualizar contador de sesión visible en el admin
   const arr=Object.values(gestiones);
@@ -6731,6 +6802,8 @@ function _mkEnliveCard(u, p, isOnline){
   const cDev=barDev<=5?'#10b981':barDev<=15?'#f59e0b':'#ef4444';
   const card=document.createElement('div');
   card.className='enlive-card'+(isOnline?' online':'');
+  card.style.cursor='pointer';
+  card.onclick=()=>window._malAbrir(u.username);
   const safeU=u.username.replace(/'/g,"\\'");
   const safeA=(u.asesor||'').replace(/'/g,"\\'");
   const safeT=(u.tienda||'').replace(/'/g,"\\'");
@@ -7669,6 +7742,84 @@ window._mConfirmCancel = function(){
   document.getElementById('modal-confirm').classList.remove('open');
   _mConfirmCallback = null;
 };
+
+// ===== MODAL DETALLE ASESOR EN VIVO =====
+let _malUsername=null, _malPresRef=null, _malPresData=null, _malInterval=null;
+
+window._malAbrir = function(username){
+  _malUsername = username;
+  document.getElementById('modal-asesor-live').classList.add('open');
+  if(_malPresRef){ _malPresRef.off('value'); _malPresRef=null; }
+  _malPresRef = _db.ref('presence/'+username);
+  _malPresRef.on('value', snap=>{ _malPresData=snap.val()||{}; _malRender(); });
+  if(_malInterval){ clearInterval(_malInterval); _malInterval=null; }
+  _malInterval = setInterval(_malActualizarTiempos, 15000);
+};
+
+window._malCerrar = function(){
+  document.getElementById('modal-asesor-live').classList.remove('open');
+  if(_malPresRef){ _malPresRef.off('value'); _malPresRef=null; }
+  if(_malInterval){ clearInterval(_malInterval); _malInterval=null; }
+  _malPresData=null; _malUsername=null;
+};
+
+function _malRender(){
+  const p=_malPresData; if(!p) return;
+  const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
+  const name=p.asesor||_malUsername||'—';
+  const color=_avatarColor(name);
+  const initials=_avatarInitials(name);
+  const av=document.getElementById('mal-avatar');
+  av.style.background=color; av.textContent=initials;
+  document.getElementById('mal-nombre').textContent=name;
+  document.getElementById('mal-tienda').textContent='🏪 '+(p.tienda||'—');
+  document.getElementById('mal-status').innerHTML=isOnline
+    ?'<div class="enlive-online-pill"><span class="adm-live-dot"></span>EN VIVO</div>'
+    :'<div class="enlive-offline-pill">Offline</div>';
+  const fin=p.finalizados||0, tp=p.totalPedidos||0;
+  const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):null;
+  document.getElementById('mal-m-total').textContent=tp||'—';
+  document.getElementById('mal-m-fin').textContent=fin;
+  document.getElementById('mal-m-cierre').textContent=tCierre!==null?tCierre+'%':'—';
+  document.getElementById('mal-m-cont').textContent=p.contestaron||0;
+  document.getElementById('mal-m-wa').textContent=p.waEnviados||0;
+  document.getElementById('mal-m-dev').textContent=p.devoluciones||0;
+  _malActualizarTiempos();
+}
+
+function _malActualizarTiempos(){
+  const p=_malPresData; if(!p) return;
+  const now=Date.now();
+  const isOnline=!!p.online&&(now-(p.lastSeen||0))<120000;
+  // Tiempo en línea
+  const tOnEl=document.getElementById('mal-t-online');
+  if(isOnline&&p.loginTime){
+    tOnEl.textContent=_fmtDuracion(now-p.loginTime);
+    tOnEl.style.color='#10b981';
+  } else if(!isOnline&&p.lastSeen){
+    tOnEl.textContent='Offline';
+    tOnEl.style.color='#94a3b8';
+  } else {
+    tOnEl.textContent='—'; tOnEl.style.color='#94a3b8';
+  }
+  // Tiempo sin actividad
+  const tInEl=document.getElementById('mal-t-inactivo');
+  const acEl=document.getElementById('mal-ultima-accion');
+  const saEl=document.getElementById('mal-sin-accion');
+  if(p.lastActivity){
+    const diff=now-p.lastActivity;
+    tInEl.textContent=_fmtDuracion(diff);
+    tInEl.style.color=diff<5*60000?'#10b981':diff<15*60000?'#f59e0b':'#ef4444';
+    acEl.style.display='block'; saEl.style.display='none';
+    document.getElementById('mal-accion-label').textContent=p.lastActionLabel||'—';
+    document.getElementById('mal-accion-pedido').textContent=p.lastActionPedido?'📦 '+p.lastActionPedido:'';
+    document.getElementById('mal-accion-hace').textContent='Hace '+_fmtDuracion(diff);
+  } else {
+    tInEl.textContent='—'; tInEl.style.color='#94a3b8';
+    acEl.style.display='none';
+    saEl.style.display=isOnline?'block':'none';
+  }
+}
 </script>
 
 </body>
