@@ -820,6 +820,11 @@ header h1{font-size:1.05rem;font-weight:700;}
           <div class="adm-cmd-val" id="adm-stat-fin" style="color:#a78bfa">0</div>
           <div class="adm-cmd-lbl">Finalizados en vivo</div>
         </div>
+        <div class="adm-cmd-card">
+          <div class="adm-cmd-icon">📦</div>
+          <div class="adm-cmd-val" id="adm-stat-tp" style="color:#64748b">—</div>
+          <div class="adm-cmd-lbl">Total pedidos hoy</div>
+        </div>
       </div>
 
       <!-- TAB: EN VIVO -->
@@ -6568,10 +6573,12 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
     const totalGest = usuarios.reduce((s,u)=>s+(presencia[u.username]?.sessionGestiones||0),0);
     const totalFin = usuarios.reduce((s,u)=>s+(presencia[u.username]?.finalizados||0),0);
+    const totalTP = usuarios.reduce((s,u)=>s+(presencia[u.username]?.totalPedidos||0),0);
     document.getElementById('adm-stat-total').textContent = usuarios.length;
     document.getElementById('adm-stat-online').textContent = online;
     document.getElementById('adm-stat-gest').textContent = totalGest;
     document.getElementById('adm-stat-fin').textContent = totalFin;
+    document.getElementById('adm-stat-tp').textContent = totalTP || '—';
 
     usuarios.sort((a,b)=>{
       const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
@@ -6632,6 +6639,7 @@ function _admMostrarSinEmpresas(){
   document.getElementById('adm-stat-online').textContent='0';
   document.getElementById('adm-stat-gest').textContent='0';
   document.getElementById('adm-stat-fin').textContent='0';
+  document.getElementById('adm-stat-tp').textContent='—';
 }
 
 function _admCargarDashboardLegacy(){
@@ -6644,10 +6652,12 @@ function _admCargarDashboardLegacy(){
     const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
     const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
     const totalFin = Object.values(presencia).reduce((s,p)=>s+(p.finalizados||0),0);
+    const totalTP = Object.values(presencia).reduce((s,p)=>s+(p.totalPedidos||0),0);
     document.getElementById('adm-stat-total').textContent = usuarios.length;
     document.getElementById('adm-stat-online').textContent = online;
     document.getElementById('adm-stat-gest').textContent = totalGest;
     document.getElementById('adm-stat-fin').textContent = totalFin;
+    document.getElementById('adm-stat-tp').textContent = totalTP || '—';
     usuarios.sort((a,b)=>{
       const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
       const bo=!!(presencia[b.username]||{}).online&&(Date.now()-((presencia[b.username]||{}).lastSeen||0))<120000;
@@ -6740,7 +6750,8 @@ function _mkEnliveCard(u, p, isOnline){
       '</div>'+
     '</div>'+
     (isOnline
-      ? '<div class="enlive-metrics">'+
+      ? '<div class="enlive-metrics" style="grid-template-columns:repeat(4,1fr)">'+
+          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#94a3b8;font-size:.82rem">'+(tp||'—')+'</div><div class="enlive-metric-lbl">Total ped.</div></div>'+
           '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#4ade80">'+fin+'</div><div class="enlive-metric-lbl">Final.</div></div>'+
           '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#60a5fa">'+cont+'</div><div class="enlive-metric-lbl">Cont.</div></div>'+
           '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#a78bfa">'+wa+'</div><div class="enlive-metric-lbl">WA</div></div>'+
