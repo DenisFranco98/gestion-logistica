@@ -6703,7 +6703,7 @@ function _mkEnliveCard(u, p, isOnline){
   const cont=p.contestaron||0, noCont=p.noContestaron||0, wa=p.waEnviados||0;
   const fin=p.finalizados||0, dev=p.devoluciones||0;
   const total=cont+noCont+wa;
-  const tCierre=total>0?Math.round(fin/total*100):0;
+  const tCierre=Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
   const tContacto=total>0?Math.round(cont/total*100):0;
   const min=isOnline&&p.loginTime?Math.max(1,(Date.now()-p.loginTime)/60000):0;
   const gpm=min>0?fin/min:0;
@@ -7127,7 +7127,7 @@ function _anlCargar(){
       perComp = _getAsesoresPorPeriodo(tiendaData).map(x=>({
         name: x.nombre,
         tCont: Math.round(x.cont/(x.cont+x.noCont+x.wa||1)*100),
-        tCierre: Math.round(x.fin/(x.cont+x.noCont+x.wa||1)*100),
+        tCierre: Math.min(100,Math.round(x.fin/Math.max(x.cont+x.noCont+x.wa,x.fin,1)*100)),
       }));
       compTitle.textContent = 'Comparativo de asesores — '+tiendaName;
     } else if(!userFilter){
@@ -7139,7 +7139,7 @@ function _anlCargar(){
         return {
           name:(_admUsuariosCache.find(x=>x.username===u)||{}).tienda||u,
           tCont:Math.round(cont/(cont+noCont+wa||1)*100),
-          tCierre:Math.round(fin/(cont+noCont+wa||1)*100),
+          tCierre:Math.min(100,Math.round(fin/Math.max(cont+noCont+wa,fin,1)*100)),
         };
       }).filter(x=>x.tCont>0||x.tCierre>0);
       compTitle.textContent = 'Comparativo de tiendas';
@@ -7224,7 +7224,7 @@ function _anlCargar(){
           asesores.sort((a,b)=>b.fin-a.fin).forEach(x=>{
             const total = x.cont+x.noCont+x.wa;
             const tCont = total>0 ? Math.round(x.cont/total*100) : 0;
-            const tCierre = total>0 ? Math.round(x.fin/total*100) : 0;
+            const tCierre = Math.min(100,Math.round(x.fin/Math.max(total,x.fin,1)*100));
             const gpm = x.min>0 ? (x.fin/x.min).toFixed(2) : '—';
             const gc = gpm==='—'?'#64748b':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
             aRows+='<tr>'+
@@ -7415,7 +7415,7 @@ function _rnkCargar(){
           fechas.forEach(f=>{const d=fd[f]||{};cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;});
           const total=cont+noCont+wa;
           if(!total&&!fin) return;
-          const tCierre=total>0?Math.round(fin/total*100):0;
+          const tCierre=Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
           const tContacto=total>0?Math.round(cont/total*100):0;
           const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
           const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
@@ -7426,7 +7426,7 @@ function _rnkCargar(){
         Object.entries(data).forEach(([f,d])=>{if(!fechas.includes(f))return;cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;});
         const total=cont+noCont+wa;
         if(!total&&!fin) return;
-        const tCierre=total>0?Math.round(fin/total*100):0;
+        const tCierre=Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
         const tContacto=total>0?Math.round(cont/total*100):0;
         const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
         const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
