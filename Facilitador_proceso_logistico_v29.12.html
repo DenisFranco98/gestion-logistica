@@ -2590,6 +2590,7 @@ function _cargarArchivo(file){
     // Limpiar gestiones_sync en Firebase al cargar nuevo archivo (historial_diario se conserva)
     if(typeof _db!=='undefined'&&window._currentUsername){
       _db.ref('gestiones_sync/'+window._currentUsername).remove();
+      _db.ref('presence/'+window._currentUsername).update({totalPedidos:pedidos.length});
     }
     // Reasignar gestiones al nuevo id interno usando dropiId como puente
     gestiones={};
@@ -6392,6 +6393,7 @@ function _fbSyncGestion(id){
   const total=(arr.filter(x=>x.llamada||x.wa_enviado||x.gestion_final)).length;
   _db.ref('presence/'+window._currentUsername).update({
     sessionGestiones: total,
+    totalPedidos: pedidos.length,
     contestaron: arr.filter(x=>x.llamada==='contestó').length,
     noContestaron: arr.filter(x=>x.llamada==='no_contestó').length,
     waEnviados: arr.filter(x=>x.wa_enviado).length,
@@ -6427,6 +6429,7 @@ function _fbActualizarHistorial(){
     // Guardar bajo tienda/asesor/fecha
     _db.ref('historial_diario/'+user+'/'+asesorKey+'/'+hoy).set({
       asesorNombre: asesorRaw||user,
+      totalPedidos: pedidos.length,
       contestaron,noContestaron,waEnviados,finalizados,devoluciones,guiasSinGestion,transitoSinGestion,rechazadosGestionados,rechazadosSinGestion,minutos,_ts:Date.now()
     });
   });
@@ -6703,7 +6706,8 @@ function _mkEnliveCard(u, p, isOnline){
   const cont=p.contestaron||0, noCont=p.noContestaron||0, wa=p.waEnviados||0;
   const fin=p.finalizados||0, dev=p.devoluciones||0;
   const total=cont+noCont+wa;
-  const tCierre=Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
+  const tp=p.totalPedidos||0;
+  const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
   const tContacto=total>0?Math.round(cont/total*100):0;
   const min=isOnline&&p.loginTime?Math.max(1,(Date.now()-p.loginTime)/60000):0;
   const gpm=min>0?fin/min:0;
@@ -6963,11 +6967,11 @@ function _anlCargar(){
     const isNew = keys.length>0 && !keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
     if(!isNew) return [];
     return Object.entries(data).map(([asesorKey, fechasData])=>{
-      let cont=0,noCont=0,wa=0,fin=0,dev=0,gsg=0,min=0;
+      let cont=0,noCont=0,wa=0,fin=0,dev=0,gsg=0,min=0,tp=0;
       const nombre = fechasData[Object.keys(fechasData)[0]]?.asesorNombre || asesorKey;
       let tsg=0,rg=0,rsg=0;
-      fechas.forEach(f=>{ const d=fechasData[f]||{}; cont+=d.contestaron||0; noCont+=d.noContestaron||0; wa+=d.waEnviados||0; fin+=d.finalizados||0; dev+=d.devoluciones||0; gsg+=d.guiasSinGestion||0; tsg+=d.transitoSinGestion||0; rg+=d.rechazadosGestionados||0; rsg+=d.rechazadosSinGestion||0; min+=d.minutos||0; });
-      return {asesorKey, nombre, cont, noCont, wa, fin, dev, gsg, tsg, rg, rsg, min};
+      fechas.forEach(f=>{ const d=fechasData[f]||{}; cont+=d.contestaron||0; noCont+=d.noContestaron||0; wa+=d.waEnviados||0; fin+=d.finalizados||0; dev+=d.devoluciones||0; gsg+=d.guiasSinGestion||0; tsg+=d.transitoSinGestion||0; rg+=d.rechazadosGestionados||0; rsg+=d.rechazadosSinGestion||0; min+=d.minutos||0; tp+=d.totalPedidos||0; });
+      return {asesorKey, nombre, cont, noCont, wa, fin, dev, gsg, tsg, rg, rsg, min, tp};
     }).filter(x=>x.cont+x.noCont+x.wa+x.fin+x.gsg+x.tsg>0);
   }
 
@@ -7127,19 +7131,19 @@ function _anlCargar(){
       perComp = _getAsesoresPorPeriodo(tiendaData).map(x=>({
         name: x.nombre,
         tCont: Math.round(x.cont/(x.cont+x.noCont+x.wa||1)*100),
-        tCierre: Math.min(100,Math.round(x.fin/Math.max(x.cont+x.noCont+x.wa,x.fin,1)*100)),
+        tCierre: x.tp>0?Math.min(100,Math.round(x.fin/x.tp*100)):Math.min(100,Math.round(x.fin/Math.max(x.cont+x.noCont+x.wa,x.fin,1)*100)),
       }));
       compTitle.textContent = 'Comparativo de asesores — '+tiendaName;
     } else if(!userFilter){
       // Comparar tiendas
       perComp = results.map(({u, data})=>{
         const tot = _aplanarHistorial(data,'');
-        let cont=0,noCont=0,wa=0,fin=0;
-        Object.values(tot).forEach(d=>{cont+=d.contestaron;noCont+=d.noContestaron;wa+=d.waEnviados;fin+=d.finalizados;});
+        let cont=0,noCont=0,wa=0,fin=0,tp=0;
+        Object.values(tot).forEach(d=>{cont+=d.contestaron;noCont+=d.noContestaron;wa+=d.waEnviados;fin+=d.finalizados;tp+=d.totalPedidos||0;});
         return {
           name:(_admUsuariosCache.find(x=>x.username===u)||{}).tienda||u,
           tCont:Math.round(cont/(cont+noCont+wa||1)*100),
-          tCierre:Math.min(100,Math.round(fin/Math.max(cont+noCont+wa,fin,1)*100)),
+          tCierre:tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(cont+noCont+wa,fin,1)*100)),
         };
       }).filter(x=>x.tCont>0||x.tCierre>0);
       compTitle.textContent = 'Comparativo de tiendas';
@@ -7224,7 +7228,7 @@ function _anlCargar(){
           asesores.sort((a,b)=>b.fin-a.fin).forEach(x=>{
             const total = x.cont+x.noCont+x.wa;
             const tCont = total>0 ? Math.round(x.cont/total*100) : 0;
-            const tCierre = Math.min(100,Math.round(x.fin/Math.max(total,x.fin,1)*100));
+            const tCierre = x.tp>0?Math.min(100,Math.round(x.fin/x.tp*100)):Math.min(100,Math.round(x.fin/Math.max(total,x.fin,1)*100));
             const gpm = x.min>0 ? (x.fin/x.min).toFixed(2) : '—';
             const gc = gpm==='—'?'#64748b':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
             aRows+='<tr>'+
@@ -7410,27 +7414,27 @@ function _rnkCargar(){
       const isNew=keys.length>0&&!keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
       if(isNew){
         Object.entries(data).forEach(([ak,fd])=>{
-          let cont=0,noCont=0,wa=0,fin=0,dev=0,min=0;
+          let cont=0,noCont=0,wa=0,fin=0,dev=0,min=0,tp=0;
           const nombre=fd[Object.keys(fd)[0]]?.asesorNombre||ak;
-          fechas.forEach(f=>{const d=fd[f]||{};cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;});
+          fechas.forEach(f=>{const d=fd[f]||{};cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;tp+=d.totalPedidos||0;});
           const total=cont+noCont+wa;
           if(!total&&!fin) return;
-          const tCierre=Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
+          const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
           const tContacto=total>0?Math.round(cont/total*100):0;
           const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
           const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
-          asesores.push({nombre,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total});
+          asesores.push({nombre,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total,tp});
         });
       } else {
-        let cont=0,noCont=0,wa=0,fin=0,dev=0,min=0;
-        Object.entries(data).forEach(([f,d])=>{if(!fechas.includes(f))return;cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;});
+        let cont=0,noCont=0,wa=0,fin=0,dev=0,min=0,tp=0;
+        Object.entries(data).forEach(([f,d])=>{if(!fechas.includes(f))return;cont+=d.contestaron||0;noCont+=d.noContestaron||0;wa+=d.waEnviados||0;fin+=d.finalizados||0;dev+=d.devoluciones||0;min+=d.minutos||0;tp+=d.totalPedidos||0;});
         const total=cont+noCont+wa;
         if(!total&&!fin) return;
-        const tCierre=Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
+        const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
         const tContacto=total>0?Math.round(cont/total*100):0;
         const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
         const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
-        asesores.push({nombre:obj.asesor||obj.username,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total});
+        asesores.push({nombre:obj.asesor||obj.username,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total,tp});
       }
     });
     asesores.sort((a,b)=>b.score-a.score);
