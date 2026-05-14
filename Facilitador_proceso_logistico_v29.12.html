@@ -6708,7 +6708,7 @@ function _mkEnliveCard(u, p, isOnline){
   const total=cont+noCont+wa;
   const tp=p.totalPedidos||0;
   const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
-  const tContacto=total>0?Math.round(cont/total*100):0;
+  const tContacto=tp>0?Math.min(100,Math.round(cont/tp*100)):(total>0?Math.round(cont/total*100):0);
   const min=isOnline&&p.loginTime?Math.max(1,(Date.now()-p.loginTime)/60000):0;
   const gpm=min>0?fin/min:0;
   const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
@@ -6925,7 +6925,7 @@ function _anlCargar(){
   // Helper: aplanar estructura nueva (tienda/asesor/fecha) o vieja (tienda/fecha)
   function _aplanarHistorial(data, soloAsesor){
     const byFecha = {};
-    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,guiasSinGestion:0,transitoSinGestion:0,rechazadosGestionados:0,rechazadosSinGestion:0,minutos:0}; });
+    fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,guiasSinGestion:0,transitoSinGestion:0,rechazadosGestionados:0,rechazadosSinGestion:0,minutos:0,totalPedidos:0}; });
     // Detectar si es estructura nueva: primer key no es una fecha
     const keys = Object.keys(data);
     const isNew = keys.length>0 && !keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
@@ -6944,6 +6944,7 @@ function _anlCargar(){
           byFecha[f].rechazadosGestionados+= d.rechazadosGestionados||0;
           byFecha[f].rechazadosSinGestion += d.rechazadosSinGestion||0;
           byFecha[f].minutos       += d.minutos||0;
+          byFecha[f].totalPedidos  += d.totalPedidos||0;
         });
       });
     } else {
@@ -6956,6 +6957,7 @@ function _anlCargar(){
         byFecha[f].devoluciones  += d.devoluciones||0;
         byFecha[f].guiasSinGestion += d.guiasSinGestion||0;
         byFecha[f].minutos       += d.minutos||0;
+        byFecha[f].totalPedidos  += d.totalPedidos||0;
       });
     }
     return byFecha;
@@ -7009,10 +7011,11 @@ function _anlCargar(){
     const totTSG   = tot('transitoSinGestion');
     const totRG    = tot('rechazadosGestionados');
     const totRSG   = tot('rechazadosSinGestion');
-    const totGest  = totCont + totNoCont + totWA; // total contactos únicos (aprox)
+    const totTP    = tot('totalPedidos');
+    const totGest  = totCont + totNoCont + totWA;
     const gpm = totMin>0 ? (totFin/totMin).toFixed(2) : '—';
-    const tasaContacto = totGest>0 ? Math.round(totCont/totGest*100) : null;
-    const tasaCierre   = totGest>0 ? Math.round(totFin/totGest*100) : null;
+    const tasaContacto = totTP>0 ? Math.round(totCont/totTP*100) : (totGest>0 ? Math.round(totCont/totGest*100) : null);
+    const tasaCierre   = totTP>0 ? Math.round(totFin/totTP*100)  : (totGest>0 ? Math.round(totFin/totGest*100)  : null);
     const tasaDev      = totFin>0  ? Math.round(totDev/totFin*100)  : null;
 
     document.getElementById('kpi-fin').textContent  = totFin;
@@ -7130,7 +7133,7 @@ function _anlCargar(){
       const tiendaData = results[0]?.data||{};
       perComp = _getAsesoresPorPeriodo(tiendaData).map(x=>({
         name: x.nombre,
-        tCont: Math.round(x.cont/(x.cont+x.noCont+x.wa||1)*100),
+        tCont: x.tp>0?Math.min(100,Math.round(x.cont/x.tp*100)):Math.round(x.cont/(x.cont+x.noCont+x.wa||1)*100),
         tCierre: x.tp>0?Math.min(100,Math.round(x.fin/x.tp*100)):Math.min(100,Math.round(x.fin/Math.max(x.cont+x.noCont+x.wa,x.fin,1)*100)),
       }));
       compTitle.textContent = 'Comparativo de asesores — '+tiendaName;
@@ -7142,7 +7145,7 @@ function _anlCargar(){
         Object.values(tot).forEach(d=>{cont+=d.contestaron;noCont+=d.noContestaron;wa+=d.waEnviados;fin+=d.finalizados;tp+=d.totalPedidos||0;});
         return {
           name:(_admUsuariosCache.find(x=>x.username===u)||{}).tienda||u,
-          tCont:Math.round(cont/(cont+noCont+wa||1)*100),
+          tCont:tp>0?Math.min(100,Math.round(cont/tp*100)):Math.round(cont/(cont+noCont+wa||1)*100),
           tCierre:tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(cont+noCont+wa,fin,1)*100)),
         };
       }).filter(x=>x.tCont>0||x.tCierre>0);
@@ -7227,7 +7230,7 @@ function _anlCargar(){
           let aRows = '';
           asesores.sort((a,b)=>b.fin-a.fin).forEach(x=>{
             const total = x.cont+x.noCont+x.wa;
-            const tCont = total>0 ? Math.round(x.cont/total*100) : 0;
+            const tCont = x.tp>0?Math.min(100,Math.round(x.cont/x.tp*100)):(total>0?Math.round(x.cont/total*100):0);
             const tCierre = x.tp>0?Math.min(100,Math.round(x.fin/x.tp*100)):Math.min(100,Math.round(x.fin/Math.max(total,x.fin,1)*100));
             const gpm = x.min>0 ? (x.fin/x.min).toFixed(2) : '—';
             const gc = gpm==='—'?'#64748b':gpm>=1?'#4ade80':gpm>=0.5?'#fbbf24':'#f87171';
@@ -7420,7 +7423,7 @@ function _rnkCargar(){
           const total=cont+noCont+wa;
           if(!total&&!fin) return;
           const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
-          const tContacto=total>0?Math.round(cont/total*100):0;
+          const tContacto=tp>0?Math.min(100,Math.round(cont/tp*100)):(total>0?Math.round(cont/total*100):0);
           const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
           const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
           asesores.push({nombre,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total,tp});
@@ -7431,7 +7434,7 @@ function _rnkCargar(){
         const total=cont+noCont+wa;
         if(!total&&!fin) return;
         const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
-        const tContacto=total>0?Math.round(cont/total*100):0;
+        const tContacto=tp>0?Math.min(100,Math.round(cont/tp*100)):(total>0?Math.round(cont/total*100):0);
         const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
         const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
         asesores.push({nombre:obj.asesor||obj.username,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total,tp});
