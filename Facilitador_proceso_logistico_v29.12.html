@@ -6705,8 +6705,10 @@ function _mkEnliveCard(u, p, isOnline){
   const total=cont+noCont+wa;
   const tCierre=total>0?Math.round(fin/total*100):0;
   const tContacto=total>0?Math.round(cont/total*100):0;
-  const score=Math.max(0,fin*3+cont-dev*2);
-  const scoreColor=score>=15?'#4ade80':score>=5?'#fbbf24':'#f87171';
+  const min=isOnline&&p.loginTime?Math.max(1,(Date.now()-p.loginTime)/60000):0;
+  const gpm=min>0?fin/min:0;
+  const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
+  const scoreColor=score>=80?'#4ade80':score>=40?'#fbbf24':'#f87171';
   const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
   const barCont=Math.min(100,tContacto), barCierre=Math.min(100,tCierre);
   const barDev=fin>0?Math.min(100,Math.round(dev/fin*100)):0;
@@ -7416,7 +7418,7 @@ function _rnkCargar(){
           const tCierre=total>0?Math.round(fin/total*100):0;
           const tContacto=total>0?Math.round(cont/total*100):0;
           const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
-          const score=Math.max(0,fin*3+cont+tCierre*2-dev*2);
+          const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
           asesores.push({nombre,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total});
         });
       } else {
@@ -7427,7 +7429,7 @@ function _rnkCargar(){
         const tCierre=total>0?Math.round(fin/total*100):0;
         const tContacto=total>0?Math.round(cont/total*100):0;
         const gpm=min>0?parseFloat((fin/min).toFixed(2)):0;
-        const score=Math.max(0,fin*3+cont+tCierre*2-dev*2);
+        const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
         asesores.push({nombre:obj.asesor||obj.username,tienda:obj.tienda||obj.username,cont,noCont,wa,fin,dev,min,tCierre,tContacto,gpm,score,total});
       }
     });
@@ -7460,8 +7462,8 @@ function _rnkCargar(){
       return;
     }
     tbody.innerHTML=asesores.map((a,i)=>{
-      const sc=a.score>=50?'#4ade80':a.score>=20?'#fbbf24':'#f87171';
-      const sb=a.score>=50?'#14532d20':a.score>=20?'#451a0320':'#450a0a20';
+      const sc=a.score>=150?'#4ade80':a.score>=80?'#fbbf24':'#f87171';
+      const sb=a.score>=150?'#14532d20':a.score>=80?'#451a0320':'#450a0a20';
       const cc=a.tCierre>=60?'#4ade80':a.tCierre>=40?'#fbbf24':'#f87171';
       const cco=a.tContacto>=70?'#4ade80':a.tContacto>=50?'#fbbf24':'#f87171';
       const cg=a.gpm>=1?'#4ade80':a.gpm>=0.5?'#fbbf24':'#f87171';
