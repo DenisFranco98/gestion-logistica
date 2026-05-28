@@ -2245,10 +2245,10 @@ function _copiarFallback(txt,cb){
     const e=document.createElement('input');
     e.type='text';e.value=txt;
     e.setAttribute('readonly','');
-    e.style.cssText='position:absolute;left:-9999px;top:-9999px;font-size:16px;';
+    // position:fixed mantiene el elemento dentro del viewport (necesario en Android)
+    e.style.cssText='position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:none;outline:none;box-shadow:none;background:transparent;font-size:16px;opacity:0;';
     document.body.appendChild(e);
     e.focus();
-    // iOS Safari necesita setSelectionRange además de select()
     const isIOS=/ipad|iphone|ipod/i.test(navigator.userAgent);
     if(isIOS){
       const range=document.createRange();
@@ -2258,6 +2258,7 @@ function _copiarFallback(txt,cb){
       e.setSelectionRange(0,999999);
     }else{
       e.select();
+      e.setSelectionRange(0,999999);
     }
     document.execCommand('copy');
     document.body.removeChild(e);
@@ -2266,7 +2267,8 @@ function _copiarFallback(txt,cb){
 }
 function _copiar(txt,cb){
   try{
-    if(navigator.clipboard&&navigator.clipboard.writeText){
+    // navigator.clipboard solo funciona en HTTPS; en HTTP ir directo al fallback
+    if(window.isSecureContext&&navigator.clipboard&&navigator.clipboard.writeText){
       navigator.clipboard.writeText(txt).then(()=>{if(cb)cb();}).catch(()=>_copiarFallback(txt,cb));
     }else{_copiarFallback(txt,cb);}
   }catch(_){_copiarFallback(txt,cb);}
@@ -2912,6 +2914,7 @@ function cerrarBienvenida(){
   }
   document.getElementById('bienvenida-modal').classList.remove('open');
   renderAll();
+  guardar(); // guardar secciones desactivadas antes de cualquier acción
   // Siempre pedir configuración de tiendas — cada agente puede tener tiendas distintas
   if(_exccelTiendas.length>0||_hayVaciasAT){
     _cfgOnboarding=true;
@@ -4199,7 +4202,7 @@ function copiarDatosCliente(id){
     p.direccion||'',
     tel,
   ].filter(Boolean);
-  navigator.clipboard.writeText(partes.join('\n')).then(()=>toast('📋 Datos del cliente copiados'));
+  _copiar(partes.join('\n'),()=>toast('📋 Datos del cliente copiados'));
 }
 
 function _histTieneRegistros(p){
