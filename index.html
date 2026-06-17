@@ -8065,16 +8065,37 @@ window._bordVerDetalle = function(key){
   document.getElementById('bord-modal-title').textContent = '📦 '+r.guia;
   document.getElementById('bord-modal-sub').textContent = r.nombre ? '👤 '+r.nombre : 'Sin nombre registrado';
   const body = document.getElementById('bord-modal-body');
+  body.innerHTML = '<div class="adm-empty">Cargando detalle...</div>';
+  modal.style.display = 'flex';
 
-  // Para cada asesor cargar evt_hist también
   const asesores = Object.entries(r.asesores);
-  Promise.all(asesores.map(([username, data])=>
-    _db.ref('evt_hist/'+username).orderByChild('guia').equalTo(r.guia).once('value')
-      .then(snap=>{ data.events = Object.values(snap.val()||{}); })
-      .catch(()=>{ data.events=[]; })
-  )).then(()=>{
+  // Para cada asesor: cargar eventos adicionales y gestión si aún no se tiene
+  Promise.all(asesores.map(([username, data])=>{
+    const promises = [];
+    // Cargar todos los eventos de esta guía (adicionales a los del search)
+    promises.push(
+      _db.ref('evt_hist/'+username).orderByChild('guia').equalTo(r.guia).once('value')
+        .then(snap=>{
+          const fbEvts = Object.values(snap.val()||{});
+          // Merge: agregar eventos que no estén ya en data.events
+          const existingTs = new Set((data.events||[]).map(e=>e.ts));
+          fbEvts.forEach(e=>{ if(!existingTs.has(e.ts)) data.events.push(e); });
+        }).catch(()=>{})
+    );
+    // Si no tiene gestión cargada, buscar en gestiones_sync por _guia
+    if(!data.gestion){
+      promises.push(
+        _db.ref('gestiones_sync/'+username).once('value')
+          .then(snap=>{
+            const todas = snap.val()||{};
+            const entrada = Object.values(todas).find(g=>g._guia===r.guia);
+            if(entrada) data.gestion = entrada;
+          }).catch(()=>{})
+      );
+    }
+    return Promise.all(promises);
+  })).then(()=>{
     body.innerHTML = _bordRenderDetalle(r);
-    modal.style.display='flex';
   });
 };
 
