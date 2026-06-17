@@ -7963,8 +7963,9 @@ function _admBuscarOrden(){
     const usernames = Object.keys(snapEA.val()||{});
     if(!usernames.length){ document.getElementById('bord-results').innerHTML='<div class="adm-empty">Esta empresa no tiene asesores</div>'; return; }
 
-    // Buscar en notes/history y gestiones_sync de cada asesor en paralelo
+    // Buscar en notes/history, gestiones_sync y evt_hist de cada asesor en paralelo
     const resultadosPorGuia = {};
+    const _debug = {asesores: usernames.length, evts:0, gests:0, notas:0};
 
     Promise.all(usernames.map(username=>
       Promise.all([
@@ -7989,7 +7990,8 @@ function _admBuscarOrden(){
           if(cb) cb(resultadosPorGuia[guia].asesores[username]);
         }
 
-        // 1. Buscar en evt_hist (tiene guía para TODA acción: llamada, WA, finalizar, etc.)
+        // 1. Buscar en evt_hist (tiene guía para TODA acción)
+        _debug.evts += eventos.length;
         eventos.forEach(ev=>{
           if(!ev.guia) return;
           const matchGuia   = _bordNorm(ev.guia).includes(qN);
@@ -7999,6 +8001,7 @@ function _admBuscarOrden(){
         });
 
         // 2. Buscar en notas (tienen guia + nombre del cliente)
+        _debug.notas += notas.length;
         notas.forEach(n=>{
           const matchGuia   = n.guia   && _bordNorm(n.guia).includes(qN);
           const matchNombre = n.nombre && _bordNorm(n.nombre).includes(qN);
@@ -8007,6 +8010,7 @@ function _admBuscarOrden(){
         });
 
         // 3. Buscar en gestiones_sync por guía, nombre, teléfono o ID de orden
+        _debug.gests += Object.keys(gestiones).length;
         Object.entries(gestiones).forEach(([dropiKey, g])=>{
           const matchKey    = _bordNorm(dropiKey).includes(qN);
           const matchGuia   = g._guia   && _bordNorm(g._guia).includes(qN);
@@ -8019,21 +8023,24 @@ function _admBuscarOrden(){
         });
       })
     )).then(()=>{
-      _bordMostrarResultados(resultadosPorGuia, q);
+      _bordMostrarResultados(resultadosPorGuia, q, _debug);
     }).catch(()=>{
       document.getElementById('bord-results').innerHTML='<div class="adm-empty">❌ Error al buscar. Intenta de nuevo.</div>';
     });
   });
 }
 
-function _bordMostrarResultados(mapa, q){
+function _bordMostrarResultados(mapa, q, debug){
   const keys = Object.keys(mapa);
   const el = document.getElementById('bord-results');
+  const debugTxt = debug
+    ? '<div style="font-size:.65rem;color:#94a3b8;margin-top:6px;">🔎 Revisé '+debug.asesores+' asesor(es) · '+debug.evts+' eventos · '+debug.gests+' gestiones · '+debug.notas+' notas</div>'
+    : '';
   if(!keys.length){
-    el.innerHTML='<div class="adm-empty">Sin resultados para "'+q+'"<br><span style="font-size:.72rem;color:#94a3b8">Prueba con la guía exacta, número de orden o nombre completo</span></div>';
+    el.innerHTML='<div class="adm-empty">Sin historial para "'+q+'"<br><span style="font-size:.72rem;color:#94a3b8">Esta orden no tiene gestiones registradas en el sistema</span>'+debugTxt+'</div>';
     return;
   }
-  let html='<div style="font-size:.75rem;color:#64748b;margin-bottom:10px;">'+keys.length+' resultado(s) encontrado(s)</div>';
+  let html='<div style="font-size:.75rem;color:#64748b;margin-bottom:4px;">'+keys.length+' resultado(s) encontrado(s)</div>'+debugTxt+'<div style="height:8px;"></div>';
   html+='<div style="display:flex;flex-direction:column;gap:8px;">';
   keys.forEach(key=>{
     const r=mapa[key];
@@ -8189,7 +8196,7 @@ function _bordRenderDetalle(r){
     html+='</div></div>';
   });
 
-  if(!html) html='<div class="adm-empty">Sin datos de gestión para esta orden</div>';
+  if(!html) html='<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">Sin historial de gestión registrado para esta orden</div>';
   return html;
 }
 
