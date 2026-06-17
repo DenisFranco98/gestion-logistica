@@ -7920,29 +7920,43 @@ function _admBuscarOrden(){
       Promise.all([
         _db.ref('notes/'+username+'/history').once('value'),
         _db.ref('gestiones_sync/'+username).once('value'),
-        _db.ref('users').orderByChild('username').equalTo(username).once('value')
-      ]).then(([snapNotes, snapGest, snapUser])=>{
+        _db.ref('users').orderByChild('username').equalTo(username).once('value'),
+        _db.ref('evt_hist/'+username).once('value')
+      ]).then(([snapNotes, snapGest, snapUser, snapEvt])=>{
         const notas = Object.values(snapNotes.val()||{});
         const gestiones = snapGest.val()||{};
         const userInfo = Object.values(snapUser.val()||{})[0]||{};
         const nombreAsesor = userInfo.asesor || username;
         const tiendaAsesor = userInfo.tienda || '—';
+        const eventos = Object.values(snapEvt.val()||{});
 
-        // Buscar en notas (tienen guia, nombre, texto)
-        notas.forEach(n=>{
-          if(!n.guia && !n.nombre) return;
-          const matchGuia = n.guia && _bordNorm(n.guia).includes(qN);
-          const matchNombre = n.nombre && _bordNorm(n.nombre).includes(qN);
-          const matchTel = esNumero && n.texto && _bordNorm(n.texto).includes(qN.replace(/\D/g,''));
-          if(matchGuia || matchNombre || matchTel){
-            const key = n.guia || n.dropiId || n.pedidoId;
-            if(!resultadosPorGuia[key]) resultadosPorGuia[key]={guia:n.guia,nombre:n.nombre,asesores:{}};
-            if(!resultadosPorGuia[key].asesores[username]) resultadosPorGuia[key].asesores[username]={nombreAsesor,tiendaAsesor,notas:[],gestion:null,events:[]};
-            resultadosPorGuia[key].asesores[username].notas.push(n);
-          }
+        function _registrarEnMapa(guia, nombre, cb){
+          if(!guia) return;
+          if(!resultadosPorGuia[guia]) resultadosPorGuia[guia]={guia,nombre:nombre||'',asesores:{}};
+          else if(nombre && !resultadosPorGuia[guia].nombre) resultadosPorGuia[guia].nombre=nombre;
+          if(!resultadosPorGuia[guia].asesores[username])
+            resultadosPorGuia[guia].asesores[username]={nombreAsesor,tiendaAsesor,notas:[],gestion:null,events:[]};
+          if(cb) cb(resultadosPorGuia[guia].asesores[username]);
+        }
+
+        // 1. Buscar en evt_hist (tiene guía para TODA acción: llamada, WA, finalizar, etc.)
+        eventos.forEach(ev=>{
+          if(!ev.guia) return;
+          const matchGuia   = _bordNorm(ev.guia).includes(qN);
+          const matchNombre = ev.nombre && _bordNorm(ev.nombre).includes(qN);
+          if(matchGuia || matchNombre)
+            _registrarEnMapa(ev.guia, ev.nombre||'', slot=>slot.events.push(ev));
         });
 
-        // Buscar en gestiones_sync por guía, nombre, teléfono o ID de orden
+        // 2. Buscar en notas (tienen guia + nombre del cliente)
+        notas.forEach(n=>{
+          const matchGuia   = n.guia   && _bordNorm(n.guia).includes(qN);
+          const matchNombre = n.nombre && _bordNorm(n.nombre).includes(qN);
+          if(matchGuia || matchNombre)
+            _registrarEnMapa(n.guia, n.nombre, slot=>slot.notas.push(n));
+        });
+
+        // 3. Buscar en gestiones_sync por guía, nombre, teléfono o ID de orden
         Object.entries(gestiones).forEach(([dropiKey, g])=>{
           const matchKey    = _bordNorm(dropiKey).includes(qN);
           const matchGuia   = g._guia   && _bordNorm(g._guia).includes(qN);
@@ -7950,10 +7964,7 @@ function _admBuscarOrden(){
           const matchTel    = esNumero  && g._tel && g._tel.replace(/\D/g,'').includes(qN.replace(/\D/g,''));
           if(matchKey || matchGuia || matchNombre || matchTel){
             const displayGuia = g._guia || dropiKey;
-            const displayNombre = g._nombre || '';
-            if(!resultadosPorGuia[displayGuia]) resultadosPorGuia[displayGuia]={guia:displayGuia,nombre:displayNombre,asesores:{}};
-            if(!resultadosPorGuia[displayGuia].asesores[username]) resultadosPorGuia[displayGuia].asesores[username]={nombreAsesor,tiendaAsesor,notas:[],gestion:null,events:[]};
-            resultadosPorGuia[displayGuia].asesores[username].gestion = g;
+            _registrarEnMapa(displayGuia, g._nombre||'', slot=>{ slot.gestion=g; });
           }
         });
       })
