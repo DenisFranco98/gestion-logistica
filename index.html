@@ -6539,10 +6539,13 @@ function _fbSyncGestion(id){
   delete g.mensajes_listos;
   g._ts=Date.now();
   // Guardar datos del pedido para que el admin pueda buscar por guía/nombre/teléfono
-  if(p.guia)   g._guia=p.guia;
-  if(p.nombre) g._nombre=p.nombre;
+  if(p.guia)    g._guia=p.guia;
+  if(p.nombre)  g._nombre=p.nombre;
   if(p.telefono) g._tel=p.telefono.replace(/^57/,'');
+  if(p.ciudad)  g._ciudad=p.ciudad;
   _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
+  // Registrar en evt_hist para que la veeduría pueda buscar por guía siempre
+  if(p.guia) _evtFbPush(p.guia,'gestion_sync');
   // Rastrear última actividad para monitoreo del admin
   const g0=gestiones[id]||{};
   let _actLabel='🔄 Gestionando pedido';
@@ -8192,15 +8195,19 @@ function _bordRenderDetalle(r){
 
 function _bordLabelEvento(tipo){
   const m={
+    'llamada_contestada':'📞 Llamada — Contestó',
+    'llamada_no_contestada':'📵 Llamada — No contestó',
     'llamada_contesto':'📞 Llamada — Contestó',
     'llamada_no_contesto':'📵 Llamada — No contestó',
     'wa_enviado':'📱 WhatsApp enviado',
     'gestion_final':'🏁 Gestión finalizada',
+    'finalizado':'🏁 Gestión finalizada',
     'devolucion':'↩️ Pedido para devolución',
     'nota_guardada':'📝 Nota guardada',
     'nueva_entrega':'🔄 Nueva entrega',
     'rechazado_gestionado':'✅ Rechazado gestionado',
     'guia_generada':'📋 Guía generada',
+    'gestion_sync':'⚡ Gestión registrada',
   };
   return m[tipo]||tipo||'Evento';
 }
