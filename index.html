@@ -4428,7 +4428,7 @@ function setNota(id, texto){
   }catch(e){}
   // Guardar también en Firebase
   if(typeof _db!=='undefined'&&window._currentUsername){
-    const pedido=pedidos.find(p=>String(p._id)===String(id));
+    const pedido=pedidos.find(p=>p.id===id);
     const noteData={texto,fecha:hoy,ts:Date.now(),guia:pedido&&pedido.guia||'',nombre:pedido&&pedido.nombre||'',pedidoId:id};
     _db.ref('notes/'+window._currentUsername+'/lastNote').set(noteData);
     _db.ref('notes/'+window._currentUsername+'/history').push(noteData);
