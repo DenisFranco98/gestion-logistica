@@ -8075,128 +8075,95 @@ window._bordVerDetalle = function(key){
   document.getElementById('bord-modal-title').textContent = '📦 '+r.guia;
   document.getElementById('bord-modal-sub').textContent = r.nombre ? '👤 '+r.nombre : 'Sin nombre registrado';
   const body = document.getElementById('bord-modal-body');
-  body.innerHTML = '<div class="adm-empty">Cargando detalle...</div>';
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;font-size:.8rem;">Cargando...</div>';
   modal.style.display = 'flex';
 
   const asesores = Object.entries(r.asesores);
-  // Para cada asesor: cargar eventos adicionales y gestión si aún no se tiene
-  Promise.all(asesores.map(([username, data])=>{
-    const promises = [];
-    // Cargar todos los eventos de esta guía (adicionales a los del search)
-    promises.push(
+  Promise.all(asesores.map(([username, data])=>
+    Promise.all([
+      // Eventos de esta guía exacta
       _db.ref('evt_hist/'+username).orderByChild('guia').equalTo(r.guia).once('value')
+        .then(snap=>{ const v=snap.val()||{}; data.events=[...Object.values(v),...(data.events||[])]; })
+        .catch(()=>{}),
+      // Gestiones del asesor para completar acciones
+      _db.ref('gestiones_sync/'+username).once('value')
         .then(snap=>{
-          const fbEvts = Object.values(snap.val()||{});
-          // Merge: agregar eventos que no estén ya en data.events
-          const existingTs = new Set((data.events||[]).map(e=>e.ts));
-          fbEvts.forEach(e=>{ if(!existingTs.has(e.ts)) data.events.push(e); });
-        }).catch(()=>{})
-    );
-    // Si no tiene gestión cargada, buscar en gestiones_sync por _guia
-    if(!data.gestion){
-      promises.push(
-        _db.ref('gestiones_sync/'+username).once('value')
-          .then(snap=>{
-            const todas = snap.val()||{};
-            const entrada = Object.values(todas).find(g=>g._guia===r.guia);
-            if(entrada) data.gestion = entrada;
-          }).catch(()=>{})
-      );
-    }
-    return Promise.all(promises);
-  })).then(()=>{
-    body.innerHTML = _bordRenderDetalle(r);
+          if(data.gestion) return;
+          const todas=snap.val()||{};
+          const g=Object.values(todas).find(x=>x._guia&&x._guia===r.guia);
+          if(g) data.gestion=g;
+        }).catch(()=>{}),
+      // Todas las notas de esta guía
+      _db.ref('notes/'+username+'/history').orderByChild('guia').equalTo(r.guia).once('value')
+        .then(snap=>{ const v=snap.val()||{}; Object.values(v).forEach(n=>{ if(!data.notas.some(x=>x.ts===n.ts)) data.notas.push(n); }); })
+        .catch(()=>{})
+    ])
+  )).then(()=>{
+    try{ body.innerHTML = _bordRenderDetalle(r); }
+    catch(e){ body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.78rem;">Error al mostrar detalle: '+e.message+'</div>'; }
+  }).catch(e=>{
+    body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.78rem;">Error al cargar datos: '+e.message+'</div>';
   });
 };
 
 function _bordRenderDetalle(r){
-  let html='';
-  const asesores = Object.entries(r.asesores);
+  // Construir línea de tiempo unificada de todas las acciones
+  const lineas=[];
 
-  asesores.forEach(([username, data])=>{
-    const g = data.gestion||{};
-    const color = _avatarColor(data.nombreAsesor);
-    const initials = _avatarInitials(data.nombreAsesor);
+  Object.entries(r.asesores).forEach(([username, data])=>{
+    const g=data.gestion||{};
+    const asesor=data.nombreAsesor||username;
+    const tienda=data.tiendaAsesor||'';
 
-    // Cabecera asesor
-    html+=
-      '<div style="margin-bottom:20px;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden;">'+
-      '<div style="background:#f8fafc;padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #e2e8f0;">'+
-        '<div style="width:32px;height:32px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;color:white;font-size:.72rem;font-weight:800;flex-shrink:0;">'+initials+'</div>'+
-        '<div>'+
-          '<div style="font-size:.85rem;font-weight:700;color:#1e293b;">'+data.nombreAsesor+'</div>'+
-          '<div style="font-size:.7rem;color:#64748b;">🏪 '+data.tiendaAsesor+' · @'+username+'</div>'+
-        '</div>'+
-      '</div>'+
-      '<div style="padding:14px 16px;">';
+    // Acciones del objeto gestión
+    const accionesGest=[
+      g.llamada==='contestó'      && {ts:g._ts,label:'📞 Llamada — Contestó',color:'#10b981'},
+      g.llamada==='no_contestó'   && {ts:g._ts,label:'📵 Llamada — No contestó',color:'#ef4444'},
+      g.wa_enviado                && {ts:g._ts,label:'📱 WhatsApp enviado',color:'#7c3aed'},
+      g.gestion_final             && {ts:g._ts,label:'🏁 Gestión finalizada',color:'#0891b2'},
+      g.devolucion                && {ts:g._ts,label:'↩️ Pedido para devolución',color:'#d97706'},
+      g.rechazado_gestionado      && {ts:g._ts,label:'✅ Rechazado gestionado',color:'#10b981'},
+      g.rechazado_sin_gestion     && {ts:g._ts,label:'🚫 Rechazado sin gestión',color:'#ef4444'},
+      g.nueva_entrega             && {ts:g._ts,label:'🔄 Nueva entrega solicitada',color:'#0891b2'},
+    ].filter(Boolean);
+    accionesGest.forEach(a=>lineas.push({ts:a.ts||0,asesor,tienda,tipo:'accion',label:a.label,color:a.color}));
 
-    // Acciones de gestión
-    const acciones=[];
-    if(g.llamada==='contestó') acciones.push({icon:'📞',label:'Llamada: <b>Contestó</b>',color:'#10b981'});
-    else if(g.llamada==='no_contestó') acciones.push({icon:'📵',label:'Llamada: <b>No contestó</b>',color:'#ef4444'});
-    if(g.wa_enviado) acciones.push({icon:'📱',label:'WhatsApp enviado',color:'#7c3aed'});
-    if(g.gestion_final) acciones.push({icon:'🏁',label:'Gestión finalizada',color:'#0891b2'});
-    if(g.devolucion) acciones.push({icon:'↩️',label:'Pedido para devolución',color:'#d97706'});
-    if(g.rechazado_gestionado) acciones.push({icon:'✅',label:'Rechazado gestionado',color:'#10b981'});
-    if(g.rechazado_sin_gestion) acciones.push({icon:'🚫',label:'Rechazado sin gestión',color:'#ef4444'});
-    if(g.nueva_entrega) acciones.push({icon:'🔄',label:'Nueva entrega solicitada',color:'#0891b2'});
-    if(g.guia_generada_hoy) acciones.push({icon:'📋',label:'Guía generada hoy',color:'#7c3aed'});
-    if(g.intentos>0) acciones.push({icon:'👆',label:'Intentos: '+g.intentos,color:'#94a3b8'});
-    if(g.llamada_fecha) acciones.push({icon:'📅',label:'Fecha llamada: '+g.llamada_fecha,color:'#64748b'});
-
-    if(acciones.length){
-      html+='<div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Acciones de gestión</div>';
-      html+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">';
-      acciones.forEach(a=>{
-        html+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:.7rem;font-weight:600;background:'+a.color+'18;color:'+a.color+';border:1px solid '+a.color+'33;">'+a.icon+' '+a.label+'</span>';
-      });
-      html+='</div>';
-    }
+    // Eventos de evt_hist
+    (data.events||[]).forEach(ev=>{
+      if(ev.tipo==='gestion_sync') return; // omitir el técnico
+      lineas.push({ts:ev.ts||0,asesor,tienda,tipo:'evento',label:_bordLabelEvento(ev.tipo),color:'#475569'});
+    });
 
     // Notas
-    const notas=[...(data.notas||[]),...(Array.isArray(g.notas)?g.notas:[])];
-    // deduplicar por texto+fecha
-    const notasUnicas=[];
-    const seen=new Set();
-    notas.forEach(n=>{ const k=(n.texto||n.text||'')+'|'+(n.fecha||''); if(!seen.has(k)){seen.add(k);notasUnicas.push(n);} });
-    notasUnicas.sort((a,b)=>(b.ts||0)-(a.ts||0));
-
-    if(notasUnicas.length){
-      html+='<div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Notas ('+notasUnicas.length+')</div>';
-      notasUnicas.forEach(n=>{
-        const texto=n.texto||n.text||'';
-        const fecha=n.ts?_bordFmtTs(n.ts):(n.fecha||'');
-        html+=
-          '<div style="background:#f0fdf4;border-left:3px solid #10b981;border-radius:0 7px 7px 0;padding:8px 12px;margin-bottom:6px;">'+
-            '<div style="font-size:.79rem;color:#1e293b;">'+texto+'</div>'+
-            '<div style="font-size:.65rem;color:#64748b;margin-top:3px;">'+fecha+'</div>'+
-          '</div>';
-      });
-    }
-
-    // Eventos (historial de acciones con timestamp)
-    const evts=[...(data.events||[])].sort((a,b)=>(b.ts||0)-(a.ts||0));
-    if(evts.length){
-      html+='<div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px;">Historial de eventos</div>';
-      html+='<div style="display:flex;flex-direction:column;gap:4px;">';
-      evts.forEach(ev=>{
-        html+=
-          '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#f8fafc;border-radius:6px;">'+
-            '<span style="font-size:.72rem;color:#475569;flex:1;">'+_bordLabelEvento(ev.tipo)+'</span>'+
-            '<span style="font-size:.65rem;color:#94a3b8;white-space:nowrap;">'+_bordFmtTs(ev.ts)+'</span>'+
-          '</div>';
-      });
-      html+='</div>';
-    }
-
-    if(!acciones.length && !notasUnicas.length && !evts.length){
-      html+='<div style="font-size:.77rem;color:#94a3b8;">Sin detalle de gestión registrado</div>';
-    }
-
-    html+='</div></div>';
+    const notasSeen=new Set();
+    const todasNotas=[...(data.notas||[]),...(Array.isArray(g.notas)?g.notas:[])];
+    todasNotas.forEach(n=>{
+      const k=(n.texto||'')+'|'+(n.ts||'');
+      if(notasSeen.has(k))return; notasSeen.add(k);
+      lineas.push({ts:n.ts||0,asesor,tienda,tipo:'nota',label:n.texto||n.text||'(sin texto)',color:'#10b981'});
+    });
   });
 
-  if(!html) html='<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">Sin historial de gestión registrado para esta orden</div>';
+  if(!lineas.length){
+    return '<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">⚠️ Sin historial de gestión registrado para esta orden</div>';
+  }
+
+  // Ordenar por fecha descendente (más reciente primero)
+  lineas.sort((a,b)=>b.ts-a.ts);
+
+  let html='<div style="display:flex;flex-direction:column;gap:6px;">';
+  lineas.forEach(l=>{
+    const icono=l.tipo==='nota'?'📝':l.tipo==='accion'?'⚡':'🔔';
+    html+=
+      '<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid '+l.color+';">'+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="font-size:.79rem;font-weight:600;color:#1e293b;">'+icono+' '+l.label+'</div>'+
+          '<div style="font-size:.67rem;color:#64748b;margin-top:2px;">'+l.asesor+(l.tienda?' · 🏪 '+l.tienda:'')+'</div>'+
+        '</div>'+
+        '<div style="font-size:.65rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;">'+_bordFmtTs(l.ts)+'</div>'+
+      '</div>';
+  });
+  html+='</div>';
   return html;
 }
 
