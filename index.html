@@ -8083,8 +8083,7 @@ function _bordMostrarResultados(mapa, q, debug){
     const totalNotas=Object.values(r.asesores).reduce((s,a)=>s+(a.notas||[]).length,0);
     const fueGest=Object.values(r.asesores).some(a=>{const g=a.gestion||{};return g.gestion_final||g.llamada||g.wa_enviado;});
     html+=
-      '<div onclick="_bordVerDetalle(\''+key.replace(/'/g,"\\'")+'\')" style="background:white;border-radius:10px;border:1.5px solid #e2e8f0;padding:14px 16px;cursor:pointer;transition:all .15s;" '+
-        'onmouseover="this.style.borderColor=\'#334155\'" onmouseout="this.style.borderColor=\'#e2e8f0\'">'+
+      '<div data-bord-key="'+key.replace(/"/g,'&quot;')+'" class="bord-result-card" style="background:white;border-radius:10px;border:1.5px solid #e2e8f0;padding:14px 16px;cursor:pointer;transition:all .15s;">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
           '<div style="min-width:0;">'+
             '<div style="font-size:.85rem;font-weight:700;color:#1e293b;font-family:monospace;">'+r.guia+'</div>'+
@@ -8108,6 +8107,13 @@ function _bordMostrarResultados(mapa, q, debug){
   html+='</div>';
   el.innerHTML=html;
   window._bordResultadosMapa = mapa;
+  // Event delegation para clicks en resultados
+  el.querySelectorAll('.bord-result-card').forEach(function(card){
+    card.addEventListener('click', function(){
+      var k=this.getAttribute('data-bord-key');
+      if(k) window._bordVerDetalle(k);
+    });
+  });
 }
 
 window._bordVerDetalle = function(key){
