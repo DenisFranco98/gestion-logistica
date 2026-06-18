@@ -8111,16 +8111,18 @@ function _bordMostrarResultados(mapa, q, debug){
 }
 
 window._bordVerDetalle = function(key){
-  const mapa = window._bordResultadosMapa||{};
-  const r = mapa[key];
-  if(!r) return;
-  const modal = document.getElementById('bord-modal');
-  document.getElementById('bord-modal-title').textContent = '📦 '+r.guia;
-  document.getElementById('bord-modal-sub').textContent = r.nombre ? '👤 '+r.nombre : 'Sin nombre registrado';
-  const body = document.getElementById('bord-modal-body');
-  try{ body.innerHTML = _bordRenderDetalle(r); }
-  catch(e){ body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.78rem;">Error al mostrar detalle: '+e.message+'</div>'; }
-  modal.style.display = 'flex';
+  try{
+    const mapa = window._bordResultadosMapa||{};
+    const r = mapa[key];
+    if(!r){alert('No se encontró la orden: '+key);return;}
+    const modal = document.getElementById('bord-modal');
+    const body = document.getElementById('bord-modal-body');
+    document.getElementById('bord-modal-title').textContent = '📦 '+(r.guia||key);
+    document.getElementById('bord-modal-sub').textContent = r.nombre ? '👤 '+r.nombre : 'Sin nombre registrado';
+    modal.style.display = 'flex';
+    try{ body.innerHTML = _bordRenderDetalle(r); }
+    catch(e2){ body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.82rem;">❌ Error al renderizar: '+e2.message+'<br><pre style="margin-top:8px;font-size:.7rem;color:#94a3b8;white-space:pre-wrap;">'+e2.stack+'</pre></div>'; }
+  }catch(e){alert('Error abriendo detalle: '+e.message);}
 };
 
 function _bordRenderDetalle(r){
