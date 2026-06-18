@@ -2427,7 +2427,10 @@ function histCargar(){try{return JSON.parse(localStorage.getItem(LS_HIST))||{};}
 function histGuardar(h){try{localStorage.setItem(LS_HIST,JSON.stringify(h));}catch(e){}}
 function _evtFbPush(guia,tipo){
   if(typeof _db==='undefined'||!window._currentUsername||!guia)return;
-  _db.ref('evt_hist/'+window._currentUsername).push({tipo,guia,ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')});
+  const p=pedidos.find(x=>x.guia===guia);
+  if(p&&p.dropiId){
+    _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)+'/eventos').push({tipo,ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')});
+  }
 }
 function histRegistrar(guia){
   if(!guia)return;
@@ -2638,20 +2641,16 @@ let _fbHistGuias = {}; // {guia: {notas:[], eventos:[]}}
 
 function _fbCargarHistorialPropio(cb){
   if(!window._currentUsername||typeof _db==='undefined'){if(cb)cb();return;}
-  Promise.all([
-    _db.ref('notes/'+window._currentUsername+'/history').once('value'),
-    _db.ref('evt_hist/'+window._currentUsername).once('value')
-  ]).then(([snapN,snapE])=>{
+  _db.ref('gestiones_sync/'+window._currentUsername).once('value').then(snap=>{
     _fbHistGuias={};
-    Object.values(snapN.val()||{}).forEach(n=>{
-      if(!n.guia)return;
-      if(!_fbHistGuias[n.guia])_fbHistGuias[n.guia]={notas:[],eventos:[]};
-      _fbHistGuias[n.guia].notas.push(n);
-    });
-    Object.values(snapE.val()||{}).forEach(e=>{
-      if(!e.guia||e.tipo==='gestion_sync')return;
-      if(!_fbHistGuias[e.guia])_fbHistGuias[e.guia]={notas:[],eventos:[]};
-      _fbHistGuias[e.guia].eventos.push(e);
+    const data=snap.val()||{};
+    Object.values(data).forEach(g=>{
+      const guia=g._guia;
+      if(!guia)return;
+      if(!_fbHistGuias[guia])_fbHistGuias[guia]={notas:[],eventos:[]};
+      if(g.notas&&Array.isArray(g.notas)) g.notas.forEach(n=>_fbHistGuias[guia].notas.push(n));
+      const evts=g.eventos?Object.values(g.eventos):[];
+      evts.forEach(e=>{if(e.tipo)_fbHistGuias[guia].eventos.push(e);});
     });
     if(cb)cb();
   }).catch(()=>{if(cb)cb();});
@@ -2752,9 +2751,7 @@ function _cargarArchivo(file){
       }catch(e){}
     }
     pedidos=nuevosPedidos;
-    // Limpiar gestiones_sync en Firebase al cargar nuevo archivo (historial_diario se conserva)
     if(typeof _db!=='undefined'&&window._currentUsername){
-      _db.ref('gestiones_sync/'+window._currentUsername).remove();
       _db.ref('presence/'+window._currentUsername).update({totalPedidos:pedidos.length});
     }
     // Reasignar gestiones al nuevo id interno usando dropiId como puente
@@ -4365,18 +4362,18 @@ function abrirHistorial(id){
     _renderHistorial(Object.values(mn).sort((a,b)=>(b.ts||0)-(a.ts||0)),evtLocal.sort((a,b)=>(b.ts||0)-(a.ts||0)));
     return;
   }
-  // Fetch desde Firebase
-  Promise.all([
-    _db.ref('notes/'+window._currentUsername+'/history').orderByChild('guia').equalTo(guia).once('value'),
-    _db.ref('evt_hist/'+window._currentUsername).orderByChild('guia').equalTo(guia).once('value')
-  ]).then(([snapN,snapE])=>{
-    const notasFb=[];snapN.forEach(c=>{const v=c.val();if(v)notasFb.push(v);});
-    const evtFb=[];snapE.forEach(c=>{const v=c.val();if(v)evtFb.push(v);});
-    // Deduplicar notas
+  // Fetch desde gestiones_sync (fuente única)
+  _db.ref('gestiones_sync/'+window._currentUsername).once('value').then(snap=>{
+    const data=snap.val()||{};
+    const notasFb=[];const evtFb=[];
+    Object.values(data).forEach(g=>{
+      if(g._guia!==guia)return;
+      if(g.notas&&Array.isArray(g.notas)) g.notas.forEach(n=>notasFb.push(n));
+      if(g.eventos) Object.values(g.eventos).forEach(e=>evtFb.push(e));
+    });
     const mn={};
     [...notasLocal,...notasFb].forEach(n=>{const k=(n.fecha||'')+'|'+(n.texto||'').trim();if(k!=='|')mn[k]=n;});
     const todasNotas=Object.values(mn).sort((a,b)=>(b.ts||0)-(a.ts||0));
-    // Deduplicar eventos
     const me={};
     [...evtLocal,...evtFb].forEach(ev=>{const k=(ev.tipo||'')+'|'+(ev.fecha||'')+'|'+(ev.ts||'');me[k]=ev;});
     const todosEvt=Object.values(me).sort((a,b)=>(b.ts||0)-(a.ts||0));
@@ -4469,13 +4466,7 @@ function setNota(id, texto){
       localStorage.setItem(LS_NOTES,JSON.stringify(_lsN));
     }
   }catch(e){}
-  // Guardar también en Firebase
-  if(typeof _db!=='undefined'&&window._currentUsername){
-    const pedido=pedidos.find(p=>p.id===id);
-    const noteData={texto,fecha:hoy,ts:Date.now(),guia:pedido&&pedido.guia||'',nombre:pedido&&pedido.nombre||'',pedidoId:id};
-    _db.ref('notes/'+window._currentUsername+'/lastNote').set(noteData);
-    _db.ref('notes/'+window._currentUsername+'/history').push(noteData);
-  }
+  // Las notas se sincronizan a Firebase via _fbSyncGestion (gestiones_sync)
   // Si es oficina y ya tiene llamada, refrescar la card entera en su lugar
   const _pNota=pedidos.find(p=>p.id===id);
   if(_pNota&&_pNota.estadoKey==='oficina'){
@@ -6588,7 +6579,7 @@ function _fbSyncGestion(id){
   if(p.nombre)  g._nombre=p.nombre;
   if(p.telefono) g._tel=p.telefono.replace(/^57/,'');
   if(p.ciudad)  g._ciudad=p.ciudad;
-  _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
+  _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).update(g);
   // Rastrear última actividad para monitoreo del admin
   const g0=gestiones[id]||{};
   let _actLabel='🔄 Gestionando pedido';
@@ -6675,32 +6666,25 @@ function _fbRestaurarGestiones(cb){
   });
 }
 
-// Guarda el estado de un rechazado en un nodo permanente (no se borra al cargar nuevo Excel)
-function _fbGuardarRechazado(id){
-  if(typeof _db==='undefined'||!window._currentUsername)return;
-  const p=pedidos.find(x=>x.id===id);
-  if(!p||!p.guia)return;
-  const g=gestiones[id]||{};
-  const estado=g.rechazado_gestionado?'gestionado':g.rechazado_sin_gestion?'sin_gestion':null;
-  if(!estado)return;
-  _db.ref('rechazados_hist/'+window._currentUsername+'/'+_fbKey(p.guia)).set({
-    estado,
-    nombre: p.nombre||'',
-    guia: p.guia,
-    ts: Date.now()
-  });
-}
+// Rechazados se guardan directamente en gestiones_sync via _fbSyncGestion
+function _fbGuardarRechazado(id){ _fbSyncGestion(id); }
 
-// Al cargar nuevo Excel: marcar automáticamente rechazados ya registrados en Firebase
+// Al cargar nuevo Excel: marcar automáticamente rechazados ya registrados en gestiones_sync
 function _fbRestaurarRechazados(cb){
   if(typeof _db==='undefined'||!window._currentUsername){if(cb)cb();return;}
-  _db.ref('rechazados_hist/'+window._currentUsername).once('value', snap=>{
-    const hist=snap.val()||{};
-    if(!Object.keys(hist).length){if(cb)cb();return;}
+  _db.ref('gestiones_sync/'+window._currentUsername).once('value', snap=>{
+    const data=snap.val()||{};
+    const rechPorGuia={};
+    Object.values(data).forEach(g=>{
+      if(!g._guia)return;
+      if(g.rechazado_gestionado) rechPorGuia[g._guia]={estado:'gestionado'};
+      else if(g.rechazado_sin_gestion) rechPorGuia[g._guia]={estado:'sin_gestion'};
+    });
+    if(!Object.keys(rechPorGuia).length){if(cb)cb();return;}
     let changed=false;
     pedidos.forEach(p=>{
       if(p.estadoKey!=='rechazado'||!p.guia)return;
-      const rec=hist[_fbKey(p.guia)];
+      const rec=rechPorGuia[p.guia];
       if(!rec)return;
       if(!gestiones[p.id])gestiones[p.id]={};
       if(rec.estado==='gestionado'&&!gestiones[p.id].rechazado_gestionado){
@@ -7990,29 +7974,16 @@ function _malActualizarTiempos(){
 // ===== HISTORIAL CLIENTE DESDE CARD =====
 function _verHistorialCliente(guia){
   const fh=_fbHistGuias[guia]||{notas:[],eventos:[]};
+  const p=pedidos.find(x=>x.guia===guia);
+  const r={guia:guia,nombre:p?p.nombre:'',asesores:{}};
+  const user=window._currentUsername||'yo';
+  r.asesores[user]={nombreAsesor:user,tiendaAsesor:'',notas:fh.notas||[],gestion:p?{_nombre:p.nombre,_tel:p.telefono,_ciudad:p.ciudad,_guia:guia}:{_guia:guia},events:fh.eventos||[]};
   const modal=document.getElementById('bord-modal');
-  document.getElementById('bord-modal-title').textContent='📋 Historial: '+guia;
+  document.getElementById('bord-modal-title').textContent='📋 Historial: '+(p?p.nombre:guia);
   document.getElementById('bord-modal-sub').textContent='Trayectoria completa de este cliente';
   const body=document.getElementById('bord-modal-body');
-
-  const lineas=[];
-  fh.notas.forEach(n=>lineas.push({ts:n.ts||0,tipo:'nota',label:n.texto||'(sin texto)',color:'#10b981'}));
-  fh.eventos.forEach(e=>lineas.push({ts:e.ts||0,tipo:'evento',label:_bordLabelEvento(e.tipo),color:'#475569'}));
-  lineas.sort((a,b)=>b.ts-a.ts);
-
-  if(!lineas.length){
-    body.innerHTML='<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">Sin historial registrado para esta guía</div>';
-  }else{
-    body.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;">'+
-      lineas.map(l=>{
-        const ico=l.tipo==='nota'?'📝':'🔔';
-        return '<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid '+l.color+';">'+
-          '<div style="flex:1;min-width:0;font-size:.79rem;font-weight:600;color:#1e293b;">'+ico+' '+l.label+'</div>'+
-          '<div style="font-size:.65rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;">'+_bordFmtTs(l.ts)+'</div>'+
-        '</div>';
-      }).join('')+
-    '</div>';
-  }
+  try{ body.innerHTML=_bordRenderDetalle(r); }
+  catch(e){ body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.78rem;">Error: '+e.message+'</div>'; }
   modal.style.display='flex';
 }
 
@@ -8035,23 +8006,19 @@ function _admBuscarOrden(){
     const usernames = Object.keys(snapEA.val()||{});
     if(!usernames.length){ document.getElementById('bord-results').innerHTML='<div class="adm-empty">Esta empresa no tiene asesores</div>'; return; }
 
-    // Buscar en notes/history, gestiones_sync y evt_hist de cada asesor en paralelo
+    // Buscar en gestiones_sync de cada asesor en paralelo
     const resultadosPorGuia = {};
-    const _debug = {asesores: usernames.length, evts:0, gests:0, notas:0};
+    const _debug = {asesores: usernames.length, gests:0};
 
     Promise.all(usernames.map(username=>
       Promise.all([
-        _db.ref('notes/'+username+'/history').once('value'),
         _db.ref('gestiones_sync/'+username).once('value'),
-        _db.ref('users').orderByChild('username').equalTo(username).once('value'),
-        _db.ref('evt_hist/'+username).once('value')
-      ]).then(([snapNotes, snapGest, snapUser, snapEvt])=>{
-        const notas = Object.values(snapNotes.val()||{});
+        _db.ref('users').orderByChild('username').equalTo(username).once('value')
+      ]).then(([snapGest, snapUser])=>{
         const gestiones = snapGest.val()||{};
         const userInfo = Object.values(snapUser.val()||{})[0]||{};
         const nombreAsesor = userInfo.asesor || username;
         const tiendaAsesor = userInfo.tienda || '—';
-        const eventos = Object.values(snapEvt.val()||{});
 
         function _registrarEnMapa(guia, nombre, cb){
           if(!guia) return;
@@ -8062,35 +8029,20 @@ function _admBuscarOrden(){
           if(cb) cb(resultadosPorGuia[guia].asesores[username]);
         }
 
-        // 1. Buscar en evt_hist (tiene guía para TODA acción)
-        _debug.evts += eventos.length;
-        eventos.forEach(ev=>{
-          if(!ev.guia) return;
-          const matchGuia   = _bordNorm(ev.guia).includes(qN);
-          const matchNombre = ev.nombre && _bordNorm(ev.nombre).includes(qN);
-          if(matchGuia || matchNombre)
-            _registrarEnMapa(ev.guia, ev.nombre||'', slot=>slot.events.push(ev));
-        });
-
-        // 2. Buscar en notas (tienen guia + nombre del cliente)
-        _debug.notas += notas.length;
-        notas.forEach(n=>{
-          const matchGuia   = n.guia   && _bordNorm(n.guia).includes(qN);
-          const matchNombre = n.nombre && _bordNorm(n.nombre).includes(qN);
-          if(matchGuia || matchNombre)
-            _registrarEnMapa(n.guia, n.nombre, slot=>slot.notas.push(n));
-        });
-
-        // 3. Buscar en gestiones_sync por guía, nombre, teléfono o ID de orden
         _debug.gests += Object.keys(gestiones).length;
         Object.entries(gestiones).forEach(([dropiKey, g])=>{
           const matchKey    = _bordNorm(dropiKey).includes(qN);
           const matchGuia   = g._guia   && _bordNorm(g._guia).includes(qN);
           const matchNombre = g._nombre && _bordNorm(g._nombre).includes(qN);
           const matchTel    = esNumero  && g._tel && g._tel.replace(/\D/g,'').includes(qN.replace(/\D/g,''));
-          if(matchKey || matchGuia || matchNombre || matchTel){
+          const matchCiudad = g._ciudad && _bordNorm(g._ciudad).includes(qN);
+          if(matchKey || matchGuia || matchNombre || matchTel || matchCiudad){
             const displayGuia = g._guia || dropiKey;
-            _registrarEnMapa(displayGuia, g._nombre||'', slot=>{ slot.gestion=g; });
+            _registrarEnMapa(displayGuia, g._nombre||'', slot=>{
+              slot.gestion=g;
+              if(g.notas&&Array.isArray(g.notas)) g.notas.forEach(n=>slot.notas.push(n));
+              if(g.eventos) Object.values(g.eventos).forEach(e=>slot.events.push(e));
+            });
           }
         });
       })
@@ -8106,7 +8058,7 @@ function _bordMostrarResultados(mapa, q, debug){
   const keys = Object.keys(mapa);
   const el = document.getElementById('bord-results');
   const debugTxt = debug
-    ? '<div style="font-size:.65rem;color:#94a3b8;margin-top:6px;">🔎 Revisé '+debug.asesores+' asesor(es) · '+debug.evts+' eventos · '+debug.gests+' gestiones · '+debug.notas+' notas</div>'
+    ? '<div style="font-size:.65rem;color:#94a3b8;margin-top:6px;">🔎 Revisé '+debug.asesores+' asesor(es) · '+debug.gests+' gestiones</div>'
     : '';
   if(!keys.length){
     el.innerHTML='<div class="adm-empty">Sin historial para "'+q+'"<br><span style="font-size:.72rem;color:#94a3b8">Esta orden no tiene gestiones registradas en el sistema</span>'+debugTxt+'</div>';
@@ -8118,20 +8070,39 @@ function _bordMostrarResultados(mapa, q, debug){
     const r=mapa[key];
     const asesoresCount=Object.keys(r.asesores).length;
     const nombres=Object.values(r.asesores).map(a=>a.nombreAsesor).join(', ');
+    const primerG=Object.values(r.asesores).map(a=>a.gestion).find(g=>g)||{};
+    const ciudad=primerG._ciudad||'';
+    const tel=primerG._tel||'';
+    const totalEvts=Object.values(r.asesores).reduce((s,a)=>{
+      let c=0;
+      if(a.gestion){
+        if(a.gestion.llamada)c++;if(a.gestion.wa_enviado)c++;if(a.gestion.gestion_final)c++;
+      }
+      return s+c+(a.events||[]).length;
+    },0);
+    const totalNotas=Object.values(r.asesores).reduce((s,a)=>s+(a.notas||[]).length,0);
+    const fueGest=Object.values(r.asesores).some(a=>{const g=a.gestion||{};return g.gestion_final||g.llamada||g.wa_enviado;});
     html+=
       '<div onclick="_bordVerDetalle(\''+key.replace(/'/g,"\\'")+'\')" style="background:white;border-radius:10px;border:1.5px solid #e2e8f0;padding:14px 16px;cursor:pointer;transition:all .15s;" '+
         'onmouseover="this.style.borderColor=\'#334155\'" onmouseout="this.style.borderColor=\'#e2e8f0\'">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
-          '<div>'+
+          '<div style="min-width:0;">'+
             '<div style="font-size:.85rem;font-weight:700;color:#1e293b;font-family:monospace;">'+r.guia+'</div>'+
             (r.nombre?'<div style="font-size:.78rem;color:#475569;margin-top:2px;">👤 '+r.nombre+'</div>':'')+
+            '<div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:.7rem;color:#94a3b8;">'+
+              (ciudad?'<span>📍 '+ciudad+'</span>':'')+
+              (tel?'<span>📞 '+tel+'</span>':'')+
+              '<span>👥 '+nombres+'</span>'+
+            '</div>'+
           '</div>'+
           '<div style="text-align:right;flex-shrink:0;">'+
-            '<div style="font-size:.72rem;color:#64748b;">'+asesoresCount+' asesor'+(asesoresCount>1?'es':'')+'</div>'+
-            '<div style="font-size:.68rem;color:#94a3b8;margin-top:2px;">'+nombres+'</div>'+
+            '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;font-size:.68rem;font-weight:700;'+
+              (fueGest?'background:#d1fae5;color:#065f46;':'background:#fef3c7;color:#92400e;')+'">'+
+              (fueGest?'✅ Gestionado':'⏳ Pendiente')+'</div>'+
+            '<div style="font-size:.65rem;color:#94a3b8;margin-top:4px;">⚡'+totalEvts+' · 📝'+totalNotas+'</div>'+
           '</div>'+
         '</div>'+
-        '<div style="margin-top:8px;font-size:.68rem;color:#94a3b8;">Ver historial completo →</div>'+
+        '<div style="margin-top:6px;font-size:.68rem;color:#6366f1;font-weight:600;">Ver trayectoria completa →</div>'+
       '</div>';
   });
   html+='</div>';
@@ -8147,47 +8118,25 @@ window._bordVerDetalle = function(key){
   document.getElementById('bord-modal-title').textContent = '📦 '+r.guia;
   document.getElementById('bord-modal-sub').textContent = r.nombre ? '👤 '+r.nombre : 'Sin nombre registrado';
   const body = document.getElementById('bord-modal-body');
-  body.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;font-size:.8rem;">Cargando...</div>';
+  try{ body.innerHTML = _bordRenderDetalle(r); }
+  catch(e){ body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.78rem;">Error al mostrar detalle: '+e.message+'</div>'; }
   modal.style.display = 'flex';
-
-  const asesores = Object.entries(r.asesores);
-  Promise.all(asesores.map(([username, data])=>
-    Promise.all([
-      // Eventos de esta guía exacta
-      _db.ref('evt_hist/'+username).orderByChild('guia').equalTo(r.guia).once('value')
-        .then(snap=>{ const v=snap.val()||{}; data.events=[...Object.values(v),...(data.events||[])]; })
-        .catch(()=>{}),
-      // Gestiones del asesor para completar acciones
-      _db.ref('gestiones_sync/'+username).once('value')
-        .then(snap=>{
-          if(data.gestion) return;
-          const todas=snap.val()||{};
-          const g=Object.values(todas).find(x=>x._guia&&x._guia===r.guia);
-          if(g) data.gestion=g;
-        }).catch(()=>{}),
-      // Todas las notas de esta guía
-      _db.ref('notes/'+username+'/history').orderByChild('guia').equalTo(r.guia).once('value')
-        .then(snap=>{ const v=snap.val()||{}; Object.values(v).forEach(n=>{ if(!data.notas.some(x=>x.ts===n.ts)) data.notas.push(n); }); })
-        .catch(()=>{})
-    ])
-  )).then(()=>{
-    try{ body.innerHTML = _bordRenderDetalle(r); }
-    catch(e){ body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.78rem;">Error al mostrar detalle: '+e.message+'</div>'; }
-  }).catch(e=>{
-    body.innerHTML='<div style="color:#ef4444;padding:16px;font-size:.78rem;">Error al cargar datos: '+e.message+'</div>';
-  });
 };
 
 function _bordRenderDetalle(r){
-  // Construir línea de tiempo unificada de todas las acciones
   const lineas=[];
+  let clienteInfo={};
 
   Object.entries(r.asesores).forEach(([username, data])=>{
     const g=data.gestion||{};
     const asesor=data.nombreAsesor||username;
     const tienda=data.tiendaAsesor||'';
 
-    // Acciones del objeto gestión
+    if(g._nombre&&!clienteInfo.nombre) clienteInfo.nombre=g._nombre;
+    if(g._tel&&!clienteInfo.tel) clienteInfo.tel=g._tel;
+    if(g._ciudad&&!clienteInfo.ciudad) clienteInfo.ciudad=g._ciudad;
+    if(g._guia&&!clienteInfo.guia) clienteInfo.guia=g._guia;
+
     const accionesGest=[
       g.llamada==='contestó'      && {ts:g._ts,label:'📞 Llamada — Contestó',color:'#10b981'},
       g.llamada==='no_contestó'   && {ts:g._ts,label:'📵 Llamada — No contestó',color:'#ef4444'},
@@ -8200,13 +8149,11 @@ function _bordRenderDetalle(r){
     ].filter(Boolean);
     accionesGest.forEach(a=>lineas.push({ts:a.ts||0,asesor,tienda,tipo:'accion',label:a.label,color:a.color}));
 
-    // Eventos de evt_hist
     (data.events||[]).forEach(ev=>{
-      if(ev.tipo==='gestion_sync') return; // omitir el técnico
+      if(ev.tipo==='gestion_sync') return;
       lineas.push({ts:ev.ts||0,asesor,tienda,tipo:'evento',label:_bordLabelEvento(ev.tipo),color:'#475569'});
     });
 
-    // Notas
     const notasSeen=new Set();
     const todasNotas=[...(data.notas||[]),...(Array.isArray(g.notas)?g.notas:[])];
     todasNotas.forEach(n=>{
@@ -8216,26 +8163,71 @@ function _bordRenderDetalle(r){
     });
   });
 
+  // Ficha del cliente
+  let html='';
+  const ci=clienteInfo;
+  const asesoresList=Object.values(r.asesores);
+  const totalGestiones=lineas.filter(l=>l.tipo!=='nota').length;
+  const totalNotas=lineas.filter(l=>l.tipo==='nota').length;
+  const fueGestionado=lineas.some(l=>l.label&&(l.label.includes('Finalizada')||l.label.includes('finalizada')||l.label.includes('Contestó')||l.label.includes('WhatsApp')));
+
+  html+='<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;">';
+  html+='<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px;">';
+  if(ci.nombre) html+='<div style="font-size:.88rem;font-weight:700;color:#1e293b;">👤 '+ci.nombre+'</div>';
+  html+='<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;'+(fueGestionado?'background:#d1fae5;color:#065f46;':'background:#fef3c7;color:#92400e;')+'">'+
+    (fueGestionado?'✅ Gestionado':'⏳ Sin gestión confirmada')+'</div>';
+  html+='</div>';
+  html+='<div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:.76rem;color:#475569;">';
+  if(ci.guia) html+='<div>📋 Guía: <strong style="font-family:monospace;">'+ci.guia+'</strong></div>';
+  if(ci.tel) html+='<div>📞 '+ci.tel+'</div>';
+  if(ci.ciudad) html+='<div>📍 '+ci.ciudad+'</div>';
+  html+='<div>👥 '+asesoresList.length+' asesor'+(asesoresList.length>1?'es':'')+': '+asesoresList.map(a=>a.nombreAsesor).join(', ')+'</div>';
+  html+='</div>';
+  html+='<div style="display:flex;gap:16px;margin-top:10px;font-size:.72rem;color:#64748b;">';
+  html+='<div>⚡ '+totalGestiones+' accion'+(totalGestiones!==1?'es':'')+'</div>';
+  html+='<div>📝 '+totalNotas+' nota'+(totalNotas!==1?'s':'')+'</div>';
+  html+='</div>';
+  html+='</div>';
+
   if(!lineas.length){
-    return '<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">⚠️ Sin historial de gestión registrado para esta orden</div>';
+    return html+'<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">⚠️ Sin historial de gestión registrado para esta orden</div>';
   }
 
-  // Ordenar por fecha descendente (más reciente primero)
-  lineas.sort((a,b)=>b.ts-a.ts);
-
-  let html='<div style="display:flex;flex-direction:column;gap:6px;">';
-  lineas.forEach(l=>{
-    const icono=l.tipo==='nota'?'📝':l.tipo==='accion'?'⚡':'🔔';
-    html+=
-      '<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid '+l.color+';">'+
-        '<div style="flex:1;min-width:0;">'+
-          '<div style="font-size:.79rem;font-weight:600;color:#1e293b;">'+icono+' '+l.label+'</div>'+
-          '<div style="font-size:.67rem;color:#64748b;margin-top:2px;">'+l.asesor+(l.tienda?' · 🏪 '+l.tienda:'')+'</div>'+
-        '</div>'+
-        '<div style="font-size:.65rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;">'+_bordFmtTs(l.ts)+'</div>'+
-      '</div>';
+  // Deduplicar por tipo+ts
+  const seen=new Set();
+  const lineasUnicas=lineas.filter(l=>{
+    const k=l.tipo+'|'+l.label+'|'+l.ts;
+    if(seen.has(k))return false; seen.add(k); return true;
   });
-  html+='</div>';
+  lineasUnicas.sort((a,b)=>b.ts-a.ts);
+
+  // Agrupar por fecha
+  const porFecha={};
+  lineasUnicas.forEach(l=>{
+    const fecha=l.ts?new Date(l.ts).toLocaleDateString('es-CO',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}):'Sin fecha';
+    if(!porFecha[fecha])porFecha[fecha]=[];
+    porFecha[fecha].push(l);
+  });
+
+  html+='<div style="font-size:.78rem;font-weight:700;color:#334155;margin-bottom:10px;">📅 Línea de tiempo</div>';
+  Object.entries(porFecha).forEach(([fecha,items])=>{
+    html+='<div style="margin-bottom:14px;">';
+    html+='<div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.3px;padding:4px 0 6px;border-bottom:1px solid #e2e8f0;margin-bottom:6px;">'+fecha+'</div>';
+    html+='<div style="display:flex;flex-direction:column;gap:4px;padding-left:8px;border-left:2px solid #e2e8f0;">';
+    items.forEach(l=>{
+      const icono=l.tipo==='nota'?'📝':l.tipo==='accion'?'⚡':'🔔';
+      const hora=l.ts?new Date(l.ts).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'';
+      html+=
+        '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;background:white;border-radius:8px;border-left:3px solid '+l.color+';">'+
+          '<div style="flex:1;min-width:0;">'+
+            '<div style="font-size:.78rem;'+(l.tipo==='nota'?'color:#374151;':'font-weight:600;color:#1e293b;')+'">'+icono+' '+l.label+'</div>'+
+            (l.asesor?'<div style="font-size:.65rem;color:#94a3b8;margin-top:1px;">'+l.asesor+(l.tienda?' · 🏪 '+l.tienda:'')+'</div>':'')+
+          '</div>'+
+          (hora?'<div style="font-size:.65rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;">'+hora+'</div>':'')+
+        '</div>';
+    });
+    html+='</div></div>';
+  });
   return html;
 }
 
