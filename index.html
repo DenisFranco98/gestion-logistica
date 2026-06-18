@@ -6002,10 +6002,12 @@ function _initLogin(){
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
     if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
     _heartbeatInterval = setInterval(()=>{ if(_currentUsername===username) ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
-    // Registrar inicio de sesión en historial
-    const _sesRef = _db.ref('session_hist/'+username).push({ start: Date.now(), tienda: tienda||'', asesor: asesor||'' });
-    window._currentSessionKey = _sesRef.key;
-    _sesRef.onDisconnect().update({ end: firebase.database.ServerValue.TIMESTAMP });
+    // Registrar inicio de sesión en historial (en try-catch para no afectar presencia)
+    try{
+      const _sesRef = _db.ref('session_hist/'+username).push({ start: Date.now(), tienda: tienda||'', asesor: asesor||'' });
+      window._currentSessionKey = _sesRef.key;
+      _sesRef.onDisconnect().update({ end: firebase.database.ServerValue.TIMESTAMP });
+    }catch(_){}
     // Marcar offline si el usuario cierra o recarga la pestaña sin hacer logout (solo registrar una vez)
     if(!window._beforeunloadPresencia){
       window._beforeunloadPresencia = true;
@@ -6544,8 +6546,6 @@ function _fbSyncGestion(id){
   if(p.telefono) g._tel=p.telefono.replace(/^57/,'');
   if(p.ciudad)  g._ciudad=p.ciudad;
   _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).set(g);
-  // Registrar en evt_hist para que la veeduría pueda buscar por guía siempre
-  if(p.guia) _evtFbPush(p.guia,'gestion_sync');
   // Rastrear última actividad para monitoreo del admin
   const g0=gestiones[id]||{};
   let _actLabel='🔄 Gestionando pedido';
