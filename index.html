@@ -8191,17 +8191,13 @@ function _bordRenderDetalle(r){
   if(ci.ciudad) html+='<div>📍 '+ci.ciudad+'</div>';
   html+='<div>👥 '+asesoresList.length+' asesor'+(asesoresList.length>1?'es':'')+': '+asesoresList.map(a=>a.nombreAsesor).join(', ')+'</div>';
   html+='</div>';
-  html+='<div style="display:flex;gap:16px;margin-top:10px;font-size:.72rem;color:#64748b;">';
-  html+='<div>⚡ '+totalGestiones+' accion'+(totalGestiones!==1?'es':'')+'</div>';
-  html+='<div>📝 '+totalNotas+' nota'+(totalNotas!==1?'s':'')+'</div>';
-  html+='</div>';
   html+='</div>';
 
   if(!lineas.length){
     return html+'<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">⚠️ Sin historial de gestión registrado para esta orden</div>';
   }
 
-  // Deduplicar por tipo+ts
+  // Deduplicar
   const seen=new Set();
   const lineasUnicas=lineas.filter(l=>{
     const k=l.tipo+'|'+l.label+'|'+l.ts;
@@ -8209,33 +8205,61 @@ function _bordRenderDetalle(r){
   });
   lineasUnicas.sort((a,b)=>b.ts-a.ts);
 
-  // Agrupar por fecha
-  const porFecha={};
-  lineasUnicas.forEach(l=>{
-    const fecha=l.ts?new Date(l.ts).toLocaleDateString('es-CO',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}):'Sin fecha';
-    if(!porFecha[fecha])porFecha[fecha]=[];
-    porFecha[fecha].push(l);
-  });
+  // Separar notas de acciones/eventos
+  const soloNotas=lineasUnicas.filter(l=>l.tipo==='nota');
+  const soloAcciones=lineasUnicas.filter(l=>l.tipo!=='nota');
 
-  html+='<div style="font-size:.78rem;font-weight:700;color:#334155;margin-bottom:10px;">📅 Línea de tiempo</div>';
-  Object.entries(porFecha).forEach(([fecha,items])=>{
-    html+='<div style="margin-bottom:14px;">';
-    html+='<div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.3px;padding:4px 0 6px;border-bottom:1px solid #e2e8f0;margin-bottom:6px;">'+fecha+'</div>';
-    html+='<div style="display:flex;flex-direction:column;gap:4px;padding-left:8px;border-left:2px solid #e2e8f0;">';
-    items.forEach(l=>{
-      const icono=l.tipo==='nota'?'📝':l.tipo==='accion'?'⚡':'🔔';
-      const hora=l.ts?new Date(l.ts).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'';
+  // ── SECCIÓN NOTAS DEL ASESOR ──
+  if(soloNotas.length){
+    html+='<div style="margin-bottom:16px;">';
+    html+='<div style="font-size:.78rem;font-weight:700;color:#334155;margin-bottom:8px;">📝 Notas del asesor ('+soloNotas.length+')</div>';
+    html+='<div style="display:flex;flex-direction:column;gap:6px;">';
+    soloNotas.forEach(n=>{
+      const fecha=n.ts?new Date(n.ts).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}):'';
+      const hora=n.ts?new Date(n.ts).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'';
       html+=
-        '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;background:white;border-radius:8px;border-left:3px solid '+l.color+';">'+
-          '<div style="flex:1;min-width:0;">'+
-            '<div style="font-size:.78rem;'+(l.tipo==='nota'?'color:#374151;':'font-weight:600;color:#1e293b;')+'">'+icono+' '+l.label+'</div>'+
-            (l.asesor?'<div style="font-size:.65rem;color:#94a3b8;margin-top:1px;">'+l.asesor+(l.tienda?' · 🏪 '+l.tienda:'')+'</div>':'')+
+        '<div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:10px 14px;">'+
+          '<div style="font-size:.82rem;color:#1e293b;line-height:1.5;white-space:pre-wrap;">'+n.label+'</div>'+
+          '<div style="display:flex;gap:12px;margin-top:6px;font-size:.66rem;color:#6b7280;">'+
+            (n.asesor?'<span>👤 '+n.asesor+'</span>':'')+
+            (n.tienda?'<span>🏪 '+n.tienda+'</span>':'')+
+            (fecha?'<span>📅 '+fecha+'</span>':'')+
+            (hora?'<span>🕐 '+hora+'</span>':'')+
           '</div>'+
-          (hora?'<div style="font-size:.65rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;">'+hora+'</div>':'')+
         '</div>';
     });
     html+='</div></div>';
-  });
+  }
+
+  // ── SECCIÓN LÍNEA DE TIEMPO (acciones y eventos) ──
+  if(soloAcciones.length){
+    const porFecha={};
+    soloAcciones.forEach(l=>{
+      const fecha=l.ts?new Date(l.ts).toLocaleDateString('es-CO',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}):'Sin fecha';
+      if(!porFecha[fecha])porFecha[fecha]=[];
+      porFecha[fecha].push(l);
+    });
+
+    html+='<div style="font-size:.78rem;font-weight:700;color:#334155;margin-bottom:10px;">⚡ Historial de gestiones ('+soloAcciones.length+')</div>';
+    Object.entries(porFecha).forEach(([fecha,items])=>{
+      html+='<div style="margin-bottom:14px;">';
+      html+='<div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.3px;padding:4px 0 6px;border-bottom:1px solid #e2e8f0;margin-bottom:6px;">'+fecha+'</div>';
+      html+='<div style="display:flex;flex-direction:column;gap:4px;padding-left:8px;border-left:2px solid #e2e8f0;">';
+      items.forEach(l=>{
+        const icono=l.tipo==='accion'?'⚡':'🔔';
+        const hora=l.ts?new Date(l.ts).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'';
+        html+=
+          '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 10px;background:white;border-radius:8px;border-left:3px solid '+l.color+';">'+
+            '<div style="flex:1;min-width:0;">'+
+              '<div style="font-size:.78rem;font-weight:600;color:#1e293b;">'+icono+' '+l.label+'</div>'+
+              (l.asesor?'<div style="font-size:.65rem;color:#94a3b8;margin-top:1px;">'+l.asesor+(l.tienda?' · 🏪 '+l.tienda:'')+'</div>':'')+
+            '</div>'+
+            (hora?'<div style="font-size:.65rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;">'+hora+'</div>':'')+
+          '</div>';
+      });
+      html+='</div></div>';
+    });
+  }
   return html;
 }
 
