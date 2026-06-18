@@ -2633,6 +2633,30 @@ function estaCompleta(p){
   return false;
 }
 
+// ── HISTORIAL FIREBASE POR GUÍA ────────────────────────────────────────
+let _fbHistGuias = {}; // {guia: {notas:[], eventos:[]}}
+
+function _fbCargarHistorialPropio(cb){
+  if(!window._currentUsername||typeof _db==='undefined'){if(cb)cb();return;}
+  Promise.all([
+    _db.ref('notes/'+window._currentUsername+'/history').once('value'),
+    _db.ref('evt_hist/'+window._currentUsername).once('value')
+  ]).then(([snapN,snapE])=>{
+    _fbHistGuias={};
+    Object.values(snapN.val()||{}).forEach(n=>{
+      if(!n.guia)return;
+      if(!_fbHistGuias[n.guia])_fbHistGuias[n.guia]={notas:[],eventos:[]};
+      _fbHistGuias[n.guia].notas.push(n);
+    });
+    Object.values(snapE.val()||{}).forEach(e=>{
+      if(!e.guia||e.tipo==='gestion_sync')return;
+      if(!_fbHistGuias[e.guia])_fbHistGuias[e.guia]={notas:[],eventos:[]};
+      _fbHistGuias[e.guia].eventos.push(e);
+    });
+    if(cb)cb();
+  }).catch(()=>{if(cb)cb();});
+}
+
 // ── STORAGE ────────────────────────────────────────────────────────────
 function guardar(){
   try{
@@ -2782,8 +2806,10 @@ function _cargarArchivo(file){
     setTimeout(mostrarBienvenida,300);
     _fbRestaurarGestiones(()=>{
       _fbRestaurarRechazados(()=>{
-        renderAll();
-        toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · 📝 '+recuperadas+' con historial de notas':''));
+        _fbCargarHistorialPropio(()=>{
+          renderAll();
+          toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · 📝 '+recuperadas+' con historial de notas':''));
+        });
       });
     });
   };
@@ -3436,6 +3462,23 @@ function crearCard(p,est,esGest){
       html+='<div style="font-size:.67rem;background:#f1f5f9;border-radius:6px;padding:4px 8px;margin-top:6px;color:#475569;display:flex;flex-wrap:wrap;gap:6px;">'+
         partes.map(p=>'<span>'+p+'</span>').join('<span style="opacity:.4">·</span>')+
       '</div>';
+    }
+  }
+
+  // Badge historial Firebase (sesiones anteriores)
+  if(p.guia&&!esGest){
+    const fh=_fbHistGuias[p.guia];
+    if(fh&&(fh.notas.length||fh.eventos.length)){
+      const tn=fh.notas.length, te=fh.eventos.length;
+      const ultima=tn>0?[...fh.notas].sort((a,b)=>(b.ts||0)-(a.ts||0))[0]:null;
+      const resumen=(tn>0?tn+' nota'+(tn>1?'s':''):'')+(tn>0&&te>0?' · ':'')+(te>0?te+' acción'+(te>1?'es':''):'');
+      html+=
+        '<div onclick="event.stopPropagation();_verHistorialCliente(\''+p.guia.replace(/'/g,"\\'")+'\')" '+
+        'style="font-size:.67rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 9px;margin-top:6px;color:#1d4ed8;cursor:pointer;display:flex;align-items:center;gap:6px;">'+
+          '<span>📋</span>'+
+          '<span style="flex:1;min-width:0;">'+resumen+(ultima?' — <em style="color:#475569">'+ultima.texto.slice(0,40)+(ultima.texto.length>40?'...':'')+'</em>':'')+'</span>'+
+          '<span style="opacity:.5;font-size:.6rem;flex-shrink:0;">ver historial →</span>'+
+        '</div>';
     }
   }
 
@@ -7942,6 +7985,35 @@ function _malActualizarTiempos(){
     acEl.style.display='none';
     saEl.style.display=isOnline?'block':'none';
   }
+}
+
+// ===== HISTORIAL CLIENTE DESDE CARD =====
+function _verHistorialCliente(guia){
+  const fh=_fbHistGuias[guia]||{notas:[],eventos:[]};
+  const modal=document.getElementById('bord-modal');
+  document.getElementById('bord-modal-title').textContent='📋 Historial: '+guia;
+  document.getElementById('bord-modal-sub').textContent='Trayectoria completa de este cliente';
+  const body=document.getElementById('bord-modal-body');
+
+  const lineas=[];
+  fh.notas.forEach(n=>lineas.push({ts:n.ts||0,tipo:'nota',label:n.texto||'(sin texto)',color:'#10b981'}));
+  fh.eventos.forEach(e=>lineas.push({ts:e.ts||0,tipo:'evento',label:_bordLabelEvento(e.tipo),color:'#475569'}));
+  lineas.sort((a,b)=>b.ts-a.ts);
+
+  if(!lineas.length){
+    body.innerHTML='<div style="text-align:center;padding:24px;color:#94a3b8;font-size:.82rem;">Sin historial registrado para esta guía</div>';
+  }else{
+    body.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;">'+
+      lineas.map(l=>{
+        const ico=l.tipo==='nota'?'📝':'🔔';
+        return '<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid '+l.color+';">'+
+          '<div style="flex:1;min-width:0;font-size:.79rem;font-weight:600;color:#1e293b;">'+ico+' '+l.label+'</div>'+
+          '<div style="font-size:.65rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;">'+_bordFmtTs(l.ts)+'</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
+  modal.style.display='flex';
 }
 
 // ===== VEEDURÍA: BUSCAR ORDEN =====
