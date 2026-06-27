@@ -4808,39 +4808,57 @@ function setCheck(id,campo,valor){ultimaGestion=Date.now();
 async function _novSyncSolucionadaGD(id, solucionada){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   const g=gestiones[id]||{};
-  if(!g.gdNovKey)return; // sin registro GD ligado
+  const p=pedidos.find(x=>x.id===id);
 
   const mes=new Date().toISOString().slice(0,7);
   const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
   const ak=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginAsesor?window.getLoginAsesor():'_');
   const novBasePath='novedades/'+tk+'/'+mes;
   const gdDiasPath='gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias';
+  const dia=new Date().getDate();
 
-  // Leer el registro GD para obtener el día
-  const novSnap=await _db.ref(novBasePath+'/'+g.gdNovKey).once('value');
+  // Si no hay registro GD aún, crearlo ahora
+  if(!g.gdNovKey && p && p.guia){
+    // Verificar si ya existe por guía
+    const existSnap=await _db.ref(novBasePath).orderByChild('guia').equalTo(p.guia).once('value');
+    if(existSnap.exists()){
+      const key=Object.keys(existSnap.val())[0];
+      gestiones[id].gdNovKey=key;
+      guardar();_fbSyncGestion(id);
+    } else {
+      const novData={guia:p.guia,fecha:p.fechaNovedad||new Date().toLocaleDateString('es-CO'),
+        asesor:window.getLoginAsesor?window.getLoginAsesor():'',
+        tipoNovedad:p.tipoNovedad||p.novedad||'',dia,ts:Date.now(),fromLogistica:true};
+      const newRef=await _db.ref(novBasePath).push(novData);
+      gestiones[id].gdNovKey=newRef.key;
+      guardar();_fbSyncGestion(id);
+    }
+  }
+  if(!gestiones[id]?.gdNovKey)return;
+  const gdNovKey=gestiones[id].gdNovKey;
+
+  // Leer el registro GD para obtener el día real
+  const novSnap=await _db.ref(novBasePath+'/'+gdNovKey).once('value');
   const novData=novSnap.val()||{};
-  const dia=novData.dia||new Date().getDate();
+  const diaReal=novData.dia||dia;
 
   if(solucionada){
-    // Agregar evidencia "Solucionada en Dropi" a soluciones/
     const today=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'});
     const solObj={estado:'solucionada',tipo:'txt',val:'✅ Solucionada en Dropi',fechaLabel:today,ts:Date.now(),fromLogistica:true};
-    await _db.ref(novBasePath+'/'+g.gdNovKey+'/soluciones').push(solObj);
-    // Actualizar campo rapido en el registro GD
-    await _db.ref(novBasePath+'/'+g.gdNovKey).update({solucionadaDropi:true});
+    await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').push(solObj);
+    await _db.ref(novBasePath+'/'+gdNovKey).update({solucionadaDropi:true});
   } else {
-    // Desmarcar: remover evidencias fromLogistica y limpiar flag
-    const solsSnap=await _db.ref(novBasePath+'/'+g.gdNovKey+'/soluciones').once('value');
+    const solsSnap=await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').once('value');
     const updates={};
     (solsSnap.val()?Object.entries(solsSnap.val()):[]).forEach(([k,s])=>{
       if(s.fromLogistica) updates[k]=null;
     });
-    if(Object.keys(updates).length) await _db.ref(novBasePath+'/'+g.gdNovKey+'/soluciones').update(updates);
-    await _db.ref(novBasePath+'/'+g.gdNovKey+'/solucionadaDropi').remove();
+    if(Object.keys(updates).length) await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').update(updates);
+    await _db.ref(novBasePath+'/'+gdNovKey+'/solucionadaDropi').remove();
   }
 
   // Recontar los 3 buckets del día desde Firebase
-  const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(dia).once('value');
+  const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(diaReal).once('value');
   let soluc=0, gestion=0, devuelt=0;
   (diaNovsSnap.val()?Object.values(diaNovsSnap.val()):[]).forEach(n=>{
     // Necesitamos leer las soluciones actualizadas de Firebase (ya están en n si el push fue antes)
@@ -4851,18 +4869,18 @@ async function _novSyncSolucionadaGD(id, solucionada){
   });
 
   // Leer dia actual de GD para no pisar otras columnas
-  const diaSnap=await _db.ref(gdDiasPath+'/'+dia).once('value');
+  const diaSnap=await _db.ref(gdDiasPath+'/'+diaReal).once('value');
   const diaData=diaSnap.val()||{};
   diaData.soluc=soluc; diaData.gestion=gestion; diaData.devuelt=devuelt;
-  await _db.ref(gdDiasPath+'/'+dia).set(diaData);
+  await _db.ref(gdDiasPath+'/'+diaReal).set(diaData);
 
   // Si GD está cargado en memoria, actualizar también la UI
   if(typeof _gdData!=='undefined'&&_gdData){
-    if(!_gdData[dia]) _gdData[dia]={};
-    Object.assign(_gdData[dia],{soluc,gestion,devuelt});
-    if(document.getElementById('gd-soluc-'+dia)) document.getElementById('gd-soluc-'+dia).textContent=soluc||'';
-    if(document.getElementById('gd-gestion-'+dia)) document.getElementById('gd-gestion-'+dia).textContent=gestion||'';
-    if(document.getElementById('gd-devuelt-'+dia)) document.getElementById('gd-devuelt-'+dia).textContent=devuelt||'';
+    if(!_gdData[diaReal]) _gdData[diaReal]={};
+    Object.assign(_gdData[diaReal],{soluc,gestion,devuelt});
+    if(document.getElementById('gd-soluc-'+diaReal)) document.getElementById('gd-soluc-'+diaReal).textContent=soluc||'';
+    if(document.getElementById('gd-gestion-'+diaReal)) document.getElementById('gd-gestion-'+diaReal).textContent=gestion||'';
+    if(document.getElementById('gd-devuelt-'+diaReal)) document.getElementById('gd-devuelt-'+diaReal).textContent=devuelt||'';
     if(typeof _gdCalc==='function'){
       const t=_gdCalc();
       if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
