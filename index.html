@@ -1696,8 +1696,8 @@ header h1{font-size:1.05rem;font-weight:700;}
     <!-- Meta (fecha, guia, asesor) — se oculta al agregar solución a novedad existente -->
     <div id="nov-m-meta">
       <div style="margin-bottom:11px;">
-        <label class="nov-form-label">Fecha</label>
-        <input id="nov-m-fecha" class="nov-form-input" type="text" placeholder="Ej: 27/mayo/2026">
+        <label class="nov-form-label">Fecha de la novedad</label>
+        <input id="nov-m-fecha" class="nov-form-input" type="date">
       </div>
       <div style="margin-bottom:11px;">
         <label class="nov-form-label">Número de guía</label>
@@ -8775,9 +8775,9 @@ function _novNuevo(){
   document.getElementById('nov-m-sol-section').style.display='block';
   document.getElementById('nov-m-title').textContent='Nueva Novedad';
   document.getElementById('nov-m-sol-label').textContent='Solución 1 (opcional)';
-  const hoy=new Date();
-  const fechaStr=hoy.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
-  document.getElementById('nov-m-fecha').value=fechaStr;
+  const hoy=new Date().toISOString().slice(0,10);
+  document.getElementById('nov-m-fecha').value=hoy;
+  document.getElementById('nov-sol-fecha').value=hoy;
   document.getElementById('nov-m-guia').value='';
   document.getElementById('nov-m-asesor').value=window.getLoginAsesor?window.getLoginAsesor():'';
   document.getElementById('nov-m-img').value='';
@@ -8891,11 +8891,13 @@ async function _novGuardar(){
       const txt=document.getElementById('nov-m-txt').value.trim();
       if(txt) solObj={estado:_novEstadoActivo,tipo:'txt',val:txt,fechaLabel,ts:Date.now()};
     }
+    const _fmtFecha=v=>{if(!v)return'';const d=new Date(v+'T12:00:00');return isNaN(d)?v:d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});};
     if(state.mode==='new'){
       const guia=document.getElementById('nov-m-guia').value.trim();
       if(!guia){ alert('Ingresa el número de guía'); btn.textContent='Guardar'; btn.disabled=false; return; }
+      const fechaVal=document.getElementById('nov-m-fecha').value.trim();
       const novData={
-        guia, fecha:document.getElementById('nov-m-fecha').value.trim(),
+        guia, fecha:_fmtFecha(fechaVal)||fechaVal,
         asesor:document.getElementById('nov-m-asesor').value.trim(),
         dia:new Date().getDate(), ts:Date.now()
       };
@@ -8910,8 +8912,9 @@ async function _novGuardar(){
     } else if(state.mode==='edit'){
       const guia=document.getElementById('nov-m-guia').value.trim();
       if(!guia){ alert('Ingresa el número de guía'); btn.textContent='Actualizar'; btn.disabled=false; return; }
+      const fechaValE=document.getElementById('nov-m-fecha').value.trim();
       const updates={
-        guia, fecha:document.getElementById('nov-m-fecha').value.trim(),
+        guia, fecha:_fmtFecha(fechaValE)||fechaValE,
         asesor:document.getElementById('nov-m-asesor').value.trim()
       };
       await _db.ref(_novBasePath()+'/'+state.id).update(updates);
