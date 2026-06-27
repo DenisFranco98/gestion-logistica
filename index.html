@@ -4781,6 +4781,8 @@ function setCheck(id,campo,valor){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id][campo]=valor;
   guardar();_fbSyncGestion(id);
+  // Sincronizar estado "solucionada en Dropi" con el registro GD
+  if(campo==='nov_solucionada') _novSyncSolucionadaGD(id, valor);
   // Actualizar solo el ícono de la fila sin re-renderizar toda la pantalla
   const p=pedidos.find(x=>x.id===id);
   if(p){
@@ -4792,6 +4794,67 @@ function setCheck(id,campo,valor){ultimaGestion=Date.now();
     if(wrap){const fi=wrap.previousElementSibling?.querySelector('.cf-gest-ico');if(fi)fi.textContent=ico;}
   }
   renderResumen();renderProgress();
+}
+
+async function _novSyncSolucionadaGD(id, solucionada){
+  if(typeof _db==='undefined'||!window._currentUsername)return;
+  const g=gestiones[id]||{};
+  if(!g.gdNovKey)return; // sin registro GD ligado
+
+  const mes=new Date().toISOString().slice(0,7);
+  const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
+  const ak=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginAsesor?window.getLoginAsesor():'_');
+  const novBasePath='novedades/'+tk+'/'+mes;
+  const gdDiasPath='gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias';
+
+  // Leer el registro GD para obtener el día
+  const novSnap=await _db.ref(novBasePath+'/'+g.gdNovKey).once('value');
+  const novData=novSnap.val()||{};
+  const dia=novData.dia||new Date().getDate();
+
+  if(solucionada){
+    // Agregar evidencia "Solucionada en Dropi" a soluciones/
+    const today=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'});
+    const solObj={estado:'solucionada',tipo:'txt',val:'✅ Solucionada en Dropi',fechaLabel:today,ts:Date.now(),fromLogistica:true};
+    await _db.ref(novBasePath+'/'+g.gdNovKey+'/soluciones').push(solObj);
+    // Actualizar campo rapido en el registro GD
+    await _db.ref(novBasePath+'/'+g.gdNovKey).update({solucionadaDropi:true});
+  } else {
+    // Desmarcar: remover evidencias fromLogistica y limpiar flag
+    const solsSnap=await _db.ref(novBasePath+'/'+g.gdNovKey+'/soluciones').once('value');
+    const updates={};
+    (solsSnap.val()?Object.entries(solsSnap.val()):[]).forEach(([k,s])=>{
+      if(s.fromLogistica) updates[k]=null;
+    });
+    if(Object.keys(updates).length) await _db.ref(novBasePath+'/'+g.gdNovKey+'/soluciones').update(updates);
+    await _db.ref(novBasePath+'/'+g.gdNovKey+'/solucionadaDropi').remove();
+  }
+
+  // Recontar soluciones del día desde Firebase para actualizar contador GD
+  const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(dia).once('value');
+  let soluc=0;
+  (diaNovsSnap.val()?Object.values(diaNovsSnap.val()):[]).forEach(n=>{
+    const sols=_novGetSols(n);
+    if(sols.some(s=>s.estado==='solucionada')) soluc++;
+  });
+
+  // Leer dia actual de GD para no pisar otras columnas
+  const diaSnap=await _db.ref(gdDiasPath+'/'+dia).once('value');
+  const diaData=diaSnap.val()||{};
+  diaData.soluc=soluc;
+  await _db.ref(gdDiasPath+'/'+dia).set(diaData);
+
+  // Si GD está cargado en memoria, actualizar también la UI
+  if(typeof _gdData!=='undefined'&&_gdData){
+    if(!_gdData[dia]) _gdData[dia]={};
+    _gdData[dia].soluc=soluc;
+    const elSoluc=document.getElementById('gd-soluc-'+dia);
+    if(elSoluc) elSoluc.textContent=soluc||'';
+    const elSolucT=document.getElementById('gdt-soluc');
+    if(elSolucT&&typeof _gdCalc==='function') elSolucT.textContent=_gdCalc().soluc;
+    if(typeof _gdRenderResumen==='function') _gdRenderResumen();
+  }
+  toast(solucionada?'✅ Novedad marcada como solucionada en GD':'↩️ Novedad desmarcada en GD',2500);
 }
 
 function marcarWA(id,estadoKey){ultimaGestion=Date.now();
