@@ -1981,7 +1981,6 @@ header h1{font-size:1.05rem;font-weight:700;}
   <button id="btn-pausa" onclick="togglePausa()" style="background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.4);color:#fcd34d;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:700;">⏸ Pausa</button><button onclick="abrirConfig()" style="background:rgba(255,255,255,.12);border:none;color:white;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⚙️</button><button onclick="_cerrarSesion()" title="Cerrar sesión" style="background:rgba(220,38,38,.25);border:1px solid rgba(220,38,38,.4);color:#fca5a5;padding:4px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;font-weight:600;">⏻ Salir</button></div>
 </header>
 <div class="toast" id="toast"></div>
-<div class="kb-hint" id="kb-hint">⌨️ <strong>C</strong> Contestó &nbsp;·&nbsp; <strong>N</strong> No contestó &nbsp;·&nbsp; <strong>Tab</strong> siguiente</div>
 
 <div id="upload-zone">
 
@@ -6022,57 +6021,6 @@ function _focusableCards(){
     .filter(c=>c.querySelector('.llamada-row')&&c.offsetParent!==null);
 }
 
-document.addEventListener('keydown',e=>{
-  // No activar si el foco está en un input/textarea
-  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;
-  if(!pedidos.length)return;
-  const key=e.key.toLowerCase();
-
-  if(key==='c'||key==='n'){
-    if(_cardFocus===null){
-      // Auto-seleccionar la primera card visible con llamada row
-      const cards=_focusableCards();
-      if(cards.length){
-        const firstId=parseInt(cards[0].id.replace('card-',''));
-        _setFocusCard(firstId);
-        return;
-      }
-    }
-    if(_cardFocus!==null){
-      e.preventDefault();
-      const resultado=key==='c'?'contestó':'no_contestó';
-      const p=pedidos.find(x=>x.id===_cardFocus);
-      if(p&&p.estadoKey==='novedad') setLlamadaNov(_cardFocus,resultado);
-      else setLlamada(_cardFocus,resultado);
-      // Mover foco a la siguiente card pendiente
-      setTimeout(()=>{
-        const cards=_focusableCards();
-        const idx=cards.findIndex(c=>c.id==='card-'+_cardFocus);
-        const next=cards[idx+1]||cards[0]||null;
-        _setFocusCard(next?parseInt(next.id.replace('card-','')):null);
-      },850);
-    }
-  }
-
-  if(key==='tab'){
-    const cards=_focusableCards();
-    if(!cards.length)return;
-    e.preventDefault();
-    const idx=cards.findIndex(c=>c.id==='card-'+_cardFocus);
-    const next=cards[(idx+1)%cards.length];
-    _setFocusCard(parseInt(next.id.replace('card-','')));
-  }
-
-  if(key==='escape'){_setFocusCard(null);}
-});
-
-// Clic en card → enfocar
-document.addEventListener('click',e=>{
-  const card=e.target.closest('.card[id^="card-"]:not(.gest)');
-  if(card&&card.querySelector('.llamada-row')){
-    _setFocusCard(parseInt(card.id.replace('card-','')));
-  }
-});
 
 
 
