@@ -8698,14 +8698,17 @@ function _novRender(){
   let rows='';
   entries.forEach(([id,n])=>{
     const sols=_novGetSols(n);
-    const lastSol=sols[sols.length-1];
-    const estadoBadge=!sols.length
-      ?'<span style="background:#f1f5f9;color:#94a3b8;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">Sin evidencia</span>'
-      :lastSol.estado==='solucionada'
-        ?'<span style="background:#dcfce7;color:#166534;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">✅ Solucionada</span>'
+    const lastSol=sols.length?sols[sols.length-1]:null; // último por ts (más reciente)
+    const lastFecha=lastSol?.fechaLabel?`<div style="font-size:.55rem;color:#94a3b8;margin-top:2px;">${lastSol.fechaLabel}</div>`:'';
+    const estadoBadge=n.solucionadaDropi
+      ?`<span style="background:#dcfce7;color:#166534;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">✅ Solucionada</span>${lastFecha}`
+      :!lastSol
+        ?'<span style="background:#f1f5f9;color:#94a3b8;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">Sin gestión</span>'
         :lastSol.estado==='devuelta'
-        ?'<span style="background:#fef3c7;color:#92400e;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">🔄 Devuelta</span>'
-        :'<span style="background:#e0f2fe;color:#0369a1;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">📋 En gestión</span>';
+          ?`<span style="background:#fef3c7;color:#92400e;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">🔄 Devuelta</span>${lastFecha}`
+          :lastSol.estado==='solucionada'
+            ?`<span style="background:#dcfce7;color:#166534;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">✅ Solucionada</span>${lastFecha}`
+            :`<span style="background:#e0f2fe;color:#0369a1;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">📋 Gestionada</span>${lastFecha}`;
     rows+=`<tr>
       <td style="white-space:nowrap;color:#64748b;font-size:.7rem;vertical-align:top;padding-top:10px;">${n.fecha||'—'}</td>
       <td style="font-weight:800;font-size:.82rem;white-space:nowrap;vertical-align:top;padding-top:10px;">
