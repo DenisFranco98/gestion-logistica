@@ -3449,6 +3449,8 @@ function _cargarArchivo(file){
         _fbCargarHistorialPropio(()=>{
           renderAll();
           toast('\u{1F4E6} '+pedidos.length+' pedidos cargados'+(recuperadas?' · 📝 '+recuperadas+' con historial de notas':''));
+          // Auto-poblar RO con pedidos en Oficina
+          setTimeout(_roAutoSync, 1500);
         });
       });
     });
@@ -9138,12 +9140,17 @@ function _roPath(){ return 'ro/'+_gdTK()+'/'+_gdMes; }
 function _roInit(){
   const wrap=document.getElementById('ro-table-wrap');
   if(wrap) wrap.innerHTML='<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.72rem;">Cargando...</div>';
+  // Si hay pedidos de Logística cargados, sincronizar oficina antes de leer
+  if(typeof pedidos!=='undefined'&&pedidos.length) _roAutoSync();
   if(typeof _db==='undefined'){_roData={};_roRender();return;}
-  _db.ref(_roPath()).orderByChild('ts').once('value',snap=>{
-    _roData={};
-    snap.forEach(ch=>{ _roData[ch.key]=ch.val(); });
-    _roRender();
-  });
+  // Pequeño delay para que los writes de autoSync lleguen primero
+  setTimeout(()=>{
+    _db.ref(_roPath()).orderByChild('ts').once('value',snap=>{
+      _roData={};
+      snap.forEach(ch=>{ _roData[ch.key]=ch.val(); });
+      _roRender();
+    });
+  }, pedidos&&pedidos.filter(p=>p.estadoKey==='oficina').length?800:0);
 }
 
 function _roRender(){
@@ -9235,6 +9242,13 @@ function _roEliminar(id){
 }
 
 // Sincroniza un pedido de oficina desde el gestor logístico → tabla R.O.
+function _roAutoSync(){
+  // Sincronizar todos los pedidos en Oficina que aún no tienen registro RO
+  if(typeof _db==='undefined'||!window._currentUsername||!pedidos.length)return;
+  const oficinas=pedidos.filter(p=>p.estadoKey==='oficina'&&p.guia);
+  oficinas.forEach(p=>_roSyncFromGestion(p.id));
+}
+
 function _roSyncFromGestion(id){
   try{
     if(typeof _db==='undefined'||!window._currentUsername)return;
