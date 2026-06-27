@@ -5139,6 +5139,15 @@ function _novGDBasePath(){
   return 'novedades/'+tk+'/'+mes;
 }
 
+function _novIncrGDCounter(dia, campo, delta){
+  if(typeof _db==='undefined'||!dia)return;
+  const mes=new Date().toISOString().slice(0,7);
+  const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
+  const ak=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginAsesor?window.getLoginAsesor():'_');
+  _db.ref('gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias/'+dia+'/'+campo)
+    .transaction(cur=>Math.max(0,(cur||0)+delta));
+}
+
 function _syncNovToGD(id){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   const p=pedidos.find(x=>x.id===id);
@@ -5169,6 +5178,8 @@ function _syncNovToGD(id){
     gestiones[id].gdNovKey=ref.key;
     guardar();_fbSyncGestion(id);
     toast('🔗 Novedad registrada en Gestiones Diarias');
+    // Incrementar contador Gestionada del día en GD
+    _novIncrGDCounter(novData.dia, 'gestion', 1);
   });
 }
 
@@ -8630,6 +8641,9 @@ function _novInit(){
     _novData={};
     snap.forEach(ch=>{ _novData[ch.key]=ch.val(); });
     _novRender();
+    // Recalcular contadores de todos los días con novedades
+    const dias=[...new Set(Object.values(_novData).map(n=>n.dia).filter(Boolean))];
+    dias.forEach(d=>_novSyncGD(d));
   });
 }
 
