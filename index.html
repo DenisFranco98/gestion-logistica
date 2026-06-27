@@ -1712,6 +1712,11 @@ header h1{font-size:1.05rem;font-weight:700;}
     <!-- Sección solución -->
     <div id="nov-m-sol-section">
       <label id="nov-m-sol-label" class="nov-form-label" style="margin-bottom:10px;font-size:.7rem;">Solución 1</label>
+      <!-- Fecha de la gestión -->
+      <div style="margin-bottom:12px;">
+        <label class="nov-form-label">Fecha de la gestión</label>
+        <input id="nov-sol-fecha" class="nov-form-input" type="date" style="font-size:.82rem;">
+      </div>
       <!-- Resultado de la gestión -->
       <div style="margin-bottom:14px;">
         <label class="nov-form-label" style="margin-bottom:7px;">Resultado de la gestión</label>
@@ -1907,6 +1912,10 @@ header h1{font-size:1.05rem;font-weight:700;}
     <div id="nov-ev-sols" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
     <div id="nov-ev-form" style="border-top:1.5px solid #f1f5f9;padding-top:14px;">
       <div style="font-size:.72rem;font-weight:700;color:#475569;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px;">Nueva evidencia</div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:.68rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.3px;">Fecha de gestión</label>
+        <input id="nov-ev-fecha" type="date" style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.82rem;font-family:inherit;box-sizing:border-box;outline:none;">
+      </div>
       <div style="display:flex;gap:8px;margin-bottom:12px;">
         <button id="nov-ev-btn-img" onclick="_novEvTipo('img')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #7c3aed;background:#7c3aed;color:white;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;">📷 Foto</button>
         <button id="nov-ev-btn-txt" onclick="_novEvTipo('txt')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #e2e8f0;background:white;color:#64748b;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;">📝 Texto</button>
@@ -5221,6 +5230,8 @@ function _novEvidenciaModal(id){
     });
     // Siempre mostrar form — sin límite
     document.getElementById('nov-ev-form').style.display='block';
+    // Precargar fecha de hoy
+    document.getElementById('nov-ev-fecha').value=new Date().toISOString().slice(0,10);
   });
   _novEvTipo('img');
   document.getElementById('nov-ev-modal').style.display='flex';
@@ -5267,7 +5278,9 @@ async function _novEvGuardar(){
   btn.textContent='Guardando...';btn.disabled=true;
   try{
     const estado=document.getElementById('nov-ev-estado').value;
-    const fechaLabel=new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+    const evFechaVal=document.getElementById('nov-ev-fecha')?.value;
+    const evFechaBase=evFechaVal?new Date(evFechaVal+'T12:00:00'):new Date();
+    const fechaLabel=evFechaBase.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
     let solObj=null;
     if(_novEvTipoActivo==='img'){
       const fi=document.getElementById('nov-ev-img');
@@ -8764,6 +8777,9 @@ function _novAbrirSol(id){
   document.getElementById('nov-m-sol-label').textContent='Evidencia '+(sols.length+1);
   document.getElementById('nov-m-img').value='';
   document.getElementById('nov-m-txt').value='';
+  // Precargar fecha de hoy
+  const hoy=new Date().toISOString().slice(0,10);
+  document.getElementById('nov-sol-fecha').value=hoy;
   _novSetEstado('solucionada');
   document.getElementById('nov-modal').classList.add('open');
 }
@@ -8845,8 +8861,9 @@ async function _novGuardar(){
   btn.textContent='Guardando...'; btn.disabled=true;
   try{
     const state=_novModalState;
-    const now=new Date();
-    const fechaLabel=now.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+    const fechaInput=document.getElementById('nov-sol-fecha')?.value;
+    const fechaBase=fechaInput?new Date(fechaInput+'T12:00:00'):new Date();
+    const fechaLabel=fechaBase.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
     // Build solution object
     let solObj=null;
     if(_novTipoActivo==='img'){
