@@ -6041,7 +6041,9 @@ document.addEventListener('keydown',e=>{
     if(_cardFocus!==null){
       e.preventDefault();
       const resultado=key==='c'?'contestó':'no_contestó';
-      setLlamada(_cardFocus,resultado);
+      const p=pedidos.find(x=>x.id===_cardFocus);
+      if(p&&p.estadoKey==='novedad') setLlamadaNov(_cardFocus,resultado);
+      else setLlamada(_cardFocus,resultado);
       // Mover foco a la siguiente card pendiente
       setTimeout(()=>{
         const cards=_focusableCards();
