@@ -1494,7 +1494,7 @@ header h1{font-size:1.05rem;font-weight:700;}
       <button onclick="_cfPrevMes()" style="background:rgba(255,255,255,.1);border:none;color:white;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.8rem;">&#8249;</button>
       <span id="cf-mes-lbl" style="font-size:.72rem;font-weight:700;min-width:80px;text-align:center;"></span>
       <button onclick="_cfNextMes()" style="background:rgba(255,255,255,.1);border:none;color:white;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.8rem;">&#8250;</button>
-      <button onclick="_cfVolver()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.72rem;font-weight:700;">← Volver</button>
+      <button onclick="_cfVolver()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.72rem;font-weight:700;">← Menú principal</button>
     </div>
   </div>
   <!-- Tabs bar -->
@@ -1530,7 +1530,7 @@ header h1{font-size:1.05rem;font-weight:700;}
       <span id="gd-mes-label" style="font-size:.78rem;font-weight:700;min-width:90px;text-align:center;">—</span>
       <button onclick="_gdNextMes()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:white;width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:.85rem;">→</button>
       <span id="gd-save-st" style="font-size:.62rem;opacity:.5;margin-left:4px;"></span>
-      <button onclick="_gdVolver()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.75);padding:5px 11px;border-radius:7px;font-size:.7rem;cursor:pointer;font-weight:600;margin-left:4px;">← Inicio</button>
+      <button onclick="_gdVolver()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.75);padding:5px 11px;border-radius:7px;font-size:.7rem;cursor:pointer;font-weight:600;margin-left:4px;">← Menú principal</button>
     </div>
   </div>
   <!-- Info strip -->
@@ -1896,6 +1896,42 @@ header h1{font-size:1.05rem;font-weight:700;}
   </div>
 </div>
 
+<!-- ===== MODAL EVIDENCIA NOVEDAD (LOGÍSTICA → GD) ===== -->
+<div id="nov-ev-modal" style="display:none;position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,.6);align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;">
+  <div style="background:white;border-radius:16px;padding:28px 24px;width:100%;max-width:360px;box-shadow:0 20px 50px rgba(0,0,0,.4);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-size:.95rem;font-weight:800;color:#1e293b;">📸 Evidencia de novedad</div>
+      <button onclick="_novEvCerrar()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;">✕</button>
+    </div>
+    <div id="nov-ev-guia-lbl" style="font-size:.72rem;color:#64748b;margin-bottom:14px;background:#f1f5f9;border-radius:8px;padding:6px 10px;"></div>
+    <div id="nov-ev-sols" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+    <div id="nov-ev-form" style="border-top:1.5px solid #f1f5f9;padding-top:14px;">
+      <div style="font-size:.72rem;font-weight:700;color:#475569;margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px;">Nueva evidencia</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button id="nov-ev-btn-img" onclick="_novEvTipo('img')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #7c3aed;background:#7c3aed;color:white;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;">📷 Foto</button>
+        <button id="nov-ev-btn-txt" onclick="_novEvTipo('txt')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #e2e8f0;background:white;color:#64748b;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;">📝 Texto</button>
+      </div>
+      <div id="nov-ev-img-wrap">
+        <input type="file" id="nov-ev-img" accept="image/*" capture="environment" style="display:none;" onchange="_novEvPreview(this)">
+        <div onclick="document.getElementById('nov-ev-img').click()" id="nov-ev-preview" style="border:2px dashed #e2e8f0;border-radius:10px;padding:24px;text-align:center;cursor:pointer;color:#94a3b8;font-size:.78rem;">
+          Toca para tomar foto o seleccionar imagen
+        </div>
+      </div>
+      <div id="nov-ev-txt-wrap" style="display:none;">
+        <textarea id="nov-ev-txt" rows="3" placeholder="Describe la evidencia o solución..." style="width:100%;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px;font-size:.82rem;font-family:inherit;resize:none;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <select id="nov-ev-estado" style="flex:1;padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.8rem;font-family:inherit;color:#1e293b;outline:none;">
+          <option value="gestion">En gestión</option>
+          <option value="solucionada">✅ Solucionada</option>
+          <option value="devuelta">🔄 Devuelta</option>
+        </select>
+        <button onclick="_novEvGuardar()" id="nov-ev-save" style="flex:1;padding:9px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL CERRAR SESIÓN ===== -->
 <div id="logout-modal">
   <div class="logout-box">
@@ -1948,6 +1984,12 @@ header h1{font-size:1.05rem;font-weight:700;}
 <div class="kb-hint" id="kb-hint">⌨️ <strong>C</strong> Contestó &nbsp;·&nbsp; <strong>N</strong> No contestó &nbsp;·&nbsp; <strong>Tab</strong> siguiente</div>
 
 <div id="upload-zone">
+
+  <div style="width:100%;max-width:480px;display:flex;justify-content:flex-start;margin-bottom:4px;">
+    <button onclick="_ocultarTodosModos();document.getElementById('mode-select-screen').style.display='flex';window._gdMostrarModeSelect(window.getLoginAsesor?window.getLoginAsesor():'');" style="background:none;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 16px;font-size:.76rem;font-weight:600;color:#64748b;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='#6366f1';this.style.color='#6366f1';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#64748b';">
+      ← Menú principal
+    </button>
+  </div>
 
   <div class="instrucciones-wrap">
     <h3>📋 ¿Cómo obtener el archivo?</h3>
@@ -4446,6 +4488,11 @@ function crearCardNovedad(p){
         '<label for="nov_sol_'+p.id+'">✅ Novedad solucionada en Dropi</label>'+
       '</div>'+
     '</div>';
+    // Botón evidencia — siempre visible en novedades
+    const gdKey=g.gdNovKey||'';
+    const solCount=[g.gdSol1,g.gdSol2,g.gdSol3].filter(Boolean).length;
+    const solLabel=solCount>0?('📸 Evidencia ('+solCount+'/3)'):'📸 Agregar evidencia';
+    html+='<button onclick="_novEvidenciaModal('+p.id+')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;font-size:.75rem;font-weight:700;border:1.5px solid #7c3aed;background:'+(solCount>0?'#7c3aed':'transparent')+';color:'+(solCount>0?'white':'#7c3aed')+';cursor:pointer;font-family:inherit;">'+solLabel+'</button>';
     html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
       (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     html+=_btnHistHtml(p);
@@ -5016,12 +5063,169 @@ function marcarDevolucion(id){
   animarCompletado(id,()=>renderAll(),'🔄');
 }
 
+// ── Sync novedad Logística → GD ─────────────────────────────────────────
+function _novGDBasePath(){
+  const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
+  const mes=new Date().toISOString().slice(0,7);
+  return 'novedades/'+tk+'/'+mes;
+}
+
+function _syncNovToGD(id){
+  if(typeof _db==='undefined'||!window._currentUsername)return;
+  const p=pedidos.find(x=>x.id===id);
+  if(!p||!p.guia)return;
+  const g=gestiones[id]||{};
+  if(g.gdNovKey){return;} // ya sincronizado
+  const base=_novGDBasePath();
+  // Evitar duplicados por guía
+  _db.ref(base).orderByChild('guia').equalTo(p.guia).once('value',snap=>{
+    if(snap.exists()){
+      // Ya existe — guardar key referencia
+      const key=Object.keys(snap.val())[0];
+      gestiones[id].gdNovKey=key;
+      guardar();_fbSyncGestion(id);
+      return;
+    }
+    const novData={
+      guia:p.guia,
+      fecha:p.fechaNovedad||new Date().toLocaleDateString('es-CO'),
+      asesor:window.getLoginAsesor?window.getLoginAsesor():'',
+      tipoNovedad:p.tipoNovedad||p.novedad||'',
+      dia:new Date().getDate(),
+      ts:Date.now(),
+      fromLogistica:true,
+      sol1:null,sol2:null,sol3:null
+    };
+    const ref=_db.ref(base).push(novData);
+    gestiones[id].gdNovKey=ref.key;
+    guardar();_fbSyncGestion(id);
+    toast('🔗 Novedad registrada en Gestiones Diarias');
+  });
+}
+
+// ── Modal evidencia ──────────────────────────────────────────────────────
+let _novEvId=null, _novEvTipoActivo='img';
+
+function _novEvidenciaModal(id){
+  _novEvId=id;
+  const p=pedidos.find(x=>x.id===id);
+  const g=gestiones[id]||{};
+  if(!p)return;
+  // Si aún no tiene gdNovKey, sincronizar primero
+  if(!g.gdNovKey){
+    _syncNovToGD(id);
+    // Esperar brevemente y reabrir
+    setTimeout(()=>_novEvidenciaModal(id),800);
+    toast('🔗 Creando registro en GD...');
+    return;
+  }
+  document.getElementById('nov-ev-guia-lbl').textContent='Guía: '+p.guia+' · '+((p.tipoNovedad||p.novedad||'Novedad').toUpperCase());
+  // Mostrar soluciones existentes
+  const base=_novGDBasePath();
+  _db.ref(base+'/'+g.gdNovKey).once('value',snap=>{
+    const d=snap.val()||{};
+    const solsEl=document.getElementById('nov-ev-sols');
+    solsEl.innerHTML='';
+    ['sol1','sol2','sol3'].forEach(k=>{
+      const s=d[k];
+      if(!s)return;
+      const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#dc2626':'#d97706';
+      const label=s.estado==='solucionada'?'Solucionada':s.estado==='devuelta'?'Devuelta':'En gestión';
+      let content=s.tipo==='img'
+        ?'<img src="'+s.val+'" style="width:100%;border-radius:6px;margin-top:6px;max-height:120px;object-fit:cover;">'
+        :'<div style="font-size:.75rem;color:#374151;margin-top:4px;">'+s.val+'</div>';
+      solsEl.innerHTML+='<div style="border:1.5px solid '+color+'30;border-radius:8px;padding:8px 10px;background:'+color+'10;">'
+        +'<div style="font-size:.65rem;font-weight:700;color:'+color+';">'+label+' · '+s.fechaLabel+'</div>'
+        +content+'</div>';
+    });
+    // Ocultar form si ya tiene 3 soluciones
+    const solCount=[d.sol1,d.sol2,d.sol3].filter(Boolean).length;
+    document.getElementById('nov-ev-form').style.display=solCount>=3?'none':'block';
+  });
+  _novEvTipo('img');
+  document.getElementById('nov-ev-modal').style.display='flex';
+}
+
+function _novEvCerrar(){
+  document.getElementById('nov-ev-modal').style.display='none';
+  document.getElementById('nov-ev-img').value='';
+  document.getElementById('nov-ev-txt').value='';
+  document.getElementById('nov-ev-preview').innerHTML='Toca para tomar foto o seleccionar imagen';
+  document.getElementById('nov-ev-preview').style.background='';
+  _novEvId=null;
+}
+
+function _novEvTipo(tipo){
+  _novEvTipoActivo=tipo;
+  document.getElementById('nov-ev-img-wrap').style.display=tipo==='img'?'block':'none';
+  document.getElementById('nov-ev-txt-wrap').style.display=tipo==='txt'?'block':'none';
+  document.getElementById('nov-ev-btn-img').style.background=tipo==='img'?'#7c3aed':'white';
+  document.getElementById('nov-ev-btn-img').style.color=tipo==='img'?'white':'#64748b';
+  document.getElementById('nov-ev-btn-img').style.borderColor=tipo==='img'?'#7c3aed':'#e2e8f0';
+  document.getElementById('nov-ev-btn-txt').style.background=tipo==='txt'?'#7c3aed':'white';
+  document.getElementById('nov-ev-btn-txt').style.color=tipo==='txt'?'white':'#64748b';
+  document.getElementById('nov-ev-btn-txt').style.borderColor=tipo==='txt'?'#7c3aed':'#e2e8f0';
+}
+
+function _novEvPreview(input){
+  if(!input.files.length)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const prev=document.getElementById('nov-ev-preview');
+    prev.innerHTML='<img src="'+e.target.result+'" style="max-width:100%;max-height:160px;border-radius:6px;object-fit:contain;">';
+    prev.style.background='#f8fafc';
+    prev.style.padding='8px';
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+async function _novEvGuardar(){
+  if(!_novEvId)return;
+  const g=gestiones[_novEvId]||{};
+  if(!g.gdNovKey){toast('⚠️ Error: sin referencia GD');return;}
+  const btn=document.getElementById('nov-ev-save');
+  btn.textContent='Guardando...';btn.disabled=true;
+  try{
+    const estado=document.getElementById('nov-ev-estado').value;
+    const fechaLabel=new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+    let solObj=null;
+    if(_novEvTipoActivo==='img'){
+      const fi=document.getElementById('nov-ev-img');
+      if(!fi.files.length){toast('⚠️ Selecciona una imagen');btn.textContent='Guardar';btn.disabled=false;return;}
+      // Reusar _novResizeImg si está disponible, si no usar FileReader directo
+      let val;
+      if(typeof _novResizeImg==='function'){val=await _novResizeImg(fi.files[0],800,.72);}
+      else{val=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(fi.files[0]);});}
+      solObj={estado,tipo:'img',val,fechaLabel,ts:Date.now()};
+    } else {
+      const txt=document.getElementById('nov-ev-txt').value.trim();
+      if(!txt){toast('⚠️ Escribe la evidencia');btn.textContent='Guardar';btn.disabled=false;return;}
+      solObj={estado,tipo:'txt',val:txt,fechaLabel,ts:Date.now()};
+    }
+    const base=_novGDBasePath();
+    const novRef=_db.ref(base+'/'+g.gdNovKey);
+    const snap=await novRef.once('value');
+    const d=snap.val()||{};
+    const slot=!d.sol1?'sol1':!d.sol2?'sol2':!d.sol3?'sol3':null;
+    if(!slot){toast('⚠️ Ya tiene 3 evidencias');btn.textContent='Guardar';btn.disabled=false;return;}
+    await novRef.child(slot).set(solObj);
+    // Guardar referencia local de que tiene evidencia
+    gestiones[_novEvId]['gdSol'+slot.slice(-1)]=true;
+    guardar();_fbSyncGestion(_novEvId);
+    toast('✅ Evidencia guardada en Gestiones Diarias');
+    _novEvCerrar();
+    renderAll();
+  }catch(e){toast('⚠️ Error: '+e.message);}
+  btn.textContent='Guardar';btn.disabled=false;
+}
+
 function marcarFinalizadoNov(id){
   ultimaGestion=Date.now();
   const g=gestiones[id]||{};
   if(g.gestion_final){marcarFinalizado(id);return;}
   if(!tieneNotaHoy(id)){_pedirNotaHoy(id);return;}
   marcarFinalizado(id);
+  _syncNovToGD(id);
 }
 
 function marcarFinalizadoOficina(id){
