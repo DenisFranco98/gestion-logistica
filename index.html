@@ -4830,28 +4830,37 @@ async function _novSyncSolucionadaGD(id, solucionada){
     await _db.ref(novBasePath+'/'+g.gdNovKey+'/solucionadaDropi').remove();
   }
 
-  // Recontar soluciones del día desde Firebase para actualizar contador GD
+  // Recontar los 3 buckets del día desde Firebase
   const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(dia).once('value');
-  let soluc=0;
+  let soluc=0, gestion=0, devuelt=0;
   (diaNovsSnap.val()?Object.values(diaNovsSnap.val()):[]).forEach(n=>{
+    // Necesitamos leer las soluciones actualizadas de Firebase (ya están en n si el push fue antes)
     const sols=_novGetSols(n);
-    if(sols.some(s=>s.estado==='solucionada')) soluc++;
+    if(n.solucionadaDropi){ soluc++; }
+    else if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
+    else { gestion++; }
   });
 
   // Leer dia actual de GD para no pisar otras columnas
   const diaSnap=await _db.ref(gdDiasPath+'/'+dia).once('value');
   const diaData=diaSnap.val()||{};
-  diaData.soluc=soluc;
+  diaData.soluc=soluc; diaData.gestion=gestion; diaData.devuelt=devuelt;
   await _db.ref(gdDiasPath+'/'+dia).set(diaData);
 
   // Si GD está cargado en memoria, actualizar también la UI
   if(typeof _gdData!=='undefined'&&_gdData){
     if(!_gdData[dia]) _gdData[dia]={};
-    _gdData[dia].soluc=soluc;
-    const elSoluc=document.getElementById('gd-soluc-'+dia);
-    if(elSoluc) elSoluc.textContent=soluc||'';
-    const elSolucT=document.getElementById('gdt-soluc');
-    if(elSolucT&&typeof _gdCalc==='function') elSolucT.textContent=_gdCalc().soluc;
+    Object.assign(_gdData[dia],{soluc,gestion,devuelt});
+    if(document.getElementById('gd-soluc-'+dia)) document.getElementById('gd-soluc-'+dia).textContent=soluc||'';
+    if(document.getElementById('gd-gestion-'+dia)) document.getElementById('gd-gestion-'+dia).textContent=gestion||'';
+    if(document.getElementById('gd-devuelt-'+dia)) document.getElementById('gd-devuelt-'+dia).textContent=devuelt||'';
+    if(typeof _gdCalc==='function'){
+      const t=_gdCalc();
+      if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
+      if(document.getElementById('gdt-gestion')) document.getElementById('gdt-gestion').textContent=t.gestion;
+      if(document.getElementById('gdt-devuelt')) document.getElementById('gdt-devuelt').textContent=t.devuelt;
+      if(document.getElementById('gdt-gral')) document.getElementById('gdt-gral').textContent=t.gral;
+    }
     if(typeof _gdRenderResumen==='function') _gdRenderResumen();
   }
   toast(solucionada?'✅ Novedad marcada como solucionada en GD':'↩️ Novedad desmarcada en GD',2500);
@@ -8297,14 +8306,14 @@ function _gdDiasEnMes(ym){
 }
 
 function _gdCalc(){
-  let conf=0,cancel=0,soluc=0,devuelt=0,contNoRecup=0,recupCarri=0,ventasWpp=0;
+  let conf=0,cancel=0,soluc=0,gestion=0,devuelt=0,contNoRecup=0,recupCarri=0,ventasWpp=0;
   Object.values(_gdData).forEach(d=>{
-    conf+=d.conf||0; cancel+=d.cancel||0; soluc+=d.soluc||0; devuelt+=d.devuelt||0;
+    conf+=d.conf||0; cancel+=d.cancel||0; soluc+=d.soluc||0; gestion+=d.gestion||0; devuelt+=d.devuelt||0;
     contNoRecup+=d.contNoRecup||0; recupCarri+=d.recupCarri||0; ventasWpp+=d.ventasWpp||0;
   });
   const totalConf=conf+cancel;
-  const gral=totalConf+soluc+recupCarri+ventasWpp;
-  return{conf,cancel,totalConf,soluc,devuelt,contNoRecup,recupCarri,ventasWpp,gral};
+  const gral=totalConf+soluc+gestion+recupCarri+ventasWpp;
+  return{conf,cancel,totalConf,soluc,gestion,devuelt,contNoRecup,recupCarri,ventasWpp,gral};
 }
 
 function _gdRenderResumen(){
@@ -8321,7 +8330,7 @@ function _gdRenderResumen(){
     <div style="font-size:.58rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📊 Resumen del mes (auto-calculado)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       ${card('Confirmaciones',`<span style="color:#15803d">${t.conf}</span><span style="font-size:.65rem;font-weight:400;color:#94a3b8">+</span><span style="color:#dc2626">${t.cancel}</span><span style="font-size:.65rem;font-weight:400;color:#94a3b8">=</span><span style="color:#15803d;font-size:1rem">${t.totalConf}</span>`,'#86efac','#f0fdf4')}
-      ${card('Novedades',`<span style="color:#1d4ed8">${t.soluc}</span><span style="font-size:.65rem;font-weight:400;color:#94a3b8">|</span><span style="color:#dc2626">${t.devuelt}</span>`,'#93c5fd','#eff6ff')}
+      ${card('Novedades',`<span style="color:#1d4ed8" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:#94a3b8;margin:0 2px">sol</span><span style="color:#0891b2" title="Gestionadas">${t.gestion}</span><span style="font-size:.55rem;color:#94a3b8;margin:0 2px">gest</span><span style="color:#dc2626" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:#94a3b8;margin-left:2px">dev</span>`,'#93c5fd','#eff6ff')}
       ${card('Carritos',`<span style="color:#7c3aed">${t.recupCarri}</span><span style="font-size:.65rem;font-weight:400;color:#94a3b8">|</span><span style="color:#374151">${t.contNoRecup}</span>`,'#c4b5fd','#f5f3ff')}
       ${card('Ventas WPP',`<span style="color:#ea580c;font-size:1rem">${t.ventasWpp}</span>`,'#fdba74','#fff7ed')}
       ${card('General',`<span style="color:#d97706;font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:#92400e;font-weight:600">${avg}/día</span><span style="font-size:.75rem;color:#15803d">${pct}%</span>`,'#fbbf24','#fef3c7')}
@@ -8338,7 +8347,7 @@ function _gdRenderTabla(){
     <tr>
       ${th('DÍA','#1e293b','white',2,1,'position:sticky;left:0;z-index:3;')}
       ${th('CONFIRMACIONES','#15803d','white',1,3)}
-      ${th('NOVEDADES','#1d4ed8','white',1,2)}
+      ${th('NOVEDADES','#1d4ed8','white',1,3)}
       ${th('CARRITOS','#7c3aed','white',1,2)}
       ${th('VENTAS WPP','#ea580c','white',2,1)}
       ${th('TOTAL','#d97706','white',2,1)}
@@ -8346,7 +8355,7 @@ function _gdRenderTabla(){
     </tr>
     <tr>
       ${th('CONF.','#16a34a')}${th('CANCEL.','#ef4444')}${th('TOTAL','#166534')}
-      ${th('SOLUCIONADO 🔒','#2563eb')}${th('DEVUELTO 🔒','#dc2626')}
+      ${th('SOLUCIONADO 🔒','#2563eb')}${th('GESTIONADA 🔒','#0891b2')}${th('DEVUELTO 🔒','#dc2626')}
       ${th('RECUPERADO','#6d28d9')}${th('CONT. NO REC.','#4b5563')}
     </tr>
   </thead>
@@ -8355,7 +8364,7 @@ function _gdRenderTabla(){
   for(let d=1;d<=total;d++){
     const r=_gdData[d]||{};
     const tc=(r.conf||0)+(r.cancel||0);
-    const tg=tc+(r.soluc||0)+(r.recupCarri||0)+(r.ventasWpp||0);
+    const tg=tc+(r.soluc||0)+(r.gestion||0)+(r.recupCarri||0)+(r.ventasWpp||0);
     const vacio=!r.conf&&!r.cancel&&!r.soluc&&!r.devuelt&&!r.contNoRecup&&!r.recupCarri&&!r.ventasWpp&&!r.obs;
     const bg=vacio?'#fafafa':'white';
     const n=(key,val,color)=>`<input type="number" min="0" value="${val||''}" placeholder="" oninput="_gdCambio(${d},'${key}',this.value)" style="color:${color};">`;
@@ -8365,6 +8374,7 @@ function _gdRenderTabla(){
       <td style="padding:2px 3px;background:${vacio?'#fafafa':'#fff1f2'};">${n('cancel',r.cancel,'#dc2626')}</td>
       <td style="padding:3px 4px;background:#dcfce7;text-align:center;font-weight:800;color:#15803d;font-size:.72rem;" id="gd-tc-${d}">${tc||''}</td>
       <td style="padding:3px 4px;background:#eff6ff;text-align:center;font-weight:700;color:#1d4ed8;font-size:.72rem;cursor:not-allowed;" title="Auto-calculado desde Novedades" id="gd-soluc-${d}">${r.soluc||''}</td>
+      <td style="padding:3px 4px;background:#ecfeff;text-align:center;font-weight:700;color:#0891b2;font-size:.72rem;cursor:not-allowed;" title="Auto-calculado desde Novedades" id="gd-gestion-${d}">${r.gestion||''}</td>
       <td style="padding:3px 4px;background:#fff1f2;text-align:center;font-weight:700;color:#dc2626;font-size:.72rem;cursor:not-allowed;" title="Auto-calculado desde Novedades" id="gd-devuelt-${d}">${r.devuelt||''}</td>
       <td style="padding:2px 3px;background:${vacio?'#fafafa':'#f5f3ff'};">${n('recupCarri',r.recupCarri,'#6d28d9')}</td>
       <td style="padding:2px 3px;background:${vacio?'#fafafa':'#f9fafb'};">${n('contNoRecup',r.contNoRecup,'#374151')}</td>
@@ -8381,6 +8391,7 @@ function _gdRenderTabla(){
     <td style="padding:5px 3px;text-align:center;color:#f87171;" id="gdt-cancel">${t.cancel}</td>
     <td style="padding:5px 3px;text-align:center;color:#86efac;" id="gdt-tc">${t.totalConf}</td>
     <td style="padding:5px 3px;text-align:center;color:#93c5fd;" id="gdt-soluc">${t.soluc}</td>
+    <td style="padding:5px 3px;text-align:center;color:#67e8f9;" id="gdt-gestion">${t.gestion}</td>
     <td style="padding:5px 3px;text-align:center;color:#fca5a5;" id="gdt-devuelt">${t.devuelt}</td>
     <td style="padding:5px 3px;text-align:center;color:#c4b5fd;" id="gdt-recupCarri">${t.recupCarri}</td>
     <td style="padding:5px 3px;text-align:center;color:#d1d5db;" id="gdt-contNoRecup">${t.contNoRecup}</td>
@@ -8884,41 +8895,36 @@ function _novGetSols(n){
 // Recalcula soluc/devuelt del día en GD a partir de todas las novedades
 async function _novSyncGD(dia){
   if(typeof _db==='undefined'||!window._currentUsername||!_gdMes||!dia) return;
-  // Contar soluciones de ese día
-  let soluc=0, devuelt=0;
+  // Contar los 3 buckets de novedades del día
+  let soluc=0, gestion=0, devuelt=0;
   Object.values(_novData).forEach(n=>{
     if((n.dia||0)!==dia) return;
-    _novGetSols(n).forEach(sol=>{
-      if(sol.estado==='solucionada') soluc++;
-      else if(sol.estado==='devuelta') devuelt++;
-    });
+    const sols=_novGetSols(n);
+    if(n.solucionadaDropi){ soluc++; }
+    else if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
+    else { gestion++; }
   });
   // Leer datos actuales del día en GD (para no pisar otras columnas)
   const base=_gdBasePath();
   const snap=await _db.ref(base+'/dias/'+dia).once('value');
   const dayData=snap.val()||{};
-  dayData.soluc=soluc;
-  dayData.devuelt=devuelt;
+  dayData.soluc=soluc; dayData.gestion=gestion; dayData.devuelt=devuelt;
   await _db.ref(base+'/dias/'+dia).set(dayData);
   // Actualizar cache local y UI si la tabla está visible
   if(!_gdData[dia]) _gdData[dia]={};
-  Object.assign(_gdData[dia], {soluc, devuelt});
+  Object.assign(_gdData[dia], {soluc, gestion, devuelt});
   const tabGestion=document.getElementById('gd-tab-gestion');
   if(tabGestion&&tabGestion.style.display!=='none'){
     const t=_gdCalc();
-    // Celdas de fila
-    const elSolucFila=document.getElementById('gd-soluc-'+dia);
-    const elDevueltFila=document.getElementById('gd-devuelt-'+dia);
-    if(elSolucFila) elSolucFila.textContent=soluc||'';
-    if(elDevueltFila) elDevueltFila.textContent=devuelt||'';
-    // Total de fila
-    const tg=(_gdData[dia].conf||0)+(_gdData[dia].cancel||0)+soluc+(_gdData[dia].recupCarri||0)+(_gdData[dia].ventasWpp||0);
-    const tgEl=document.getElementById('gd-tg-'+dia);
-    if(tgEl) tgEl.textContent=tg||'';
-    // Totales de columna
-    const elSoluc=document.getElementById('gdt-soluc'); if(elSoluc) elSoluc.textContent=t.soluc;
-    const elDevuelt=document.getElementById('gdt-devuelt'); if(elDevuelt) elDevuelt.textContent=t.devuelt;
-    const tg2=document.getElementById('gdt-gral'); if(tg2) tg2.textContent=t.gral;
+    if(document.getElementById('gd-soluc-'+dia)) document.getElementById('gd-soluc-'+dia).textContent=soluc||'';
+    if(document.getElementById('gd-gestion-'+dia)) document.getElementById('gd-gestion-'+dia).textContent=gestion||'';
+    if(document.getElementById('gd-devuelt-'+dia)) document.getElementById('gd-devuelt-'+dia).textContent=devuelt||'';
+    const tg=(_gdData[dia].conf||0)+(_gdData[dia].cancel||0)+soluc+gestion+(_gdData[dia].recupCarri||0)+(_gdData[dia].ventasWpp||0);
+    const tgEl=document.getElementById('gd-tg-'+dia); if(tgEl) tgEl.textContent=tg||'';
+    if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
+    if(document.getElementById('gdt-gestion')) document.getElementById('gdt-gestion').textContent=t.gestion;
+    if(document.getElementById('gdt-devuelt')) document.getElementById('gdt-devuelt').textContent=t.devuelt;
+    if(document.getElementById('gdt-gral')) document.getElementById('gdt-gral').textContent=t.gral;
     _gdRenderResumen();
   }
 }
