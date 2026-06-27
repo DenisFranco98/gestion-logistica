@@ -4489,10 +4489,8 @@ function crearCardNovedad(p){
       '</div>'+
     '</div>';
     // Botón evidencia — siempre visible en novedades
-    const gdKey=g.gdNovKey||'';
-    const solCount=[g.gdSol1,g.gdSol2,g.gdSol3].filter(Boolean).length;
-    const solLabel=solCount>0?('📸 Evidencia ('+solCount+'/3)'):'📸 Agregar evidencia';
-    html+='<button onclick="_novEvidenciaModal('+p.id+')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;font-size:.75rem;font-weight:700;border:1.5px solid #7c3aed;background:'+(solCount>0?'#7c3aed':'transparent')+';color:'+(solCount>0?'white':'#7c3aed')+';cursor:pointer;font-family:inherit;">'+solLabel+'</button>';
+    const tieneSols=g.gdNovKey&&g.gdTieneSols;
+    html+='<button onclick="_novEvidenciaModal('+p.id+')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;font-size:.75rem;font-weight:700;border:1.5px solid #7c3aed;background:'+(tieneSols?'#7c3aed':'transparent')+';color:'+(tieneSols?'white':'#7c3aed')+';cursor:pointer;font-family:inherit;">'+(tieneSols?'📸 Ver / agregar evidencias':'📸 Agregar evidencia')+'</button>';
     html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
       (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     html+=_btnHistHtml(p);
@@ -5124,23 +5122,23 @@ function _novEvidenciaModal(id){
   const base=_novGDBasePath();
   _db.ref(base+'/'+g.gdNovKey).once('value',snap=>{
     const d=snap.val()||{};
+    const sols=_novGetSols?_novGetSols(d):[];
     const solsEl=document.getElementById('nov-ev-sols');
     solsEl.innerHTML='';
-    ['sol1','sol2','sol3'].forEach(k=>{
-      const s=d[k];
-      if(!s)return;
-      const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#dc2626':'#d97706';
-      const label=s.estado==='solucionada'?'Solucionada':s.estado==='devuelta'?'Devuelta':'En gestión';
+    if(!sols.length){solsEl.innerHTML='<div style="font-size:.7rem;color:#94a3b8;text-align:center;padding:8px;">Sin evidencias aún</div>';}
+    sols.forEach((s,i)=>{
+      const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
+      const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 En gestión';
       let content=s.tipo==='img'
-        ?'<img src="'+s.val+'" style="width:100%;border-radius:6px;margin-top:6px;max-height:120px;object-fit:cover;">'
-        :'<div style="font-size:.75rem;color:#374151;margin-top:4px;">'+s.val+'</div>';
-      solsEl.innerHTML+='<div style="border:1.5px solid '+color+'30;border-radius:8px;padding:8px 10px;background:'+color+'10;">'
-        +'<div style="font-size:.65rem;font-weight:700;color:'+color+';">'+label+' · '+s.fechaLabel+'</div>'
+        ?'<img src="'+s.val+'" style="width:100%;border-radius:6px;margin-top:4px;max-height:100px;object-fit:cover;">'
+        :'<div style="font-size:.72rem;color:#374151;margin-top:4px;">'+s.val+'</div>';
+      solsEl.innerHTML+='<div style="border:1.5px solid '+color+'30;border-radius:8px;padding:7px 9px;background:'+color+'10;">'
+        +'<div style="display:flex;justify-content:space-between;"><span style="font-size:.62rem;font-weight:700;color:'+color+';">'+label+'</span>'
+        +'<span style="font-size:.58rem;color:#94a3b8;">'+(s.fechaLabel||'')+'</span></div>'
         +content+'</div>';
     });
-    // Ocultar form si ya tiene 3 soluciones
-    const solCount=[d.sol1,d.sol2,d.sol3].filter(Boolean).length;
-    document.getElementById('nov-ev-form').style.display=solCount>=3?'none':'block';
+    // Siempre mostrar form — sin límite
+    document.getElementById('nov-ev-form').style.display='block';
   });
   _novEvTipo('img');
   document.getElementById('nov-ev-modal').style.display='flex';
@@ -5204,13 +5202,9 @@ async function _novEvGuardar(){
     }
     const base=_novGDBasePath();
     const novRef=_db.ref(base+'/'+g.gdNovKey);
-    const snap=await novRef.once('value');
-    const d=snap.val()||{};
-    const slot=!d.sol1?'sol1':!d.sol2?'sol2':!d.sol3?'sol3':null;
-    if(!slot){toast('⚠️ Ya tiene 3 evidencias');btn.textContent='Guardar';btn.disabled=false;return;}
-    await novRef.child(slot).set(solObj);
-    // Guardar referencia local de que tiene evidencia
-    gestiones[_novEvId]['gdSol'+slot.slice(-1)]=true;
+    // Siempre push a soluciones/ — sin límite
+    await novRef.child('soluciones').push(solObj);
+    gestiones[_novEvId].gdTieneSols=true;
     guardar();_fbSyncGestion(_novEvId);
     toast('✅ Evidencia guardada en Gestiones Diarias');
     _novEvCerrar();
@@ -8621,9 +8615,9 @@ function _novRender(){
   const allNov=Object.entries(_novData).sort((a,b)=>b[1].ts-a[1].ts);
   const entries=allNov.filter(([,n])=>{
     if(_nq&&![(n.guia||''),(n.asesor||'')].some(v=>v.toLowerCase().includes(_nq)))return false;
-    if(_novFilter.sol==='sin'){if(n.sol1)return false;}
-    else if(_novFilter.sol==='solucionada'){if(![n.sol1,n.sol2,n.sol3].some(s=>s&&s.estado==='solucionada'))return false;}
-    else if(_novFilter.sol==='devuelta'){if(![n.sol1,n.sol2,n.sol3].some(s=>s&&s.estado==='devuelta'))return false;}
+    if(_novFilter.sol==='sin'){if(_novGetSols(n).length)return false;}
+    else if(_novFilter.sol==='solucionada'){if(!_novGetSols(n).some(s=>s.estado==='solucionada'))return false;}
+    else if(_novFilter.sol==='devuelta'){if(!_novGetSols(n).some(s=>s.estado==='devuelta'))return false;}
     return true;
   });
   const cntNov=document.getElementById('nov-count');
@@ -8634,61 +8628,76 @@ function _novRender(){
   }
   let rows='';
   entries.forEach(([id,n])=>{
+    const sols=_novGetSols(n);
+    const lastSol=sols[sols.length-1];
+    const estadoBadge=!sols.length
+      ?'<span style="background:#f1f5f9;color:#94a3b8;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">Sin evidencia</span>'
+      :lastSol.estado==='solucionada'
+        ?'<span style="background:#dcfce7;color:#166534;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">✅ Solucionada</span>'
+        :lastSol.estado==='devuelta'
+        ?'<span style="background:#fef3c7;color:#92400e;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">🔄 Devuelta</span>'
+        :'<span style="background:#e0f2fe;color:#0369a1;border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">📋 En gestión</span>';
     rows+=`<tr>
-      <td style="white-space:nowrap;color:#64748b;font-size:.7rem;">${n.fecha||'—'}</td>
-      <td style="font-weight:800;font-size:.82rem;white-space:nowrap;">${n.guia||'—'}</td>
-      <td>${_novSolCell(id,n,1)}</td>
-      <td>${_novSolCell(id,n,2)}</td>
-      <td>${_novSolCell(id,n,3)}</td>
-      <td style="text-align:center;"><span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.65rem;font-weight:700;white-space:nowrap;">${n.asesor||'—'}</span></td>
-      <td style="text-align:center;white-space:nowrap;">
+      <td style="white-space:nowrap;color:#64748b;font-size:.7rem;vertical-align:top;padding-top:10px;">${n.fecha||'—'}</td>
+      <td style="font-weight:800;font-size:.82rem;white-space:nowrap;vertical-align:top;padding-top:10px;">
+        ${n.guia||'—'}
+        ${n.tipoNovedad?'<div style="font-size:.6rem;color:#d97706;font-weight:600;margin-top:2px;">'+n.tipoNovedad+'</div>':''}
+      </td>
+      <td style="vertical-align:top;">${_novSolsCell(id,n,sols)}</td>
+      <td style="text-align:center;vertical-align:top;padding-top:10px;">
+        <span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:20px;font-size:.65rem;font-weight:700;white-space:nowrap;">${n.asesor||'—'}</span>
+        <div style="margin-top:5px;">${estadoBadge}</div>
+      </td>
+      <td style="text-align:center;white-space:nowrap;vertical-align:top;padding-top:8px;">
         <button onclick="_novEditar('${id}')" title="Editar" style="background:#f1f5f9;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:.8rem;margin-right:4px;">✏️</button>
         <button onclick="_novEliminar('${id}')" title="Eliminar" style="background:#fee2e2;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:.8rem;">🗑️</button>
       </td>
     </tr>`;
   });
   el.innerHTML=`<div style="overflow-x:auto;"><table id="nov-table">
-    <colgroup><col style="width:90px"><col style="width:130px"><col><col><col><col style="width:100px"><col style="width:70px"></colgroup>
+    <colgroup><col style="width:90px"><col style="width:120px"><col><col style="width:110px"><col style="width:70px"></colgroup>
     <thead>
       <tr>
-        <th rowspan="2" style="vertical-align:middle;">FECHA</th>
-        <th rowspan="2" style="vertical-align:middle;">NÚMERO DE GUÍA</th>
-        <th colspan="3" class="redth">COMPROBANTE DE CONTACTO</th>
-        <th rowspan="2" style="vertical-align:middle;">ASESOR<br>ENCARGADO</th>
-        <th rowspan="2" style="vertical-align:middle;background:#374151;"></th>
-      </tr>
-      <tr>
-        <th class="redth">SOLUCIÓN 1</th>
-        <th class="redth">SOLUCIÓN 2</th>
-        <th class="redth">SOLUCIÓN 3</th>
+        <th>FECHA</th>
+        <th>GUÍA</th>
+        <th class="redth">EVIDENCIAS DE SOLUCIÓN</th>
+        <th>ASESOR</th>
+        <th style="background:#374151;"></th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
 
-function _novSolCell(id,n,num){
-  const sol=n['sol'+num];
-  const prevSol=num===1?true:n['sol'+(num-1)];
-  if(sol){
-    const esDevuelta=sol.estado==='devuelta';
-    const badge=esDevuelta
-      ? `<span style="background:#fef3c7;color:#92400e;border-radius:20px;padding:2px 9px;font-size:.58rem;font-weight:700;display:inline-block;margin-bottom:5px;">📦 Devuelto</span>`
-      : `<span style="background:#dcfce7;color:#166534;border-radius:20px;padding:2px 9px;font-size:.58rem;font-weight:700;display:inline-block;margin-bottom:5px;">✅ Solucionado</span>`;
-    const fecha=`<div style="font-size:.58rem;color:#94a3b8;margin-top:3px;">${sol.fechaLabel||''}</div>`;
-    const acciones=`<div style="display:flex;gap:4px;margin-top:6px;">
-      <button onclick="_novAbrirSol('${id}',${num})" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;border-radius:6px;padding:3px 8px;font-size:.6rem;font-weight:600;cursor:pointer;font-family:inherit;">✏️ Editar</button>
-      <button onclick="_novClearSol('${id}',${num})" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 7px;font-size:.6rem;cursor:pointer;font-family:inherit;" title="Eliminar solución">🗑️</button>
+function _novSolsCell(id,n,sols){
+  let html='<div style="display:flex;flex-direction:column;gap:6px;padding:6px 0;">';
+  sols.forEach((s,i)=>{
+    const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
+    const bg=s.estado==='solucionada'?'#dcfce7':s.estado==='devuelta'?'#fef3c7':'#e0f2fe';
+    const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 En gestión';
+    const delBtn=s._key
+      ?`<button onclick="_novDelSol('${id}','${s._key}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:2px 6px;font-size:.6rem;cursor:pointer;font-family:inherit;" title="Eliminar">🗑️</button>`
+      :s._legacyNum
+      ?`<button onclick="_novClearSol('${id}',${s._legacyNum})" style="background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:2px 6px;font-size:.6rem;cursor:pointer;font-family:inherit;" title="Eliminar">🗑️</button>`
+      :'';
+    html+=`<div style="border:1.5px solid ${color}30;border-radius:8px;overflow:hidden;">`;
+    html+=`<div style="background:${bg};padding:4px 8px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:.58rem;font-weight:700;color:${color};">${label} · ${i+1}ª evidencia</span>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <span style="font-size:.52rem;color:#94a3b8;">${s.fechaLabel||''}</span>
+        ${delBtn}
+      </div>
     </div>`;
-    if(sol.tipo==='img'){
-      return `<div class="nov-sol-cell">${badge}<img class="nov-sol-img" src="${sol.val}" onclick="_novVerImg(this.src)">${fecha}${acciones}</div>`;
+    if(s.tipo==='img'){
+      html+=`<img src="${s.val}" onclick="_novVerImg(this.src)" style="width:100%;max-height:120px;object-fit:cover;cursor:zoom-in;display:block;">`;
+    } else {
+      html+=`<div style="padding:6px 8px;font-size:.68rem;color:#374151;">${s.val}</div>`;
     }
-    return `<div class="nov-sol-cell">${badge}<div class="nov-sol-txt">${sol.val}</div>${fecha}${acciones}</div>`;
-  }
-  if(prevSol){
-    return `<div class="nov-sol-cell"><button class="nov-add-btn" onclick="_novAbrirSol('${id}',${num})">+ Sol. ${num}</button></div>`;
-  }
-  return `<div class="nov-sol-cell" style="color:#e2e8f0;font-size:.65rem;">—</div>`;
+    html+='</div>';
+  });
+  html+=`<button onclick="_novAbrirSol('${id}')" style="width:100%;padding:6px;border:1.5px dashed #e2e8f0;border-radius:8px;background:none;color:#94a3b8;font-size:.7rem;cursor:pointer;font-family:inherit;" onmouseover="this.style.borderColor='#7c3aed';this.style.color='#7c3aed';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8';">+ Agregar evidencia</button>`;
+  html+='</div>';
+  return html;
 }
 
 function _novNuevo(){
@@ -8708,17 +8717,16 @@ function _novNuevo(){
   document.getElementById('nov-modal').classList.add('open');
 }
 
-function _novAbrirSol(id,solNum){
-  _novModalState={mode:'sol',id,solNum};
+function _novAbrirSol(id){
+  const sols=_novGetSols(_novData[id]||{});
+  _novModalState={mode:'sol',id,solNum:sols.length+1};
   document.getElementById('nov-m-meta').style.display='none';
   document.getElementById('nov-m-sol-section').style.display='block';
-  document.getElementById('nov-m-title').textContent='Solución '+solNum;
-  document.getElementById('nov-m-sol-label').textContent='Solución '+solNum;
+  document.getElementById('nov-m-title').textContent='Evidencia '+(sols.length+1);
+  document.getElementById('nov-m-sol-label').textContent='Evidencia '+(sols.length+1);
   document.getElementById('nov-m-img').value='';
   document.getElementById('nov-m-txt').value='';
-  // Pre-seleccionar estado si la solución ya existe (modo edición)
-  const solExistente=_novData[id]&&_novData[id]['sol'+solNum];
-  _novSetEstado(solExistente?solExistente.estado||'solucionada':'solucionada');
+  _novSetEstado('solucionada');
   document.getElementById('nov-modal').classList.add('open');
 }
 
@@ -8743,16 +8751,20 @@ function _novEditar(id){
   document.getElementById('nov-modal').classList.add('open');
 }
 
-function _novClearSol(id,num){
-  const cascade=num<3?` (y las soluciones ${num<2?'2 y 3':'3'} si existen)`:'';
-  if(!confirm('¿Eliminar solución '+num+cascade+'?'))return;
-  const updates={};
-  for(let i=num;i<=3;i++) updates['sol'+i]=null;
-  _db.ref(_novBasePath()+'/'+id).update(updates).then(()=>{
+function _novDelSol(id, solKey){
+  if(!confirm('¿Eliminar esta evidencia?'))return;
+  _db.ref(_novBasePath()+'/'+id+'/soluciones/'+solKey).remove().then(()=>{
     const dia=_novData[id]?.dia||new Date().getDate();
-    for(let i=num;i<=3;i++) _novData[id]['sol'+i]=null;
-    _novRender();
-    _novSyncGD(dia);
+    if(_novData[id]?.soluciones) delete _novData[id].soluciones[solKey];
+    _novRender(); _novSyncGD(dia);
+  });
+}
+function _novClearSol(id,num){
+  if(!confirm('¿Eliminar evidencia '+num+'?'))return;
+  _db.ref(_novBasePath()+'/'+id+'/sol'+num).remove().then(()=>{
+    const dia=_novData[id]?.dia||new Date().getDate();
+    if(_novData[id]) _novData[id]['sol'+num]=null;
+    _novRender(); _novSyncGD(dia);
   });
 }
 
@@ -8812,11 +8824,16 @@ async function _novGuardar(){
       const novData={
         guia, fecha:document.getElementById('nov-m-fecha').value.trim(),
         asesor:document.getElementById('nov-m-asesor').value.trim(),
-        dia:new Date().getDate(),
-        ts:Date.now(), sol1:solObj||null, sol2:null, sol3:null
+        dia:new Date().getDate(), ts:Date.now()
       };
+      // Primera evidencia va en soluciones/ si existe
       const ref=await _db.ref(_novBasePath()).push(novData);
       _novData[ref.key]=novData;
+      if(solObj){
+        await _db.ref(_novBasePath()+'/'+ref.key+'/soluciones').push(solObj);
+        if(!_novData[ref.key].soluciones)_novData[ref.key].soluciones={};
+        _novData[ref.key].soluciones[Date.now()]=solObj;
+      }
     } else if(state.mode==='edit'){
       const guia=document.getElementById('nov-m-guia').value.trim();
       if(!guia){ alert('Ingresa el número de guía'); btn.textContent='Actualizar'; btn.disabled=false; return; }
@@ -8827,10 +8844,12 @@ async function _novGuardar(){
       await _db.ref(_novBasePath()+'/'+state.id).update(updates);
       Object.assign(_novData[state.id], updates);
     } else {
+      // Agregar nueva evidencia → siempre push a soluciones/
       if(!solObj){ alert('Agrega una imagen o texto de evidencia'); btn.textContent='Guardar'; btn.disabled=false; return; }
-      await _db.ref(_novBasePath()+'/'+state.id+'/sol'+state.solNum).set(solObj);
+      const solRef=await _db.ref(_novBasePath()+'/'+state.id+'/soluciones').push(solObj);
       if(!_novData[state.id]) _novData[state.id]={};
-      _novData[state.id]['sol'+state.solNum]=solObj;
+      if(!_novData[state.id].soluciones) _novData[state.id].soluciones={};
+      _novData[state.id].soluciones[solRef.key]=solObj;
     }
     _novCerrarModal();
     _novRender();
@@ -8841,6 +8860,14 @@ async function _novGuardar(){
   btn.textContent='Guardar'; btn.disabled=false;
 }
 
+// Devuelve array de soluciones de una novedad (compatible con estructura vieja sol1/2/3 y nueva soluciones/{key})
+function _novGetSols(n){
+  if(n.soluciones&&Object.keys(n.soluciones).length){
+    return Object.entries(n.soluciones).sort((a,b)=>(a[1].ts||0)-(b[1].ts||0)).map(([k,s])=>({...s,_key:k}));
+  }
+  return [n.sol1,n.sol2,n.sol3].filter(Boolean).map((s,i)=>({...s,_legacyNum:i+1}));
+}
+
 // Recalcula soluc/devuelt del día en GD a partir de todas las novedades
 async function _novSyncGD(dia){
   if(typeof _db==='undefined'||!window._currentUsername||!_gdMes||!dia) return;
@@ -8848,8 +8875,7 @@ async function _novSyncGD(dia){
   let soluc=0, devuelt=0;
   Object.values(_novData).forEach(n=>{
     if((n.dia||0)!==dia) return;
-    [n.sol1,n.sol2,n.sol3].forEach(sol=>{
-      if(!sol) return;
+    _novGetSols(n).forEach(sol=>{
       if(sol.estado==='solucionada') soluc++;
       else if(sol.estado==='devuelta') devuelt++;
     });
