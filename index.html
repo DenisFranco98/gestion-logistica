@@ -994,9 +994,9 @@ header h1{font-size:1.05rem;font-weight:700;}
       <button class="adm-nav-item" id="tab-btn-buscar" onclick="_admTab('buscar')">
         <span class="adm-nav-icon">🔍</span> Buscar orden
       </button>
-      <div class="adm-sidebar-label">Empresa</div>
+      <div class="adm-sidebar-label">Tiendas</div>
       <button class="adm-nav-item" id="tab-btn-empresas" onclick="_admTab('empresas')">
-        <span class="adm-nav-icon">🏢</span> Empresas
+        <span class="adm-nav-icon">🏪</span> Tiendas
       </button>
       <div class="adm-sidebar-label">Gestiones Diarias</div>
       <button class="adm-nav-item" id="tab-btn-gdconsolid" onclick="_admTab('gdconsolid')">
@@ -1217,8 +1217,8 @@ header h1{font-size:1.05rem;font-weight:700;}
       <!-- TAB: EMPRESAS -->
       <div id="adm-tab-empresas" style="display:none;">
         <div class="adm-sec-head" style="margin-bottom:16px;">
-          <div class="adm-sec-title">Mis empresas</div>
-          <button class="adm-add-btn" onclick="_admAbrirCrearEmpresa()">+ Nueva empresa</button>
+          <div class="adm-sec-title">Mis tiendas</div>
+          <button class="adm-add-btn" onclick="_admAbrirCrearEmpresa()">+ Nueva tienda</button>
         </div>
         <div id="adm-empresas-list" style="display:flex;flex-direction:column;gap:8px;">
           <div class="adm-empty">Cargando...</div>
@@ -1353,16 +1353,16 @@ header h1{font-size:1.05rem;font-weight:700;}
 <!-- ===== MODAL CREAR EMPRESA ===== -->
 <div class="adm-modal-bg" id="modal-crear-empresa">
   <div class="adm-modal">
-    <h3>🏢 Nueva empresa</h3>
+    <h3>🏪 Nueva tienda</h3>
     <div class="adm-field">
-      <label>Nombre de la empresa</label>
-      <input type="text" id="modal-empresa-nombre" placeholder="Ej: Mi Empresa SAS" autocomplete="off"
+      <label>Nombre de la tienda</label>
+      <input type="text" id="modal-empresa-nombre" placeholder="Ej: Mi Tienda" autocomplete="off"
         onkeydown="if(event.key==='Enter')_mCrearEmpresaOk()"/>
     </div>
     <div id="modal-empresa-error" style="color:#f87171;font-size:.75rem;margin-top:-6px;display:none;"></div>
     <div class="adm-modal-btns" style="margin-top:18px;">
       <button class="adm-modal-btn cancel" onclick="_mCrearEmpresaCerrar()">Cancelar</button>
-      <button class="adm-modal-btn primary" onclick="_mCrearEmpresaOk()">Crear empresa</button>
+      <button class="adm-modal-btn primary" onclick="_mCrearEmpresaOk()">Crear tienda</button>
     </div>
   </div>
 </div>
@@ -1380,7 +1380,7 @@ header h1{font-size:1.05rem;font-weight:700;}
       <input type="text" id="mga-search" placeholder="Buscar usuario disponible..." autocomplete="off" oninput="_mgaFiltrar(this.value)"
         style="width:100%;background:#f8fafc;border:1.5px solid #d6d2cc;border-radius:8px;padding:8px 12px;color:#1e293b;font-size:.78rem;outline:none;margin-bottom:8px;"/>
       <div id="mga-disponibles" style="display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto;"></div>
-      <div id="mga-sin-disponibles" style="color:#94a3b8;font-size:.76rem;font-style:italic;display:none;">Todos los usuarios ya están en esta empresa</div>
+      <div id="mga-sin-disponibles" style="color:#94a3b8;font-size:.76rem;font-style:italic;display:none;">Todos los usuarios ya están en esta tienda</div>
     </div>
     <div class="adm-modal-btns" style="margin-top:18px;">
       <button class="adm-modal-btn cancel" onclick="document.getElementById('modal-gestionar-asesores').classList.remove('open')">Cerrar</button>
@@ -1803,7 +1803,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     <!-- Stats -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
       <div class="adm-cmd-card blue"><div class="adm-cmd-icon">👤</div><div class="adm-cmd-val" id="sa-stat-admins">0</div><div class="adm-cmd-lbl">Administradores</div></div>
-      <div class="adm-cmd-card green"><div class="adm-cmd-icon">🏢</div><div class="adm-cmd-val" id="sa-stat-empresas">0</div><div class="adm-cmd-lbl">Empresas</div></div>
+      <div class="adm-cmd-card green"><div class="adm-cmd-icon">🏪</div><div class="adm-cmd-val" id="sa-stat-empresas">0</div><div class="adm-cmd-lbl">Tiendas</div></div>
       <div class="adm-cmd-card amber"><div class="adm-cmd-icon">👥</div><div class="adm-cmd-val" id="sa-stat-asesores">0</div><div class="adm-cmd-lbl">Asesores totales</div></div>
       <div class="adm-cmd-card purple"><div class="adm-cmd-icon">🟢</div><div class="adm-cmd-val" id="sa-stat-online">0</div><div class="adm-cmd-lbl">En línea ahora</div></div>
     </div>
@@ -1811,7 +1811,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     <div style="background:white;border-radius:12px;border:1.5px solid #e7e5e4;padding:14px 16px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
       <div style="position:relative;flex:1;min-width:200px;">
         <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.85rem;">🔍</span>
-        <input id="sa-search" type="text" placeholder="Buscar por admin, empresa o asesor..." oninput="_saFiltrar()"
+        <input id="sa-search" type="text" placeholder="Buscar por admin, tienda o asesor..." oninput="_saFiltrar()"
           style="width:100%;padding:8px 12px 8px 32px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.78rem;color:#1e293b;outline:none;background:#f8fafc;"/>
       </div>
       <select id="sa-sort" onchange="_saFiltrar()" style="background:white;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:.76rem;color:#1e293b;cursor:pointer;outline:none;">
@@ -1819,13 +1819,13 @@ header h1{font-size:1.05rem;font-weight:700;}
         <option value="antiguo">Más antiguo</option>
         <option value="az">A → Z</option>
         <option value="za">Z → A</option>
-        <option value="mas-empresas">Más empresas</option>
+        <option value="mas-empresas">Más tiendas</option>
         <option value="mas-asesores">Más asesores</option>
       </select>
       <select id="sa-filtro" onchange="_saFiltrar()" style="background:white;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:.76rem;color:#1e293b;cursor:pointer;outline:none;">
         <option value="todos">Todos los admins</option>
-        <option value="con-empresas">Con empresas</option>
-        <option value="sin-empresas">Sin empresas</option>
+        <option value="con-empresas">Con tiendas</option>
+        <option value="sin-empresas">Sin tiendas</option>
         <option value="con-asesores">Con asesores</option>
         <option value="sin-asesores">Sin asesores</option>
       </select>
@@ -1871,7 +1871,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 <div id="registro-modal">
   <div style="background:#0f172a;border-radius:16px;padding:28px;width:100%;max-width:380px;border:1.5px solid #1e293b;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <h3 style="color:white;font-size:.95rem;font-weight:800;margin-bottom:6px;">Crear cuenta de administrador</h3>
-    <p style="color:#64748b;font-size:.74rem;margin-bottom:20px;">Podrás crear empresas y gestionar tu equipo.</p>
+    <p style="color:#64748b;font-size:.74rem;margin-bottom:20px;">Podrás crear tiendas y gestionar tu equipo.</p>
     <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Usuario</label><input type="text" id="reg-user" placeholder="ej: miempresa_admin" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
     <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Contraseña</label><input type="password" id="reg-pass" placeholder="Contraseña" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
     <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="Repite la contraseña" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
@@ -10147,7 +10147,7 @@ function _saBuildCard(a, q){
       <div>
         <div style="font-weight:800;color:#1e293b;font-size:.88rem;">@${a.username}</div>
         <div style="color:#94a3b8;font-size:.62rem;margin-top:2px;">
-          🏢 ${a.totalEmpresas} empresa${a.totalEmpresas!==1?'s':''} &nbsp;·&nbsp; 👥 ${a.totalAsesores} asesor${a.totalAsesores!==1?'es':''}
+          🏪 ${a.totalEmpresas} tienda${a.totalEmpresas!==1?'s':''} &nbsp;·&nbsp; 👥 ${a.totalAsesores} asesor${a.totalAsesores!==1?'es':''}
           ${onlineAsesores?'&nbsp;·&nbsp; <span style="color:#16a34a;font-weight:700;">🟢 '+onlineAsesores+' en línea</span>':''}
           &nbsp;·&nbsp; Registrado ${fechaReg}
         </div>
@@ -10160,7 +10160,7 @@ function _saBuildCard(a, q){
   bodyDiv.style.cssText='display:none;';
 
   if(!a.empresas.length){
-    bodyDiv.innerHTML='<div style="padding:12px 20px 14px;color:#94a3b8;font-size:.75rem;font-style:italic;">Sin empresas creadas</div>';
+    bodyDiv.innerHTML='<div style="padding:12px 20px 14px;color:#94a3b8;font-size:.75rem;font-style:italic;">Sin tiendas creadas</div>';
   } else {
     a.empresas.forEach(emp=>{
       const empSection = document.createElement('div');
@@ -11439,7 +11439,7 @@ function _admAbrirEditar(username, asesor, tienda, rol){
     const todasEmpresas = snapE.val()||{};
     const misEmpresasIds = Object.keys(snapAE.val()||{});
     const habilitadas = snapUT.val()||{};
-    if(!misEmpresasIds.length){ contenedor.innerHTML='<div style="font-size:.7rem;color:#94a3b8;">Sin empresas disponibles</div>'; return; }
+    if(!misEmpresasIds.length){ contenedor.innerHTML='<div style="font-size:.7rem;color:#94a3b8;">Sin tiendas disponibles</div>'; return; }
     contenedor.innerHTML = misEmpresasIds.map(empId=>{
       const nombre = (todasEmpresas[empId]||{}).nombre||empId;
       const checked = habilitadas[empId]?'checked':'';
