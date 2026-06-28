@@ -1006,6 +1006,10 @@ header h1{font-size:1.05rem;font-weight:700;}
       <button class="adm-nav-item" id="tab-btn-analitica" onclick="_admTab('analitica')">
         <span class="adm-nav-icon">📊</span> Analítica
       </button>
+      <div class="adm-sidebar-label">Seguridad</div>
+      <button class="adm-nav-item" id="tab-btn-auditoria" onclick="_admTab('auditoria')">
+        <span class="adm-nav-icon">🔐</span> Auditoría logins
+      </button>
       <div class="adm-sidebar-footer">
         <div class="adm-sidebar-user">⚙️ Administrador</div>
       </div>
@@ -1189,6 +1193,25 @@ header h1{font-size:1.05rem;font-weight:700;}
           <div class="anl-card-title">Detalle día a día</div>
           <div id="anl-table-wrap"><div class="anl-empty">Selecciona una tienda para ver el historial</div></div>
         </div>
+      </div>
+
+      <!-- TAB: AUDITORÍA LOGINS -->
+      <div id="adm-tab-auditoria" style="display:none;padding:20px;">
+        <div style="font-size:1rem;font-weight:900;color:#1e293b;margin-bottom:4px;">🔐 Auditoría de inicios de sesión</div>
+        <div style="font-size:.7rem;color:#94a3b8;margin-bottom:16px;">Registro de todos los accesos al sistema — IP, ubicación, dispositivo y resultado</div>
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <select id="aud-user-sel" onchange="_audCargar()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.75rem;font-family:inherit;outline:none;">
+            <option value="">Todos los usuarios</option>
+          </select>
+          <select id="aud-result-sel" onchange="_audFiltrar()" style="padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.75rem;font-family:inherit;outline:none;">
+            <option value="">Todos los resultados</option>
+            <option value="exito">✅ Exitosos</option>
+            <option value="fallo_password">❌ Contraseña incorrecta</option>
+            <option value="fallo_usuario">👤 Usuario no existe</option>
+          </select>
+          <button onclick="_audCargar()" style="padding:7px 14px;background:#1e293b;color:white;border:none;border-radius:8px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:inherit;">↻ Actualizar</button>
+        </div>
+        <div id="aud-table-wrap"></div>
       </div>
 
       <!-- TAB: EMPRESAS -->
@@ -9842,7 +9865,8 @@ function _initLogin(){
       snapAdm.forEach(child => {
         foundAdm = true;
         const d = child.val();
-        if(d.password !== p){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
+        if(d.password !== p){ _auditLogin(u,'fallo_password'); err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
+        _auditLogin(u,'exito');
         localStorage.setItem(LOGIN_KEY, 'admin');
         localStorage.setItem('lgs_admin_id', child.key);
         localStorage.setItem('lgs_admin_user', u);
@@ -9856,7 +9880,8 @@ function _initLogin(){
         snap.forEach(child => {
           found = true;
           const d = child.val();
-          if(d.password !== p){ err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
+          if(d.password !== p){ _auditLogin(u,'fallo_password'); err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
+          _auditLogin(u,'exito');
           window._currentRol = d.rol||'dueno';
           const nombreAsesor = d.asesor||u;
           // Cargar tiendas habilitadas para este usuario
@@ -9880,7 +9905,8 @@ function _initLogin(){
           });
         });
         if(!found){
-          if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ err.classList.add('show'); document.getElementById('login-pass').value=''; return; }
+          if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ _auditLogin(u,'fallo_usuario'); err.classList.add('show'); document.getElementById('login-pass').value=''; return; }
+          _auditLogin(u,'exito');
           window._currentRol = 'dueno';
           _pedirPerfil(u, '');
         }
@@ -10431,7 +10457,7 @@ let _admPresenceListener = null;
 let _admPresenciaCache = {};
 
 function _admTab(tab){
-  ['enlive','ranking','equipo','analitica','empresas','buscar','gdconsolid'].forEach(t=>{
+  ['enlive','ranking','equipo','analitica','empresas','buscar','gdconsolid','auditoria'].forEach(t=>{
     const el = document.getElementById('adm-tab-'+t);
     if(el) el.style.display = t===tab ? 'block' : 'none';
     const btn = document.getElementById('tab-btn-'+t);
@@ -10447,6 +10473,120 @@ function _admTab(tab){
     const mesEl=document.getElementById('gdadm-mes');
     if(mesEl&&!mesEl.value) mesEl.value=y+'-'+m;
   }
+  if(tab==='auditoria') _audInicializar();
+}
+
+// ── AUDITORÍA DE LOGINS ───────────────────────────────────────────────────
+let _audAllData=[], _audFilter='';
+
+async function _auditLogin(username, resultado){
+  try{
+    if(typeof _db==='undefined')return;
+    // Obtener IP y ubicación via API gratuita (sin API key)
+    let ip='—', ciudad='—', pais='—', isp='—', region='—';
+    try{
+      const r=await fetch('https://ip-api.com/json/?fields=status,query,city,regionName,country,org',{cache:'no-store'});
+      if(r.ok){
+        const d=await r.json();
+        if(d.status==='success'){ip=d.query||'—';ciudad=d.city||'—';region=d.regionName||'—';pais=d.country||'—';isp=d.org||'—';}
+      }
+    }catch(_){}
+    const ua=navigator.userAgent||'—';
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone||'—';
+    // Detectar dispositivo aproximado
+    const esMovil=/Mobi|Android|iPhone|iPad/i.test(ua);
+    const navegador=ua.includes('Chrome')?'Chrome':ua.includes('Firefox')?'Firefox':ua.includes('Safari')?'Safari':ua.includes('Edge')?'Edge':'Otro';
+    const record={
+      username, resultado, ts:Date.now(),
+      fecha:new Date().toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'}),
+      ip, ciudad, region, pais, isp,
+      dispositivo:esMovil?'Móvil':'Escritorio',
+      navegador, tz,
+      ua:ua.slice(0,120) // truncar para no exceder límites
+    };
+    await _db.ref('login_audit/'+username).push(record);
+  }catch(e){ console.warn('[audit]',e); }
+}
+
+async function _audInicializar(){
+  const wrap=document.getElementById('aud-table-wrap');
+  if(!wrap)return;
+  wrap.innerHTML='<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.75rem;">Cargando registros...</div>';
+  // Cargar todos los usuarios para el selector
+  const [snapUsers, snapAdmins]=await Promise.all([
+    _db.ref('users').once('value'),
+    _db.ref('admins').once('value')
+  ]);
+  const usuarios=[];
+  snapUsers.val()&&Object.values(snapUsers.val()).forEach(u=>u.username&&usuarios.push(u.username));
+  snapAdmins.val()&&Object.values(snapAdmins.val()).forEach(a=>a.username&&usuarios.push(a.username));
+  const sel=document.getElementById('aud-user-sel');
+  if(sel){
+    sel.innerHTML='<option value="">Todos los usuarios</option>'+[...new Set(usuarios)].sort().map(u=>`<option value="${u}">${u}</option>`).join('');
+  }
+  _audCargar();
+}
+
+async function _audCargar(){
+  const wrap=document.getElementById('aud-table-wrap');
+  if(!wrap)return;
+  wrap.innerHTML='<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.75rem;">Cargando...</div>';
+  const userFil=(document.getElementById('aud-user-sel')||{}).value||'';
+  let snap;
+  if(userFil){
+    snap=await _db.ref('login_audit/'+userFil).orderByChild('ts').limitToLast(200).once('value');
+    _audAllData=[];
+    snap.forEach(ch=>_audAllData.unshift({...ch.val(),_key:ch.key}));
+  } else {
+    const snapAll=await _db.ref('login_audit').once('value');
+    _audAllData=[];
+    (snapAll.val()||{})&&Object.entries(snapAll.val()||{}).forEach(([user,regs])=>{
+      Object.entries(regs||{}).forEach(([k,r])=>_audAllData.push({...r,_key:k,username:r.username||user}));
+    });
+    _audAllData.sort((a,b)=>(b.ts||0)-(a.ts||0));
+    _audAllData=_audAllData.slice(0,300);
+  }
+  _audFiltrar();
+}
+
+function _audFiltrar(){
+  const wrap=document.getElementById('aud-table-wrap');
+  if(!wrap)return;
+  const resFil=(document.getElementById('aud-result-sel')||{}).value||'';
+  const rows=_audAllData.filter(r=>!resFil||r.resultado===resFil);
+  if(!rows.length){wrap.innerHTML='<div style="padding:30px;text-align:center;color:#94a3b8;font-size:.75rem;">Sin registros</div>';return;}
+  const badge=r=>{
+    if(r.resultado==='exito') return '<span style="background:#dcfce7;color:#166534;border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">✅ Éxito</span>';
+    if(r.resultado==='fallo_password') return '<span style="background:#fee2e2;color:#991b1b;border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">❌ Contraseña incorrecta</span>';
+    if(r.resultado==='fallo_usuario') return '<span style="background:#fef3c7;color:#92400e;border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">👤 Usuario no existe</span>';
+    return '<span style="background:#f1f5f9;color:#64748b;border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">' +(r.resultado||'—')+'</span>';
+  };
+  wrap.innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.7rem;">
+    <thead><tr style="background:#0f172a;color:white;font-size:.62rem;letter-spacing:.3px;">
+      <th style="padding:8px 10px;text-align:left;">FECHA</th>
+      <th style="padding:8px 10px;text-align:left;">USUARIO</th>
+      <th style="padding:8px 10px;text-align:left;">RESULTADO</th>
+      <th style="padding:8px 10px;text-align:left;">IP</th>
+      <th style="padding:8px 10px;text-align:left;">CIUDAD / REGIÓN</th>
+      <th style="padding:8px 10px;text-align:left;">PAÍS</th>
+      <th style="padding:8px 10px;text-align:left;">ISP / OPERADOR</th>
+      <th style="padding:8px 10px;text-align:left;">DISPOSITIVO</th>
+      <th style="padding:8px 10px;text-align:left;">NAVEGADOR</th>
+      <th style="padding:8px 10px;text-align:left;">ZONA HORARIA</th>
+    </tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr style="background:${i%2?'#f8fafc':'white'};border-bottom:1px solid #f1f5f9;">
+      <td style="padding:6px 10px;white-space:nowrap;color:#64748b;">${r.fecha||'—'}</td>
+      <td style="padding:6px 10px;font-weight:700;color:#1e293b;">${r.username||'—'}</td>
+      <td style="padding:6px 10px;">${badge(r)}</td>
+      <td style="padding:6px 10px;font-family:monospace;color:#0891b2;">${r.ip||'—'}</td>
+      <td style="padding:6px 10px;">${r.ciudad||'—'}${r.region&&r.region!==r.ciudad?' · '+r.region:''}</td>
+      <td style="padding:6px 10px;">${r.pais||'—'}</td>
+      <td style="padding:6px 10px;color:#64748b;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.isp||''}">${r.isp||'—'}</td>
+      <td style="padding:6px 10px;">${r.dispositivo||'—'}</td>
+      <td style="padding:6px 10px;">${r.navegador||'—'}</td>
+      <td style="padding:6px 10px;color:#64748b;">${r.tz||'—'}</td>
+    </tr>`).join('')}</tbody>
+  </table><div style="padding:8px 10px;font-size:.62rem;color:#94a3b8;">${rows.length} registros mostrados</div></div>`;
 }
 
 function _admCargarDashboard(){
