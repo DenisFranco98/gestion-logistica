@@ -1835,6 +1835,17 @@ header h1{font-size:1.05rem;font-weight:700;}
     </div>
     <div id="sa-results-label" style="font-size:.63rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;"></div>
     <div id="sa-tree" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <!-- Designar Super Admin Gmail -->
+    <div style="margin-top:28px;background:white;border-radius:14px;border:2px solid #fde68a;padding:20px 22px;">
+      <div style="font-size:.8rem;font-weight:800;color:#92400e;margin-bottom:4px;">🔑 Cuenta Gmail de Super Admin</div>
+      <div style="font-size:.7rem;color:#78350f;margin-bottom:14px;">Vincula tu cuenta Gmail para poder ingresar como Super Admin desde el login normal.</div>
+      <div id="sa-superadmin-actual" style="font-size:.73rem;color:#64748b;margin-bottom:12px;font-style:italic;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input id="sa-superadmin-email" type="email" placeholder="correo@gmail.com" style="flex:1;min-width:180px;padding:8px 12px;border:1.5px solid #fde68a;border-radius:8px;font-size:.76rem;outline:none;font-family:inherit;"/>
+        <button onclick="_saDesignarSuperAdmin()" style="background:#d97706;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">Designar</button>
+        <button onclick="_saQuitarSuperAdmin()" style="background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca;border-radius:8px;padding:8px 12px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">✕ Quitar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1909,6 +1920,19 @@ header h1{font-size:1.05rem;font-weight:700;}
       <button class="adm-modal-btn primary" onclick="_loginStep2Confirmar()">Continuar</button>
     </div>
     <div id="ls2-error" style="color:#f87171;font-size:.75rem;margin-top:10px;display:none;">Completa todos los campos</div>
+  </div>
+</div>
+
+<!-- ===== SELECTOR DE ROL ===== -->
+<div id="rol-select-screen" style="display:none;position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;">
+  <div style="background:white;border-radius:20px;padding:40px 36px;width:100%;max-width:400px;box-shadow:0 25px 60px rgba(0,0,0,.5);">
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:2.2rem;margin-bottom:8px;">🎭</div>
+      <div style="font-size:1.1rem;font-weight:800;color:#0f172a;margin-bottom:4px;">¿Con qué perfil quieres entrar?</div>
+      <div id="rss-subtitle" style="font-size:.78rem;color:#94a3b8;">Tu cuenta tiene múltiples roles</div>
+    </div>
+    <div id="rss-lista" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <button onclick="_cerrarSesionRol()" style="margin-top:20px;width:100%;background:none;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px;font-size:.75rem;font-weight:600;color:#94a3b8;cursor:pointer;font-family:inherit;" onmouseover="this.style.borderColor='#dc2626';this.style.color='#dc2626';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8';">Cerrar sesión</button>
   </div>
 </div>
 
@@ -9883,6 +9907,73 @@ function _initLogin(){
     },'secondary');
   window._fbSecAuth = _fbSecApp.auth();
 
+  // Entrar al panel según el rol elegido
+  function _entrarConRol(uid, email, rolTipo, admData, userData){
+    const btn = document.querySelector('.login-btn');
+    if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
+    document.getElementById('rol-select-screen').style.display='none';
+    if(rolTipo === 'superadmin'){
+      localStorage.setItem(LOGIN_KEY,'superadmin');
+      _showSuperAdmin(); _superAdmCargar();
+    } else if(rolTipo === 'admin'){
+      _auditLogin(email,'exito');
+      localStorage.setItem(LOGIN_KEY,'admin');
+      localStorage.setItem('lgs_admin_id', uid);
+      localStorage.setItem('lgs_admin_user', email);
+      _showAdmin(); _admCargarDashboard();
+    } else {
+      const d = userData||{};
+      _auditLogin(email,'exito');
+      window._currentRol = d.rol||'dueno';
+      const nombreAsesor = d.asesor||email;
+      _db.ref('user_tiendas/'+uid).once('value', snapT=>{
+        const tiendaIds = Object.keys(snapT.val()||{});
+        if(!tiendaIds.length){ _pedirPerfil(uid, d.tienda||''); return; }
+        if(tiendaIds.length===1){
+          _db.ref('empresas/'+tiendaIds[0]).once('value', snapE=>{
+            _entrarApp(uid, (snapE.val()||{}).nombre||tiendaIds[0], nombreAsesor);
+          });
+        } else {
+          _mostrarSelectorTienda(uid, nombreAsesor, tiendaIds);
+        }
+      });
+    }
+  }
+
+  // Mostrar selector de roles cuando una cuenta tiene varios
+  function _mostrarSelectorRol(uid, email, roles, admData, userData){
+    const ICONOS = { superadmin:'🛡️', admin:'🏢', dueno:'🏪', asesor:'👤' };
+    const LABELS  = { superadmin:'Super Admin', admin:'Admin de negocios', dueno:'Dueño de tienda', asesor:'Asesor' };
+    const COLORES = { superadmin:'#92400e', admin:'#1e40af', dueno:'#065f46', asesor:'#1e293b' };
+    const FONDOS  = { superadmin:'#fef3c7', admin:'#eff6ff', dueno:'#ecfdf5', asesor:'#f8fafc' };
+    document.getElementById('rss-subtitle').textContent = email;
+    document.getElementById('rss-lista').innerHTML = roles.map(r=>`
+      <button onclick="_entrarConRol('${uid}','${email}','${r}',null,null)"
+        style="display:flex;align-items:center;gap:14px;padding:16px 18px;background:${FONDOS[r]||'#f8fafc'};border:2px solid transparent;border-radius:12px;cursor:pointer;font-family:inherit;text-align:left;transition:all .15s;"
+        onmouseover="this.style.borderColor='${COLORES[r]||'#94a3b8'}';this.style.transform='translateY(-1px)';"
+        onmouseout="this.style.borderColor='transparent';this.style.transform='';">
+        <span style="font-size:1.8rem;">${ICONOS[r]||'👤'}</span>
+        <div>
+          <div style="font-size:.9rem;font-weight:800;color:${COLORES[r]||'#1e293b'};">${LABELS[r]||r}</div>
+          <div style="font-size:.7rem;color:#64748b;margin-top:2px;">Ingresar con este perfil</div>
+        </div>
+        <span style="margin-left:auto;font-size:1rem;color:${COLORES[r]||'#94a3b8'};">→</span>
+      </button>`).join('');
+    // El onclick necesita pasar los datos — guardar en window temporalmente
+    window._rolPendiente = { uid, email, admData, userData };
+    // Reescribir onclick con closure real
+    document.getElementById('rss-lista').querySelectorAll('button').forEach((btn,i)=>{
+      const r = roles[i];
+      btn.onclick = ()=>_entrarConRol(uid, email, r, admData, userData);
+    });
+    document.getElementById('rol-select-screen').style.display='flex';
+  }
+
+  window._cerrarSesionRol = function(){
+    document.getElementById('rol-select-screen').style.display='none';
+    firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
+  };
+
   window._loginCheck = function(){
     const email = document.getElementById('login-user').value.trim();
     const p = document.getElementById('login-pass').value;
@@ -9891,7 +9982,7 @@ function _initLogin(){
     document.getElementById('login-error-campos').classList.remove('show');
     if(!email||!p){ document.getElementById('login-error-campos').classList.add('show'); setTimeout(()=>document.getElementById('login-error-campos').classList.remove('show'),3000); return; }
 
-    // Super Admin (hardcodeado — usa auth anónimo para acceso a DB)
+    // Acceso de emergencia hardcodeado (solo para Super Admin sin cuenta Gmail aún)
     if(email === ADMIN_USER && p === ADMIN_PASS){
       firebase.auth().signInAnonymously().then(()=>{
         localStorage.setItem(LOGIN_KEY,'superadmin');
@@ -9906,42 +9997,34 @@ function _initLogin(){
     firebase.auth().signInWithEmailAndPassword(email, p)
       .then(cred=>{
         const uid = cred.user.uid;
-        // ¿Es admin?
-        _db.ref('admins/'+uid).once('value', snapAdm=>{
-          if(snapAdm.exists()){
-            _auditLogin(email,'exito');
-            localStorage.setItem(LOGIN_KEY,'admin');
-            localStorage.setItem('lgs_admin_id', uid);
-            localStorage.setItem('lgs_admin_user', email);
-            if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
-            _showAdmin(); _admCargarDashboard(); return;
+        // Consultar los 3 nodos en paralelo
+        return Promise.all([
+          _db.ref('config/superAdminUid').once('value'),
+          _db.ref('admins/'+uid).once('value'),
+          _db.ref('users/'+uid).once('value')
+        ]).then(([snapSA, snapAdm, snapUser])=>{
+          if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
+          const roles = [];
+          if(snapSA.val() === uid) roles.push('superadmin');
+          if(snapAdm.exists()) roles.push('admin');
+          if(snapUser.exists()){
+            const rol = (snapUser.val().rol||'dueno');
+            roles.push(rol==='dueno'?'dueno':'asesor');
           }
-          // ¿Es asesor?
-          _db.ref('users/'+uid).once('value', snapUser=>{
-            if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
-            if(!snapUser.exists()){
-              _auditLogin(email,'fallo_usuario');
-              err.textContent='Cuenta no autorizada. Contacta al administrador.';
-              err.classList.add('show');
-              firebase.auth().signOut(); return;
-            }
-            const d = snapUser.val();
-            _auditLogin(email,'exito');
-            window._currentRol = d.rol||'dueno';
-            const nombreAsesor = d.asesor||email;
-            _db.ref('user_tiendas/'+uid).once('value', snapT=>{
-              const tiendaIds = Object.keys(snapT.val()||{});
-              if(!tiendaIds.length){ _pedirPerfil(uid, d.tienda||''); return; }
-              if(tiendaIds.length===1){
-                _db.ref('empresas/'+tiendaIds[0]).once('value', snapE=>{
-                  const nombreTienda = (snapE.val()||{}).nombre||tiendaIds[0];
-                  _entrarApp(uid, nombreTienda, nombreAsesor);
-                });
-              } else {
-                _mostrarSelectorTienda(uid, nombreAsesor, tiendaIds);
-              }
-            });
-          });
+          if(!roles.length){
+            _auditLogin(email,'fallo_usuario');
+            err.textContent='Cuenta no autorizada. Contacta al administrador.';
+            err.classList.add('show');
+            firebase.auth().signOut(); return;
+          }
+          _auditLogin(email,'exito');
+          const admData = snapAdm.val();
+          const userData = snapUser.val();
+          if(roles.length === 1){
+            _entrarConRol(uid, email, roles[0], admData, userData);
+          } else {
+            _mostrarSelectorRol(uid, email, roles, admData, userData);
+          }
         });
       })
       .catch(e=>{
@@ -10083,9 +10166,59 @@ window._registrarAdmin = function(){
 // ===== SUPER ADMIN CARGAR =====
 let _saData = null; // cache de datos cargados
 
+// --- Designar Super Admin Gmail ---
+window._saDesignarSuperAdmin = function(){
+  const emailBuscar = document.getElementById('sa-superadmin-email').value.trim();
+  if(!emailBuscar){ toast('⚠️ Ingresa un correo'); return; }
+  // Buscar en /admins por email
+  _db.ref('admins').once('value', snap=>{
+    const found = Object.entries(snap.val()||{}).find(([uid,d])=>d.email===emailBuscar);
+    if(!found){
+      // Buscar en /users también
+      _db.ref('users').once('value', snapU=>{
+        const foundU = Object.entries(snapU.val()||{}).find(([uid,d])=>d.email===emailBuscar);
+        if(!foundU){ toast('⚠️ No se encontró ninguna cuenta con ese correo'); return; }
+        _db.ref('config/superAdminUid').set(foundU[0]).then(()=>{
+          toast('✅ '+emailBuscar+' designado como Super Admin');
+          document.getElementById('sa-superadmin-actual').textContent='Super Admin actual: '+emailBuscar+' ('+foundU[0]+')';
+        });
+      });
+      return;
+    }
+    _db.ref('config/superAdminUid').set(found[0]).then(()=>{
+      toast('✅ '+emailBuscar+' designado como Super Admin');
+      document.getElementById('sa-superadmin-actual').textContent='Super Admin actual: '+emailBuscar+' ('+found[0]+')';
+    });
+  });
+};
+
+window._saQuitarSuperAdmin = function(){
+  if(!confirm('¿Quitar la cuenta Gmail de Super Admin?')) return;
+  _db.ref('config/superAdminUid').remove().then(()=>{
+    toast('✅ Vinculación de Super Admin eliminada');
+    document.getElementById('sa-superadmin-actual').textContent='Sin cuenta Gmail vinculada como Super Admin';
+    document.getElementById('sa-superadmin-email').value='';
+  });
+};
+
 function _superAdmCargar(){
   const tree = document.getElementById('sa-tree');
   tree.innerHTML = '<div class="adm-empty">Cargando...</div>';
+  // Cargar estado actual de Super Admin Gmail
+  _db.ref('config/superAdminUid').once('value', snapSA=>{
+    const saUid = snapSA.val();
+    const saDiv = document.getElementById('sa-superadmin-actual');
+    if(saUid){
+      _db.ref('admins/'+saUid).once('value', sn=>{
+        const e = (sn.val()||{}).email||'';
+        if(!e) _db.ref('users/'+saUid).once('value', sn2=>{
+          saDiv.textContent='Super Admin actual: '+((sn2.val()||{}).email||saUid);
+        }); else saDiv.textContent='Super Admin actual: '+e;
+      });
+    } else {
+      saDiv.textContent='Sin cuenta Gmail vinculada como Super Admin';
+    }
+  });
 
   Promise.all([
     _db.ref('admins').once('value'),
