@@ -2073,6 +2073,10 @@ header h1{font-size:1.05rem;font-weight:700;}
   </div>
 </div>
 
+<div id="mes-excel-banner" style="display:none;align-items:center;gap:10px;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:8px 18px;font-size:.78rem;color:#92400e;font-weight:600;">
+  <span style="font-size:1rem;">⚠️</span>
+  <span id="mes-excel-banner-txt"></span>
+</div>
 <div id="main">
   <div class="topbar">
     <div id="pills" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
@@ -3325,7 +3329,7 @@ function _fbCargarHistorialPropio(cb){
 // ── STORAGE ────────────────────────────────────────────────────────────
 function guardar(){
   try{
-    localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,contadorAlertasInactividad,estadosDesactivados:[...estadosDesactivados],ordenSecciones:ordenSecciones||[],ts:Date.now()}));
+    localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,contadorAlertasInactividad,estadosDesactivados:[...estadosDesactivados],ordenSecciones:ordenSecciones||[],mesCargado:window._mesCargado||null,ts:Date.now()}));
     const now=new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('save-st').textContent='💾 '+now;
   }catch(e){}
@@ -3350,6 +3354,7 @@ function restaurar(){
     const d=JSON.parse(localStorage.getItem(LS_KEY));
     if(!d||!Array.isArray(d.pedidos)||!d.pedidos.length){toast('⚠️ No se pudo restaurar: datos inválidos o vacíos.');return;}
     pedidos=d.pedidos;gestiones=d.gestiones||{};
+    if(d.mesCargado) window._mesCargado=d.mesCargado;
     // Limpiar mensajes_listos al restaurar — la cola se controla manualmente cada sesión
     Object.values(gestiones).forEach(g=>{ delete g.mensajes_listos; });
     waCounters=d.waCounters||{reparto:0,oficina:0,transito:0,novedad:0};
@@ -3417,6 +3422,40 @@ function _cargarArchivo(file){
       }catch(e){}
     }
     pedidos=nuevosPedidos;
+    // Detectar el mes del Excel desde las fechas de los pedidos
+    (function(){
+      const mesesConteo={};
+      pedidos.forEach(p=>{
+        if(!p.fechaOrden)return;
+        const val=p.fechaOrden;
+        let d;
+        if(typeof val==='number'){d=new Date(Math.round((val-25569)*86400*1000));}
+        else{const s=String(val).trim(),pts=s.split(/[\/\-\.]/);
+          if(pts.length===3){d=pts[0].length===4?new Date(pts[0],pts[1]-1,pts[2]):new Date(pts[2],pts[1]-1,pts[0]);}
+          else{d=new Date(s);}
+        }
+        if(!d||isNaN(d))return;
+        const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+        mesesConteo[k]=(mesesConteo[k]||0)+1;
+      });
+      const sorted=Object.entries(mesesConteo).sort((a,b)=>b[1]-a[1]);
+      if(sorted.length){
+        window._mesCargado=sorted[0][0];
+        const mesActual=new Date().toISOString().slice(0,7);
+        const banner=document.getElementById('mes-excel-banner');
+        const bannerTxt=document.getElementById('mes-excel-banner-txt');
+        if(banner&&bannerTxt){
+          if(window._mesCargado!==mesActual){
+            const [y,m]=window._mesCargado.split('-');
+            const nomMes=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(m)-1];
+            bannerTxt.innerHTML='El Excel cargado corresponde a <strong>'+nomMes+' '+y+'</strong>. Todas las gestiones y novedades se guardarán en ese mes.';
+            banner.style.display='flex';
+          }else{
+            banner.style.display='none';
+          }
+        }
+      }
+    })();
     if(typeof _db!=='undefined'&&window._currentUsername){
       _db.ref('presence/'+window._currentUsername).update({totalPedidos:pedidos.length});
     }
@@ -4835,7 +4874,7 @@ async function _novSyncSolucionadaGD(id, solucionada){
   const g=gestiones[id]||{};
   const p=pedidos.find(x=>x.id===id);
 
-  const mes=new Date().toISOString().slice(0,7);
+  const mes=_getMesCargado();
   const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
   const ak=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginAsesor?window.getLoginAsesor():'_');
   const novBasePath='novedades/'+tk+'/'+mes;
@@ -5184,16 +5223,20 @@ function marcarDevolucion(id){
   animarCompletado(id,()=>renderAll(),'🔄');
 }
 
+function _getMesCargado(){
+  return window._mesCargado || new Date().toISOString().slice(0,7);
+}
+
 // ── Sync novedad Logística → GD ─────────────────────────────────────────
 function _novGDBasePath(){
   const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
-  const mes=new Date().toISOString().slice(0,7);
+  const mes=_getMesCargado();
   return 'novedades/'+tk+'/'+mes;
 }
 
 function _novIncrGDCounter(dia, campo, delta){
   if(typeof _db==='undefined'||!dia)return;
-  const mes=new Date().toISOString().slice(0,7);
+  const mes=_getMesCargado();
   const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
   const ak=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginAsesor?window.getLoginAsesor():'_');
   _db.ref('gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias/'+dia+'/'+campo)
@@ -6980,7 +7023,7 @@ function _cfPrevMes(){
   _cfMes=d.getFullYear()+'-'+_cfPad(d.getMonth()+1);
   const lbl=document.getElementById('cf-mes-lbl');
   if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
-  _cfMD={};
+  _cfMD={};_cfXlsOrdenes=null;_cfXlsProductos=null;_cfExtracted=null;
   if(typeof _db!=='undefined'){
     document.getElementById('cf-tab-'+_cfCurTab).innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:.8rem;">Cargando...</div>';
     _db.ref(_cfBasePath()).once('value').then(s=>{_cfMD=s.val()||{};_cfTab(_cfCurTab);});
@@ -6992,7 +7035,7 @@ function _cfNextMes(){
   _cfMes=d.getFullYear()+'-'+_cfPad(d.getMonth()+1);
   const lbl=document.getElementById('cf-mes-lbl');
   if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
-  _cfMD={};
+  _cfMD={};_cfXlsOrdenes=null;_cfXlsProductos=null;_cfExtracted=null;
   if(typeof _db!=='undefined'){
     document.getElementById('cf-tab-'+_cfCurTab).innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:.8rem;">Cargando...</div>';
     _db.ref(_cfBasePath()).once('value').then(s=>{_cfMD=s.val()||{};_cfTab(_cfCurTab);});
@@ -7458,12 +7501,12 @@ function _cfSetDia(dd,k,v){
       const fc=tr.querySelector('td');
       if(!fc||fc.textContent.trim()!==String(parseInt(dd)))return;
       const tds=tr.querySelectorAll('td');
-      // col 6 = Tot# (índice 6), col 11 = ads total (12), col 12 = fee (13), col 13 = ads+fee (14), col 14 = cpa (15)
-      if(tds[6])tds[6].textContent=totalDia||'';
-      if(tds[11])tds[11].textContent=adsT?_cfM$(adsT):'';
-      if(tds[12])tds[12].textContent=fee?_cfM$(fee):'';
-      if(tds[13])tds[13].textContent=adsFee?_cfM$(adsFee):'';
-      if(tds[14])tds[14].textContent=cpa?_cf$(cpa):'';
+      // [7]=Tot#, [12]=AdsTotal, [13]=Fee, [14]=AdsFee, [15]=CPA
+      if(tds[7])tds[7].textContent=totalDia||'';
+      if(tds[12])tds[12].textContent=adsT?_cfM$(adsT):'';
+      if(tds[13])tds[13].textContent=fee?_cfM$(fee):'';
+      if(tds[14])tds[14].textContent=adsFee?_cfM$(adsFee):'';
+      if(tds[15])tds[15].textContent=cpa?_cf$(cpa):'';
     });
   }
 }
@@ -8264,26 +8307,8 @@ function _cfAplicarTodo(){
   }));
   _cfSave('ultimoAnalisis',_cfMD.ultimoAnalisis,0);
 
-  // Datos diarios por canal (WPP + Shopify + monto)
-  let diasGuardados=0;
-  if(X.diasCanal&&Object.keys(X.diasCanal).length>0){
-    if(!_cfMD.dias)_cfMD.dias={};
-    Object.entries(X.diasCanal).forEach(([dd,ch])=>{
-      if(!_cfMD.dias[dd])_cfMD.dias[dd]={};
-      // Solo actualizar si hay datos; no pisar Ads que ya estén ingresados
-      if(ch.wpp>0)_cfMD.dias[dd].wppNum=ch.wpp;
-      if(ch.shop>0)_cfMD.dias[dd].shopifyNum=ch.shop;
-      if(ch.monto>0)_cfMD.dias[dd].shopifyMonto=ch.monto;
-      if(ch.montoWpp>0)_cfMD.dias[dd].wppMonto=ch.montoWpp;
-      _cfSave('dias/'+dd,_cfMD.dias[dd],0);
-      diasGuardados++;
-    });
-  }
-
   // Confirmación visual
   const resEl=document.getElementById('cf-ord-result');
-  const wppTotal=Object.values(X.diasCanal||{}).reduce((a,d)=>a+d.wpp,0);
-  const shopTotal=Object.values(X.diasCanal||{}).reduce((a,d)=>a+d.shop,0);
   const sumario=`<div style="background:#f0fdf4;border-radius:12px;border:2px solid #86efac;padding:16px 18px;margin-bottom:14px;">
     <div style="font-size:.82rem;font-weight:900;color:#15803d;margin-bottom:10px;">✅ Datos aplicados al mes ${_cfMesLabel(_cfMes)}</div>
     <div style="font-size:.7rem;color:#374151;line-height:1.9;">
@@ -8292,8 +8317,7 @@ function _cfAplicarTodo(){
       🔴 Devueltos: <b>${X.cod.devueltos.num}</b> · <b>${_cf$(X.cod.devueltos.monto)}</b><br>
       ⚠️ No gestionados (cancelados/pendientes): <b>${X.cod.cancelados.num}</b><br>
       🚚 Fletes: Ent. <b>${_cf$(co.fleteEntregados)}</b> · Proc. <b>${_cf$(co.fleteEnProceso)}</b> · Dev. <b>${_cf$(co.fleteDevueltos)}</b><br>
-      💜 COGS aplicado: <b>${_cf$(cogsAplicar)}</b><br>
-      ${diasGuardados>0?`💬 WPP total: <b>${wppTotal}</b> · 🛍️ Shopify total: <b>${shopTotal}</b> · días llenados: <b>${diasGuardados}</b>`:'⚠️ No se detectaron fechas en el archivo para llenar datos diarios.'}
+      💜 COGS aplicado: <b>${_cf$(cogsAplicar)}</b>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
       <button onclick="_cfTab('dash')" style="background:#16a34a;color:white;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.73rem;font-weight:700;">📊 Ver Dashboard</button>
@@ -9285,8 +9309,7 @@ function _roSyncFromGestion(id){
     else if(g.gestion_final) estado='ENTREGADO';
     else if(g.llamada)     estado='EN PROCESO';
     const hoy=new Date().toISOString().split('T')[0];
-    const nd=new Date();
-    const mes=nd.getFullYear()+'-'+String(nd.getMonth()+1).padStart(2,'0');
+    const mes=_getMesCargado();
     const tel=(p.telefono||'').replace(/^57/,'');
     const rKey=_fbKey(p.guia);
     const basePath='ro/'+_gdTK()+'/'+mes+'/'+rKey;
