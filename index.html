@@ -1294,8 +1294,9 @@ header h1{font-size:1.05rem;font-weight:700;}
 <div class="adm-modal-bg" id="adm-edit-modal">
   <div class="adm-modal">
     <h3>✏️ Editar usuario</h3>
-    <div class="adm-field"><label>Usuario</label><input type="text" id="adm-edit-user" disabled style="opacity:.5;cursor:not-allowed;"/></div>
-    <div class="adm-field"><label>Nueva contraseña <span style="color:#64748b;font-weight:400">(dejar vacío para no cambiar)</span></label><div style="position:relative;"><input type="password" id="adm-edit-pass" placeholder="Nueva contraseña" style="width:100%;padding-right:38px;"/><span onclick="const i=document.getElementById('adm-edit-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁️':'🙈';" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁️</span></div></div>
+    <input type="hidden" id="adm-edit-uid"/>
+    <div class="adm-field"><label>Correo electrónico</label><input type="email" id="adm-edit-user" disabled style="opacity:.5;cursor:not-allowed;"/></div>
+    <div class="adm-field"><button onclick="_admEnviarResetPass()" style="width:100%;padding:9px 14px;background:#eff6ff;color:#1d4ed8;border:1.5px solid #bfdbfe;border-radius:9px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;">📧 Enviar email para restablecer contraseña</button></div>
     <div class="adm-field"><label>Nombre completo</label><input type="text" id="adm-edit-asesor" autocomplete="off" placeholder="Ej: Juan García"/></div>
     <div class="adm-field"><label>Tienda</label><input type="text" id="adm-edit-tienda" autocomplete="off"/></div>
     <div class="adm-field"><label>Rol</label>
@@ -1320,7 +1321,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 <div class="adm-modal-bg" id="adm-add-modal">
   <div class="adm-modal">
     <h3>➕ Nuevo usuario</h3>
-    <div class="adm-field"><label>Usuario</label><input type="text" id="adm-new-user" placeholder="ej: juan123" autocomplete="off"/></div>
+    <div class="adm-field"><label>Correo electrónico</label><input type="email" id="adm-new-user" placeholder="correo@gmail.com" autocomplete="off"/></div>
     <div class="adm-field"><label>Contraseña</label><div style="position:relative;"><input type="password" id="adm-new-pass" placeholder="Contraseña" style="width:100%;padding-right:38px;"/><span onclick="const i=document.getElementById('adm-new-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁️':'🙈';" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁️</span></div></div>
     <div class="adm-field"><label>Nombre completo</label><input type="text" id="adm-new-asesor" placeholder="Ej: Juan García" autocomplete="off"/></div>
     <div class="adm-field"><label>Tienda</label><input type="text" id="adm-new-tienda" placeholder="Ej: Tienda Norte" autocomplete="off"/></div>
@@ -1842,10 +1843,10 @@ header h1{font-size:1.05rem;font-weight:700;}
   <div class="login-box">
     <div class="login-logo">🚚</div>
     <div class="login-title">Gestión Logística</div>
-    <div class="login-subtitle">Ingresa tus credenciales para continuar</div>
+    <div class="login-subtitle">Ingresa tu correo y contraseña para continuar</div>
     <div class="login-field">
-      <label>Usuario</label>
-      <input type="text" id="login-user" placeholder="Usuario" autocomplete="username" />
+      <label>Correo electrónico</label>
+      <input type="email" id="login-user" placeholder="correo@gmail.com" autocomplete="email" />
     </div>
     <div class="login-field">
       <label>Contraseña</label>
@@ -1858,7 +1859,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     <input type="hidden" id="login-tienda" />
     <input type="hidden" id="login-asesor" />
     <button class="login-btn" onclick="_loginCheck()">Ingresar</button>
-    <div class="login-error" id="login-error">Usuario o contraseña incorrectos</div>
+    <div class="login-error" id="login-error">Correo o contraseña incorrectos</div>
     <div class="login-error" id="login-error-campos" style="margin-top:6px;">Completa los campos requeridos</div>
     <div style="text-align:center;margin-top:14px;">
       <span style="color:#94a3b8;font-size:.76rem;">¿Eres administrador?</span>
@@ -1872,7 +1873,7 @@ header h1{font-size:1.05rem;font-weight:700;}
   <div style="background:#0f172a;border-radius:16px;padding:28px;width:100%;max-width:380px;border:1.5px solid #1e293b;box-shadow:0 20px 60px rgba(0,0,0,.5);">
     <h3 style="color:white;font-size:.95rem;font-weight:800;margin-bottom:6px;">Crear cuenta de administrador</h3>
     <p style="color:#64748b;font-size:.74rem;margin-bottom:20px;">Podrás crear tiendas y gestionar tu equipo.</p>
-    <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Usuario</label><input type="text" id="reg-user" placeholder="ej: miempresa_admin" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
+    <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Correo electrónico</label><input type="email" id="reg-user" placeholder="correo@gmail.com" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
     <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Contraseña</label><input type="password" id="reg-pass" placeholder="Contraseña" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
     <div style="margin-bottom:13px;"><label style="display:block;color:#64748b;font-size:.68rem;font-weight:700;margin-bottom:5px;text-transform:uppercase;">Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="Repite la contraseña" autocomplete="off" style="width:100%;background:#1e293b;border:1.5px solid #334155;border-radius:8px;padding:9px 12px;color:white;font-size:.85rem;outline:none;"/></div>
     <div id="reg-error" style="color:#f87171;font-size:.75rem;margin-bottom:10px;display:none;"></div>
@@ -9869,72 +9870,90 @@ function _initLogin(){
     _pendingUser = null;
   };
 
+  // App secundaria para crear usuarios sin perder sesión del admin
+  const _fbSecApp = firebase.apps.find(a=>a.name==='secondary') ||
+    firebase.initializeApp({
+      apiKey:'AIzaSyA9Ae7Zt7TwKsg7h7TOD9PTfeEaYhkoLVE',
+      authDomain:'gestion-logistica-86fd7.firebaseapp.com',
+      databaseURL:'https://gestion-logistica-86fd7-default-rtdb.firebaseio.com',
+      projectId:'gestion-logistica-86fd7',
+      storageBucket:'gestion-logistica-86fd7.firebasestorage.app',
+      messagingSenderId:'950929138441',
+      appId:'1:950929138441:web:a6f3fc27e23fe355a6e9d8'
+    },'secondary');
+  window._fbSecAuth = _fbSecApp.auth();
+
   window._loginCheck = function(){
-    const u = document.getElementById('login-user').value.trim();
+    const email = document.getElementById('login-user').value.trim();
     const p = document.getElementById('login-pass').value;
     const err = document.getElementById('login-error');
     err.classList.remove('show');
-    if(!u||!p){ document.getElementById('login-error-campos').classList.add('show'); setTimeout(()=>document.getElementById('login-error-campos').classList.remove('show'),3000); return; }
+    document.getElementById('login-error-campos').classList.remove('show');
+    if(!email||!p){ document.getElementById('login-error-campos').classList.add('show'); setTimeout(()=>document.getElementById('login-error-campos').classList.remove('show'),3000); return; }
 
-    // 1. Super Admin
-    if(u === ADMIN_USER && p === ADMIN_PASS){
-      localStorage.setItem(LOGIN_KEY, 'superadmin');
-      _showSuperAdmin(); _superAdmCargar(); return;
+    // Super Admin (hardcodeado — usa auth anónimo para acceso a DB)
+    if(email === ADMIN_USER && p === ADMIN_PASS){
+      firebase.auth().signInAnonymously().then(()=>{
+        localStorage.setItem(LOGIN_KEY,'superadmin');
+        _showSuperAdmin(); _superAdmCargar();
+      });
+      return;
     }
 
-    // 2. Admin registrado
-    _db.ref('admins').orderByChild('username').equalTo(u).once('value', snapAdm => {
-      let foundAdm = false;
-      snapAdm.forEach(child => {
-        foundAdm = true;
-        const d = child.val();
-        if(d.password !== p){ _auditLogin(u,'fallo_password'); err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-        _auditLogin(u,'exito');
-        localStorage.setItem(LOGIN_KEY, 'admin');
-        localStorage.setItem('lgs_admin_id', child.key);
-        localStorage.setItem('lgs_admin_user', u);
-        _showAdmin(); _admCargarDashboard(); return;
-      });
-      if(foundAdm) return;
+    const btn = document.querySelector('.login-btn');
+    if(btn){ btn.disabled=true; btn.textContent='Verificando...'; }
 
-      // 3. Asesor en /users
-      _db.ref('users').orderByChild('username').equalTo(u).once('value', snap => {
-        let found = false;
-        snap.forEach(child => {
-          found = true;
-          const d = child.val();
-          if(d.password !== p){ _auditLogin(u,'fallo_password'); err.classList.add('show'); document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus(); return; }
-          _auditLogin(u,'exito');
-          window._currentRol = d.rol||'dueno';
-          const nombreAsesor = d.asesor||u;
-          // Cargar tiendas habilitadas para este usuario
-          _db.ref('user_tiendas/'+u).once('value', snapT=>{
-            const tiendaIds = Object.keys(snapT.val()||{});
-            if(!tiendaIds.length){
-              // Sin tiendas asignadas → flujo legado
-              _pedirPerfil(u, d.tienda||'');
-              return;
+    firebase.auth().signInWithEmailAndPassword(email, p)
+      .then(cred=>{
+        const uid = cred.user.uid;
+        // ¿Es admin?
+        _db.ref('admins/'+uid).once('value', snapAdm=>{
+          if(snapAdm.exists()){
+            _auditLogin(email,'exito');
+            localStorage.setItem(LOGIN_KEY,'admin');
+            localStorage.setItem('lgs_admin_id', uid);
+            localStorage.setItem('lgs_admin_user', email);
+            if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
+            _showAdmin(); _admCargarDashboard(); return;
+          }
+          // ¿Es asesor?
+          _db.ref('users/'+uid).once('value', snapUser=>{
+            if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
+            if(!snapUser.exists()){
+              _auditLogin(email,'fallo_usuario');
+              err.textContent='Cuenta no autorizada. Contacta al administrador.';
+              err.classList.add('show');
+              firebase.auth().signOut(); return;
             }
-            if(tiendaIds.length===1){
-              // Una sola tienda → entrar directo
-              _db.ref('empresas/'+tiendaIds[0]).once('value', snapE=>{
-                const nombreTienda = (snapE.val()||{}).nombre||tiendaIds[0];
-                _entrarApp(u, nombreTienda, nombreAsesor);
-              });
-            } else {
-              // Varias tiendas → mostrar selector
-              _mostrarSelectorTienda(u, nombreAsesor, tiendaIds);
-            }
+            const d = snapUser.val();
+            _auditLogin(email,'exito');
+            window._currentRol = d.rol||'dueno';
+            const nombreAsesor = d.asesor||email;
+            _db.ref('user_tiendas/'+uid).once('value', snapT=>{
+              const tiendaIds = Object.keys(snapT.val()||{});
+              if(!tiendaIds.length){ _pedirPerfil(uid, d.tienda||''); return; }
+              if(tiendaIds.length===1){
+                _db.ref('empresas/'+tiendaIds[0]).once('value', snapE=>{
+                  const nombreTienda = (snapE.val()||{}).nombre||tiendaIds[0];
+                  _entrarApp(uid, nombreTienda, nombreAsesor);
+                });
+              } else {
+                _mostrarSelectorTienda(uid, nombreAsesor, tiendaIds);
+              }
+            });
           });
         });
-        if(!found){
-          if(u !== FALLBACK_USER || p !== FALLBACK_PASS){ _auditLogin(u,'fallo_usuario'); err.classList.add('show'); document.getElementById('login-pass').value=''; return; }
-          _auditLogin(u,'exito');
-          window._currentRol = 'dueno';
-          _pedirPerfil(u, '');
-        }
+      })
+      .catch(e=>{
+        if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
+        let msg = 'Correo o contraseña incorrectos';
+        if(e.code==='auth/user-not-found'||e.code==='auth/invalid-email') msg='Correo no registrado';
+        else if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential') msg='Contraseña incorrecta';
+        else if(e.code==='auth/too-many-requests') msg='Demasiados intentos. Intenta más tarde.';
+        _auditLogin(email, (e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')?'fallo_password':'fallo_usuario');
+        err.textContent=msg; err.classList.add('show');
+        document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus();
       });
-    });
   };
 
   window.getLoginTienda = function(){ return localStorage.getItem(TIENDA_KEY) || ''; };
@@ -9947,8 +9966,7 @@ function _initLogin(){
     _limpiarPresencia();
     [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY,'lgs_rol'].forEach(k=>localStorage.removeItem(k));
     window._currentRol=null;
-    ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>document.getElementById(id).value='');
-    _loginShow(); document.getElementById('login-user').focus();
+    firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
   window._admLogout = function(){
     localStorage.removeItem(LOGIN_KEY);
@@ -9956,13 +9974,12 @@ function _initLogin(){
     localStorage.removeItem('lgs_admin_user');
     localStorage.removeItem('lgs_empresa_actual');
     document.getElementById('admin-panel').classList.remove('visible');
-    ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>document.getElementById(id).value='');
-    _loginShow(); document.getElementById('login-user').focus();
+    firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
   window._superAdmLogout = function(){
     localStorage.removeItem(LOGIN_KEY);
     document.getElementById('super-admin-panel').style.display='none';
-    _loginShow(); document.getElementById('login-user').focus();
+    firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
 
   function _mostrarSelectorTienda(username, nombreAsesor, tiendaIds){
@@ -9995,19 +10012,30 @@ function _initLogin(){
   document.getElementById('ls2-asesor').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('ls2-tienda').focus(); });
   document.getElementById('ls2-tienda').addEventListener('keydown', function(e){ if(e.key==='Enter') window._loginStep2Confirmar(); });
 
-  const savedSession = localStorage.getItem(LOGIN_KEY);
-  if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); }
-  else if(savedSession === 'superadmin'){ _showSuperAdmin(); _superAdmCargar(); }
-  else if(savedSession === 'admin'){ _showAdmin(); _admCargarDashboard(); }
-  else {
-    _loginHide();
-    const u = localStorage.getItem(USER_KEY);
+  // Restauración de sesión via Firebase Auth
+  firebase.auth().onAuthStateChanged(user=>{
+    const savedSession = localStorage.getItem(LOGIN_KEY);
+    if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); return; }
+    if(savedSession==='superadmin'){ _showSuperAdmin(); _superAdmCargar(); return; }
+    if(savedSession==='admin'){ _showAdmin(); _admCargarDashboard(); return; }
+    if(!user){ _loginShow(); document.getElementById('login-user').focus(); return; }
+    const uid = user.uid;
     const t = localStorage.getItem(TIENDA_KEY);
     const a = localStorage.getItem(ASESOR_KEY);
-    window._currentRol = localStorage.getItem('lgs_rol')||'dueno';
-    if(u) _registrarPresencia(u, t, a);
-    window._gdMostrarModeSelect(a||'');
-  }
+    if(t && a){
+      _loginHide();
+      window._currentRol = localStorage.getItem('lgs_rol')||'dueno';
+      _registrarPresencia(uid, t, a);
+      window._gdMostrarModeSelect(a);
+    } else {
+      _db.ref('users/'+uid).once('value', snap=>{
+        if(!snap.exists()){ firebase.auth().signOut(); return; }
+        const d = snap.val();
+        window._currentRol = d.rol||'dueno';
+        _pedirPerfil(uid, d.tienda||'');
+      });
+    }
+  });
 }
 
 // ===== REGISTRO DE ADMIN =====
@@ -10021,26 +10049,35 @@ window._ocultarRegistro = function(){
   document.getElementById('reg-error').style.display='none';
 };
 window._registrarAdmin = function(){
-  const u=document.getElementById('reg-user').value.trim();
+  const email=document.getElementById('reg-user').value.trim();
   const p=document.getElementById('reg-pass').value;
   const p2=document.getElementById('reg-pass2').value;
   const err=document.getElementById('reg-error');
   err.style.display='none';
-  if(!u||!p||!p2){err.textContent='Completa todos los campos';err.style.display='block';return;}
+  if(!email||!p||!p2){err.textContent='Completa todos los campos';err.style.display='block';return;}
+  if(!email.includes('@')){err.textContent='Ingresa un correo electrónico válido';err.style.display='block';return;}
   if(p!==p2){err.textContent='Las contraseñas no coinciden';err.style.display='block';return;}
   if(p.length<6){err.textContent='La contraseña debe tener al menos 6 caracteres';err.style.display='block';return;}
-  _db.ref('admins').orderByChild('username').equalTo(u).once('value', snap=>{
-    if(snap.exists()){err.textContent='Ese usuario ya existe';err.style.display='block';return;}
-    const ref = _db.ref('admins').push();
-    ref.set({username:u, password:p, createdAt:Date.now()}).then(()=>{
+  firebase.auth().createUserWithEmailAndPassword(email, p)
+    .then(cred=>{
+      const uid=cred.user.uid;
+      return _db.ref('admins/'+uid).set({email, username:email, createdAt:Date.now()});
+    })
+    .then(()=>{
       _ocultarRegistro();
+      const uid=firebase.auth().currentUser.uid;
       localStorage.setItem('lgs_auth','admin');
-      localStorage.setItem('lgs_admin_id', ref.key);
-      localStorage.setItem('lgs_admin_user', u);
+      localStorage.setItem('lgs_admin_id', uid);
+      localStorage.setItem('lgs_admin_user', email);
       document.getElementById('login-screen').classList.add('hidden');
       _showAdminGlobal(); _admCargarDashboard();
-    }).catch(e=>{err.textContent='Error al crear cuenta: '+e.message;err.style.display='block';});
-  });
+    })
+    .catch(e=>{
+      let msg='Error al crear cuenta: '+e.message;
+      if(e.code==='auth/email-already-in-use') msg='Ese correo ya está registrado';
+      else if(e.code==='auth/invalid-email') msg='Correo inválido';
+      err.textContent=msg; err.style.display='block';
+    });
 };
 
 // ===== SUPER ADMIN CARGAR =====
@@ -10072,7 +10109,7 @@ function _superAdmCargar(){
     document.getElementById('sa-stat-online').textContent   = totalOnline;
 
     // Construir estructura de datos enriquecida
-    const usersArr = Object.values(users);
+    const usersArr = Object.entries(users).map(([uid,d])=>({uid,...d}));
     _saData = Object.entries(admins).map(([adminId, adminData])=>{
       const misEmpresasIds = Object.keys(adminEmpresas[adminId]||{});
       let totalAsesores = 0;
@@ -10081,9 +10118,9 @@ function _superAdmCargar(){
         if(!emp) return null;
         const asesorKeys = Object.keys(empresaAsesores[empId]||{});
         const asesores = asesorKeys.map(ukey=>{
-          const u = usersArr.find(x=>x.username===ukey||_fbKey(x.username)===ukey);
-          const online = !!(presencia[u?.username||ukey]||{}).online && (Date.now()-((presencia[u?.username||ukey]||{}).lastSeen||0))<120000;
-          return { nombre: u?(u.asesor||u.username):ukey, user: u?u.username:ukey, online };
+          const u = usersArr.find(x=>x.uid===ukey);
+          const online = !!(presencia[ukey]||{}).online && (Date.now()-((presencia[ukey]||{}).lastSeen||0))<120000;
+          return { nombre: u?(u.asesor||u.email||ukey):ukey, user: ukey, online };
         });
         totalAsesores += asesores.length;
         return { empId, nombre: emp.nombre, createdAt: emp.createdAt||0, asesores };
@@ -10271,8 +10308,8 @@ function _migracionInicial(){
       // Siempre re-sincronizar todos los usuarios existentes a 3D Company
       _db.ref('users').once('value', snapUsers=>{
         const batch = {};
-        Object.values(snapUsers.val()||{}).forEach(u=>{
-          if(u.username) batch[_fbKey(u.username)] = true;
+        Object.keys(snapUsers.val()||{}).forEach(uid=>{
+          batch[uid] = true;
         });
         if(Object.keys(batch).length) _db.ref('empresa_asesores/'+empresaId).update(batch);
       });
@@ -10308,10 +10345,7 @@ function _migracionInicial(){
   });
 }
 
-// Iniciar app solo después de que la autenticación anónima esté lista
-firebase.auth().signInAnonymously()
-  .then(() => { _initLogin(); _migracionInicial(); })
-  .catch(e => { console.warn('Firebase Auth anónimo falló:', e); _initLogin(); });
+_initLogin(); _migracionInicial();
 
 // ===== FIREBASE SYNC GESTIONES =====
 function _fbKey(k){ return String(k).replace(/[.#$\[\]\/]/g,'_'); }
@@ -10541,8 +10575,8 @@ async function _audInicializar(){
     _db.ref('admins').once('value')
   ]);
   const usuarios=[];
-  snapUsers.val()&&Object.values(snapUsers.val()).forEach(u=>u.username&&usuarios.push(u.username));
-  snapAdmins.val()&&Object.values(snapAdmins.val()).forEach(a=>a.username&&usuarios.push(a.username));
+  snapUsers.val()&&Object.entries(snapUsers.val()).forEach(([uid,u])=>usuarios.push(u.email||uid));
+  snapAdmins.val()&&Object.entries(snapAdmins.val()).forEach(([uid,a])=>usuarios.push(a.email||a.username||uid));
   const sel=document.getElementById('aud-user-sel');
   if(sel){
     sel.innerHTML='<option value="">Todos los usuarios</option>'+[...new Set(usuarios)].sort().map(u=>`<option value="${u}">${u}</option>`).join('');
@@ -10643,11 +10677,11 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     _db.ref('presence').once('value')
   ]).then(([snapEmpresas, snapAsesores, snapUsers, snapPresence])=>{
     const todasEmpresas = snapEmpresas.val()||{};
-    const asesorUsernames = Object.keys(snapAsesores.val()||{});
-    const todosUsers = Object.values(snapUsers.val()||{});
+    const asesorUids = Object.keys(snapAsesores.val()||{});
+    const todosUsers = Object.entries(snapUsers.val()||{}).map(([uid,d])=>({uid,...d}));
     const presencia = snapPresence.val()||{};
 
-    const usuarios = todosUsers.filter(u=>asesorUsernames.includes(u.username));
+    const usuarios = todosUsers.filter(u=>asesorUids.includes(u.uid));
 
     _admPresenciaCache = presencia;
     _admUsuariosCache = usuarios;
@@ -10655,9 +10689,9 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     _admActualizarSelectorEmpresa(adminId, empresasIds, todasEmpresas, empresaActualId);
 
     const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
-    const totalGest = usuarios.reduce((s,u)=>s+(presencia[u.username]?.sessionGestiones||0),0);
-    const totalFin = usuarios.reduce((s,u)=>s+(presencia[u.username]?.finalizados||0),0);
-    const totalTP = usuarios.reduce((s,u)=>s+(presencia[u.username]?.totalPedidos||0),0);
+    const totalGest = usuarios.reduce((s,u)=>s+(presencia[u.uid]?.sessionGestiones||0),0);
+    const totalFin = usuarios.reduce((s,u)=>s+(presencia[u.uid]?.finalizados||0),0);
+    const totalTP = usuarios.reduce((s,u)=>s+(presencia[u.uid]?.totalPedidos||0),0);
     document.getElementById('adm-stat-total').textContent = usuarios.length;
     document.getElementById('adm-stat-online').textContent = online;
     document.getElementById('adm-stat-gest').textContent = totalGest;
@@ -10665,10 +10699,10 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     document.getElementById('adm-stat-tp').textContent = totalTP || '—';
 
     usuarios.sort((a,b)=>{
-      const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
-      const bo=!!(presencia[b.username]||{}).online&&(Date.now()-((presencia[b.username]||{}).lastSeen||0))<120000;
+      const ao=!!(presencia[a.uid]||{}).online&&(Date.now()-((presencia[a.uid]||{}).lastSeen||0))<120000;
+      const bo=!!(presencia[b.uid]||{}).online&&(Date.now()-((presencia[b.uid]||{}).lastSeen||0))<120000;
       if(ao!==bo) return bo-ao;
-      return ((presencia[b.username]||{}).lastSeen||0)-((presencia[a.username]||{}).lastSeen||0);
+      return ((presencia[b.uid]||{}).lastSeen||0)-((presencia[a.uid]||{}).lastSeen||0);
     });
 
     _buildEnliveCards(usuarios, presencia);
@@ -10682,7 +10716,7 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     if(emp){
       _db.ref('empresa_asesores/'+emp).once('value', snapEA=>{
         const unames = Object.keys(snapEA.val()||{});
-        const usuarios = _admUsuariosCache.filter(u=>unames.includes(u.username));
+        const usuarios = _admUsuariosCache.filter(u=>unames.includes(u.uid));
         _buildEnliveCards(usuarios, _admPresenciaCache);
       });
     }
@@ -10730,8 +10764,7 @@ function _admCargarDashboardLegacy(){
   if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener = null; }
   function _procesarDatos(presencia, usuarios){
     _admPresenciaCache = presencia;
-    if(!usuarios.find(u=>u.username==='3D Company'))
-      usuarios.push({username:'3D Company', asesor:'3D Company', tienda:'Principal'});
+    // Legacy: fallback user no aplica con Firebase Auth
     _admUsuariosCache = usuarios;
     const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
     const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
@@ -10743,10 +10776,10 @@ function _admCargarDashboardLegacy(){
     document.getElementById('adm-stat-fin').textContent = totalFin;
     document.getElementById('adm-stat-tp').textContent = totalTP || '—';
     usuarios.sort((a,b)=>{
-      const ao=!!(presencia[a.username]||{}).online&&(Date.now()-((presencia[a.username]||{}).lastSeen||0))<120000;
-      const bo=!!(presencia[b.username]||{}).online&&(Date.now()-((presencia[b.username]||{}).lastSeen||0))<120000;
+      const ao=!!(presencia[a.uid]||{}).online&&(Date.now()-((presencia[a.uid]||{}).lastSeen||0))<120000;
+      const bo=!!(presencia[b.uid]||{}).online&&(Date.now()-((presencia[b.uid]||{}).lastSeen||0))<120000;
       if(ao!==bo) return bo-ao;
-      return ((presencia[b.username]||{}).lastSeen||0)-((presencia[a.username]||{}).lastSeen||0);
+      return ((presencia[b.uid]||{}).lastSeen||0)-((presencia[a.uid]||{}).lastSeen||0);
     });
     _buildEnliveCards(usuarios, presencia);
     _buildEquipoList(usuarios, presencia);
@@ -10782,7 +10815,8 @@ function _buildEnliveCards(usuarios, presencia){
   grid.innerHTML=''; offGrid.innerHTML='';
   const on=[], off=[];
   usuarios.forEach(u=>{
-    const p=presencia[u.username]||{};
+    if(!u.uid) return;
+    const p=presencia[u.uid]||{};
     const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
     if(isOnline) on.push({u,p}); else off.push({u,p});
   });
@@ -10793,7 +10827,7 @@ function _buildEnliveCards(usuarios, presencia){
 }
 
 function _mkEnliveCard(u, p, isOnline){
-  const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.username);
+  const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.email||u.uid);
   const tienda=isOnline&&p.tienda?p.tienda:(u.tienda||'—');
   const color=_avatarColor(name);
   const initials=_avatarInitials(name);
@@ -10816,8 +10850,9 @@ function _mkEnliveCard(u, p, isOnline){
   const card=document.createElement('div');
   card.className='enlive-card'+(isOnline?' online':'');
   card.style.cursor='pointer';
-  card.onclick=()=>window._malAbrir(u.username);
-  const safeU=u.username.replace(/'/g,"\\'");
+  card.onclick=()=>window._malAbrir(u.uid);
+  const safeU=(u.uid||'').replace(/'/g,"\\'");
+  const safeEmail=(u.email||'').replace(/'/g,"\\'");
   const safeA=(u.asesor||'').replace(/'/g,"\\'");
   const safeT=(u.tienda||'').replace(/'/g,"\\'");
   card.innerHTML=
@@ -10849,11 +10884,9 @@ function _mkEnliveCard(u, p, isOnline){
         '</div>'
       : '')+
     '<div class="enlive-actions">'+
-      (isOnline&&u.username!=='3D Company'?'<button class="enlive-btn danger" onclick="_admForzarLogout(\''+safeU+'\')">⏻ Cerrar sesión</button>':'')+
-      (u.username!=='3D Company'
-        ? '<button class="enlive-btn" onclick="_admAbrirEditar(\''+safeU+'\',\''+safeA+'\',\''+safeT+'\',\''+(u.rol||'asesor')+'\')">✏️ Editar</button>'+
-          '<button class="enlive-btn danger" onclick="_admEliminarUsuario(\''+safeU+'\')">✕</button>'
-        : '')+
+      (isOnline?'<button class="enlive-btn danger" onclick="_admForzarLogout(\''+safeU+'\')">⏻ Cerrar sesión</button>':'')+
+      '<button class="enlive-btn" onclick="_admAbrirEditar(\''+safeU+'\',\''+safeEmail+'\',\''+safeA+'\',\''+safeT+'\',\''+(u.rol||'asesor')+'\')">✏️ Editar</button>'+
+      '<button class="enlive-btn danger" onclick="_admEliminarUsuario(\''+safeU+'\')">✕</button>'+
     '</div>';
   return card;
 }
@@ -10865,11 +10898,13 @@ function _buildEquipoList(usuarios, presencia){
   if(!usuarios.length){list.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>';return;}
   let visible=0;
   usuarios.forEach(u=>{
-    const p=presencia[u.username]||{};
+    if(!u.uid) return;
+    const p=presencia[u.uid]||{};
     const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
-    const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.username);
+    const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.email||u.uid);
     const tienda=isOnline&&p.tienda?p.tienda:(u.tienda||'');
-    if(q&&!name.toLowerCase().includes(q)&&!tienda.toLowerCase().includes(q)&&!u.username.toLowerCase().includes(q)) return;
+    const emailDisplay=u.email||'';
+    if(q&&!name.toLowerCase().includes(q)&&!tienda.toLowerCase().includes(q)&&!emailDisplay.toLowerCase().includes(q)) return;
     visible++;
     const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
     const cont=p.contestaron||0,noCont=p.noContestaron||0,wa=p.waEnviados||0,fin=p.finalizados||0;
@@ -10882,7 +10917,8 @@ function _buildEquipoList(usuarios, presencia){
           (!cont&&!noCont&&!wa&&!fin?'<span style="color:#0e1c2e;font-size:.6rem;">Sin gestiones</span>':'')+
         '</div>'
       : '';
-    const safeU=u.username.replace(/'/g,"\\'");
+    const safeU=u.uid.replace(/'/g,"\\'");
+    const safeEmail=emailDisplay.replace(/'/g,"\\'");
     const safeA=(u.asesor||'').replace(/'/g,"\\'");
     const safeT=(u.tienda||'').replace(/'/g,"\\'");
     const row=document.createElement('div');
@@ -10892,7 +10928,7 @@ function _buildEquipoList(usuarios, presencia){
       '<div class="adm-user-row-info" style="flex:1;">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
           '<div>'+
-            '<div class="adm-user-row-name">'+name+(name!==u.username?'<span style="color:#0e1c2e;font-size:.65rem;font-weight:400;margin-left:6px;">@'+u.username+'</span>':'')+'</div>'+
+            '<div class="adm-user-row-name">'+name+(emailDisplay&&name!==emailDisplay?'<span style="color:#0e1c2e;font-size:.65rem;font-weight:400;margin-left:6px;">'+emailDisplay+'</span>':'')+'</div>'+
             '<div class="adm-user-row-meta">'+(tienda?'🏪 '+tienda+' · ':'')+(u.rol==='dueno'?'<span style="color:#7c3aed;font-weight:700;">👑 Dueño</span>':'<span style="color:#0891b2;font-weight:700;">👤 Asesor</span>')+'</div>'+
           '</div>'+
           '<div style="font-size:.63rem;font-weight:600;color:'+(isOnline?'#10b981':'#0e1c2e')+'">'+
@@ -10901,11 +10937,9 @@ function _buildEquipoList(usuarios, presencia){
         '</div>'+statsHtml+
       '</div>'+
       '<div class="adm-user-row-actions">'+
-        (isOnline&&u.username!=='3D Company'?'<button class="adm-row-btn" style="color:#f59e0b;border-color:#78350f20;" onclick="_admForzarLogout(\''+safeU+'\')">⏻</button>':'')+
-        (u.username!=='3D Company'
-          ?'<button class="adm-row-btn" onclick="_admAbrirEditar(\''+safeU+'\',\''+safeA+'\',\''+safeT+'\',\''+(u.rol||'asesor')+'\')">✏️</button>'+
-           '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+safeU+'\')">✕</button>'
-          :'')+
+        (isOnline?'<button class="adm-row-btn" style="color:#f59e0b;border-color:#78350f20;" onclick="_admForzarLogout(\''+safeU+'\')">⏻</button>':'')+
+        '<button class="adm-row-btn" onclick="_admAbrirEditar(\''+safeU+'\',\''+safeEmail+'\',\''+safeA+'\',\''+safeT+'\',\''+(u.rol||'asesor')+'\')">✏️</button>'+
+        '<button class="adm-row-btn danger" onclick="_admEliminarUsuario(\''+safeU+'\')">✕</button>'+
       '</div>';
     list.appendChild(row);
   });
@@ -10918,10 +10952,11 @@ function _anlInicializar(){
   const current = sel.value;
   sel.innerHTML = '<option value="">Todas las tiendas</option>';
   _admUsuariosCache.forEach(u=>{
+    if(!u.uid) return;
     const opt = document.createElement('option');
-    opt.value = u.username;
-    opt.textContent = u.tienda || u.asesor || u.username;
-    if(u.username===current) opt.selected = true;
+    opt.value = u.uid;
+    opt.textContent = u.tienda || u.asesor || u.email || u.uid;
+    if(u.uid===current) opt.selected = true;
     sel.appendChild(opt);
   });
   _anlCargar();
@@ -10932,10 +10967,11 @@ function _rnkInicializar(){
   const current = sel.value;
   sel.innerHTML = '<option value="">Todas las tiendas</option>';
   _admUsuariosCache.forEach(u=>{
+    if(!u.uid) return;
     const opt = document.createElement('option');
-    opt.value = u.username;
-    opt.textContent = u.tienda || u.asesor || u.username;
-    if(u.username===current) opt.selected = true;
+    opt.value = u.uid;
+    opt.textContent = u.tienda || u.asesor || u.email || u.uid;
+    if(u.uid===current) opt.selected = true;
     sel.appendChild(opt);
   });
   _rnkCargar();
@@ -11005,7 +11041,7 @@ function _anlCargar(){
   if(!fechas.length) return;
 
   const asesorFilter = document.getElementById('anl-asesor-filter')?.value||'';
-  const tiendaName = userFilter ? ((_admUsuariosCache.find(u=>u.username===userFilter)||{}).tienda||userFilter) : 'Todas las tiendas';
+  const tiendaName = userFilter ? ((_admUsuariosCache.find(u=>u.uid===userFilter)||{}).tienda||userFilter) : 'Todas las tiendas';
   const asesorName = asesorFilter ? document.getElementById('anl-asesor-filter').options[document.getElementById('anl-asesor-filter').selectedIndex]?.text : '';
   const periodLabel = period==='today'?'Hoy':period==='yesterday'?'Ayer':period==='custom'?'Rango personalizado':'Últimos '+period+' días';
   document.getElementById('anl-chart-title').textContent = (asesorName||tiendaName) + ' — ' + periodLabel;
@@ -11015,7 +11051,7 @@ function _anlCargar(){
   document.getElementById('kpi-cont-lbl').textContent = 'Contestaron'+kpiSuffix;
   document.getElementById('kpi-wa-lbl').textContent   = 'WA enviados'+kpiSuffix;
 
-  const users = userFilter ? [userFilter] : _admUsuariosCache.map(u=>u.username);
+  const users = userFilter ? [userFilter] : _admUsuariosCache.filter(u=>u.uid).map(u=>u.uid);
   const limit = Math.max(fechas.length, 30);
   const promises = users.map(u => _db.ref('historial_diario/'+u).once('value').then(s=>({u,data:s.val()||{}})));
 
@@ -11424,40 +11460,52 @@ function _admAbrirAgregar(){
 function _admCerrarAgregar(){ document.getElementById('adm-add-modal').classList.remove('open'); }
 
 function _admGuardarUsuario(){
-  const u=document.getElementById('adm-new-user').value.trim();
+  const email=document.getElementById('adm-new-user').value.trim();
   const p=document.getElementById('adm-new-pass').value.trim();
   const a=document.getElementById('adm-new-asesor').value.trim();
   const t=document.getElementById('adm-new-tienda').value.trim();
   const rol=document.getElementById('adm-new-rol').value||'asesor';
   const err=document.getElementById('adm-add-error');
-  if(!u||!p){ err.textContent='Usuario y contraseña son obligatorios'; err.style.display='block'; return; }
+  err.style.display='none';
+  if(!email||!p){ err.textContent='Correo y contraseña son obligatorios'; err.style.display='block'; return; }
+  if(!email.includes('@')){ err.textContent='Ingresa un correo válido'; err.style.display='block'; return; }
   if(!a){ err.textContent='El nombre completo es obligatorio'; err.style.display='block'; return; }
   if(!t){ err.textContent='La tienda es obligatoria'; err.style.display='block'; return; }
-  _db.ref('users').orderByChild('username').equalTo(u).once('value', snap=>{
-    if(snap.exists()){ err.textContent='Ese usuario ya existe'; err.style.display='block'; return; }
-    _db.ref('users').push().set({username:u,password:p,asesor:a,tienda:t,rol,createdAt:Date.now()}).then(()=>{
-      const empresaActual = localStorage.getItem('lgs_empresa_actual');
-      if(empresaActual) _db.ref('empresa_asesores/'+empresaActual+'/'+u).set(true);
+  const secAuth=window._fbSecAuth;
+  if(!secAuth){ err.textContent='Error interno. Recarga la página.'; err.style.display='block'; return; }
+  secAuth.createUserWithEmailAndPassword(email, p)
+    .then(cred=>{
+      const uid=cred.user.uid;
+      secAuth.signOut();
+      return _db.ref('users/'+uid).set({email, username:email, asesor:a, tienda:t, rol, createdAt:Date.now()})
+        .then(()=>{
+          const empresaActual=localStorage.getItem('lgs_empresa_actual');
+          if(empresaActual) _db.ref('empresa_asesores/'+empresaActual+'/'+uid).set(true);
+        });
+    })
+    .then(()=>{ _admCerrarAgregar(); _admCargarDashboard(); toast('✅ Usuario creado'); })
+    .catch(e=>{
+      let msg='Error: '+e.message;
+      if(e.code==='auth/email-already-in-use') msg='Ese correo ya está registrado';
+      else if(e.code==='auth/invalid-email') msg='Correo inválido';
+      else if(e.code==='auth/weak-password') msg='Contraseña muy débil (mínimo 6 caracteres)';
+      err.textContent=msg; err.style.display='block';
     });
-    _admCerrarAgregar();
-  });
 }
 
-function _admAbrirEditar(username, asesor, tienda, rol){
-  document.getElementById('adm-edit-user').value = username;
-  document.getElementById('adm-edit-pass').value = '';
+function _admAbrirEditar(uid, email, asesor, tienda, rol){
+  document.getElementById('adm-edit-uid').value = uid;
+  document.getElementById('adm-edit-user').value = email;
   document.getElementById('adm-edit-asesor').value = asesor;
   document.getElementById('adm-edit-tienda').value = tienda;
   document.getElementById('adm-edit-rol').value = rol||'asesor';
   document.getElementById('adm-edit-error').style.display = 'none';
-  // Cargar checkboxes de tiendas
   const contenedor = document.getElementById('adm-edit-tiendas');
   contenedor.innerHTML = '<div style="font-size:.7rem;color:#94a3b8;">Cargando tiendas…</div>';
-  const empresaActual = localStorage.getItem('lgs_empresa_actual');
   Promise.all([
     _db.ref('empresas').once('value'),
     _db.ref('admin_empresas/'+localStorage.getItem('lgs_admin_id')).once('value'),
-    _db.ref('user_tiendas/'+username).once('value')
+    _db.ref('user_tiendas/'+uid).once('value')
   ]).then(([snapE, snapAE, snapUT])=>{
     const todasEmpresas = snapE.val()||{};
     const misEmpresasIds = Object.keys(snapAE.val()||{});
@@ -11478,51 +11526,45 @@ function _admAbrirEditar(username, asesor, tienda, rol){
 function _admCerrarEditar(){ document.getElementById('adm-edit-modal').classList.remove('open'); }
 
 function _admGuardarEdicion(){
-  const username = document.getElementById('adm-edit-user').value;
-  const newPass  = document.getElementById('adm-edit-pass').value.trim();
-  const asesor   = document.getElementById('adm-edit-asesor').value.trim();
-  const tienda   = document.getElementById('adm-edit-tienda').value.trim();
-  const rol      = document.getElementById('adm-edit-rol').value||'asesor';
-  const err      = document.getElementById('adm-edit-error');
+  const uid    = document.getElementById('adm-edit-uid').value;
+  const asesor = document.getElementById('adm-edit-asesor').value.trim();
+  const tienda = document.getElementById('adm-edit-tienda').value.trim();
+  const rol    = document.getElementById('adm-edit-rol').value||'asesor';
+  const err    = document.getElementById('adm-edit-error');
   if(!asesor){ err.textContent='El nombre es obligatorio'; err.style.display='block'; return; }
-  // Recoger tiendas marcadas
   const checkboxes = document.querySelectorAll('#adm-edit-tiendas input[type=checkbox]');
   const tiendasUpdate = {};
   checkboxes.forEach(cb=>{ tiendasUpdate[cb.dataset.empid] = cb.checked ? true : null; });
-  _db.ref('users').orderByChild('username').equalTo(username).once('value', snap=>{
-    if(!snap.exists()){ err.textContent='Usuario no encontrado'; err.style.display='block'; return; }
-    snap.forEach(child=>{
-      const updates = { asesor, tienda: tienda||asesor, rol };
-      if(newPass) updates.password = newPass;
-      child.ref.update(updates);
-    });
-    // Guardar tiendas habilitadas
-    const tiendasRef = _db.ref('user_tiendas/'+username);
-    tiendasRef.once('value', snapT=>{
-      // Primero quitar las desmarcadas, luego poner las marcadas
-      Object.entries(tiendasUpdate).forEach(([empId, val])=>{
-        if(val) _db.ref('user_tiendas/'+username+'/'+empId).set(true);
-        else _db.ref('user_tiendas/'+username+'/'+empId).remove();
-      });
-    });
+  const updates = { asesor, tienda: tienda||asesor, rol };
+  _db.ref('users/'+uid).update(updates).then(()=>{
+    _db.ref('user_tiendas/'+uid).update(tiendasUpdate);
     _admCerrarEditar();
+    _admCargarDashboard();
     toast('✅ Usuario actualizado');
-  });
+  }).catch(e=>{ err.textContent='Error: '+e.message; err.style.display='block'; });
 }
 
-function _admForzarLogout(username){
-  _mConfirm('¿Cerrar sesión remota?','Se cerrará la sesión activa de "'+username+'" de forma inmediata.',()=>{
-    _db.ref('presence/'+username).update({ force_logout: true, online: false, lastSeen: Date.now() });
-    toast('⏻ Sesión de '+username+' cerrada');
+function _admEnviarResetPass(){
+  const email=document.getElementById('adm-edit-user').value;
+  if(!email){ toast('⚠️ Sin correo'); return; }
+  firebase.auth().sendPasswordResetEmail(email)
+    .then(()=>{ toast('📧 Email de restablecimiento enviado a '+email); })
+    .catch(e=>{ toast('⚠️ Error: '+e.message); });
+}
+
+function _admForzarLogout(uid){
+  _mConfirm('¿Cerrar sesión remota?','Se cerrará la sesión activa de forma inmediata.',()=>{
+    _db.ref('presence/'+uid).update({ force_logout: true, online: false, lastSeen: Date.now() });
+    toast('⏻ Sesión cerrada');
   },'danger');
 }
 
-function _admEliminarUsuario(username){
-  _mConfirm('¿Eliminar usuario?','Esta acción eliminará permanentemente a "'+username+'". No se puede deshacer.',()=>{
-    _db.ref('users').orderByChild('username').equalTo(username).once('value', snap=>{ snap.forEach(c=>c.ref.remove()); });
-    _db.ref('presence/'+username).remove();
+function _admEliminarUsuario(uid){
+  _mConfirm('¿Eliminar usuario?','Esta acción eliminará permanentemente al usuario. No se puede deshacer.',()=>{
+    _db.ref('users/'+uid).remove();
+    _db.ref('presence/'+uid).remove();
     _admCargarDashboard();
-    toast('🗑️ Usuario "'+username+'" eliminado');
+    toast('🗑️ Usuario eliminado');
   },'danger');
 }
 
@@ -11546,8 +11588,8 @@ function _rnkCargar(){
     const dias=parseInt(period);
     for(let i=dias-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);fechas.push(d.toISOString().slice(0,10));}
   }
-  const users=userFilter?[userFilter]:_admUsuariosCache.map(u=>u.username);
-  const promises=users.map(u=>_db.ref('historial_diario/'+u).once('value').then(s=>({u,data:s.val()||{},obj:_admUsuariosCache.find(x=>x.username===u)||{username:u}})));
+  const users=userFilter?[userFilter]:_admUsuariosCache.filter(u=>u.uid).map(u=>u.uid);
+  const promises=users.map(u=>_db.ref('historial_diario/'+u).once('value').then(s=>({u,data:s.val()||{},obj:_admUsuariosCache.find(x=>x.uid===u)||{uid:u}})));
   Promise.all(promises).then(results=>{
     const asesores=[];
     results.forEach(({data,obj})=>{
@@ -11705,9 +11747,9 @@ window._admGestionarEmpresa = function(empresaId){
     _db.ref('empresas/'+empresaId).once('value')
   ]).then(([snapEA, snapUsers, snapEmp])=>{
     const asignados = Object.keys(snapEA.val()||{});
-    const todosUsers = Object.values(snapUsers.val()||{});
+    const todosUsers = Object.entries(snapUsers.val()||{}).map(([uid,d])=>({uid,...d}));
     const empNombre = (snapEmp.val()||{}).nombre||'Empresa';
-    _mgaDisponibles = todosUsers.filter(u=>!asignados.includes(u.username));
+    _mgaDisponibles = todosUsers.filter(u=>!asignados.includes(u.uid));
 
     document.getElementById('mga-titulo').textContent = empNombre;
     document.getElementById('mga-search').value = '';
@@ -11717,13 +11759,14 @@ window._admGestionarEmpresa = function(empresaId){
     if(!asignados.length){
       actDiv.innerHTML='<div style="color:#94a3b8;font-size:.75rem;font-style:italic;">Sin asesores asignados</div>';
     } else {
-      actDiv.innerHTML = asignados.map(uname=>{
-        const u = todosUsers.find(x=>x.username===uname);
-        const nombre = u?(u.asesor||u.username):uname;
+      actDiv.innerHTML = asignados.map(uid=>{
+        const u = todosUsers.find(x=>x.uid===uid);
+        const nombre = u?(u.asesor||u.email||uid):uid;
+        const display = u?(u.email||uid):uid;
         return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8fafc;border-radius:8px;border:1px solid #e7e5e4;">
           <div style="width:26px;height:26px;border-radius:7px;background:#1e293b;display:flex;align-items:center;justify-content:center;color:white;font-size:.65rem;font-weight:800;flex-shrink:0;">${nombre.slice(0,2).toUpperCase()}</div>
-          <div style="flex:1;"><div style="font-size:.76rem;font-weight:700;color:#1e293b;">${nombre}</div><div style="font-size:.62rem;color:#94a3b8;">@${uname}</div></div>
-          <button onclick="_mgaQuitarAsesor('${uname}')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:3px 9px;font-size:.65rem;font-weight:700;cursor:pointer;">Quitar</button>
+          <div style="flex:1;"><div style="font-size:.76rem;font-weight:700;color:#1e293b;">${nombre}</div><div style="font-size:.62rem;color:#94a3b8;">${display}</div></div>
+          <button onclick="_mgaQuitarAsesor('${uid}')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:3px 9px;font-size:.65rem;font-weight:700;cursor:pointer;">Quitar</button>
         </div>`;
       }).join('');
     }
@@ -11736,7 +11779,7 @@ window._admGestionarEmpresa = function(empresaId){
 window._mgaFiltrar = function(q){
   const disDiv = document.getElementById('mga-disponibles');
   const sinDiv = document.getElementById('mga-sin-disponibles');
-  const filtrados = q ? _mgaDisponibles.filter(u=>(u.asesor||u.username).toLowerCase().includes(q.toLowerCase())||u.username.toLowerCase().includes(q.toLowerCase())) : _mgaDisponibles;
+  const filtrados = q ? _mgaDisponibles.filter(u=>((u.asesor||'').toLowerCase().includes(q.toLowerCase())||(u.email||'').toLowerCase().includes(q.toLowerCase()))) : _mgaDisponibles;
   if(!filtrados.length){
     disDiv.innerHTML='';
     sinDiv.style.display='block';
@@ -11744,11 +11787,12 @@ window._mgaFiltrar = function(q){
   }
   sinDiv.style.display='none';
   disDiv.innerHTML = filtrados.map(u=>{
-    const nombre = u.asesor||u.username;
+    const nombre = u.asesor||u.email||u.uid;
+    const display = u.email||u.uid;
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
       <div style="width:26px;height:26px;border-radius:7px;background:#16a34a;display:flex;align-items:center;justify-content:center;color:white;font-size:.65rem;font-weight:800;flex-shrink:0;">${nombre.slice(0,2).toUpperCase()}</div>
-      <div style="flex:1;"><div style="font-size:.76rem;font-weight:700;color:#1e293b;">${nombre}</div><div style="font-size:.62rem;color:#94a3b8;">@${u.username}</div></div>
-      <button onclick="_mgaAgregarAsesor('${u.username}')" style="background:#16a34a;color:white;border:none;border-radius:6px;padding:3px 9px;font-size:.65rem;font-weight:700;cursor:pointer;">+ Agregar</button>
+      <div style="flex:1;"><div style="font-size:.76rem;font-weight:700;color:#1e293b;">${nombre}</div><div style="font-size:.62rem;color:#94a3b8;">${display}</div></div>
+      <button onclick="_mgaAgregarAsesor('${u.uid}')" style="background:#16a34a;color:white;border:none;border-radius:6px;padding:3px 9px;font-size:.65rem;font-weight:700;cursor:pointer;">+ Agregar</button>
     </div>`;
   }).join('');
 };
