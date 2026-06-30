@@ -1797,6 +1797,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     </div>
     <div class="adm-header-right">
       <button onclick="_superAdmCargar()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🔄 Actualizar</button>
+      <button id="btn-volver-roles-sa" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🎭 Cambiar perfil</button>
       <button class="adm-logout" onclick="_superAdmLogout()">Cerrar sesión</button>
     </div>
   </div>
@@ -9912,6 +9913,10 @@ function _initLogin(){
     const btn = document.querySelector('.login-btn');
     if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
     document.getElementById('rol-select-screen').style.display='none';
+    // Mostrar botón "Cambiar perfil" solo si la cuenta tiene múltiples roles
+    const tieneMultiRol = window._rolPendiente && window._rolPendiente.roles && window._rolPendiente.roles.length > 1;
+    const btnVolver = document.getElementById('btn-volver-roles-sa');
+    if(btnVolver) btnVolver.style.display = tieneMultiRol ? 'inline-block' : 'none';
     if(rolTipo === 'superadmin'){
       localStorage.setItem(LOGIN_KEY,'superadmin');
       _showSuperAdmin(); _superAdmCargar();
@@ -9959,8 +9964,8 @@ function _initLogin(){
         </div>
         <span style="margin-left:auto;font-size:1rem;color:${COLORES[r]||'#94a3b8'};">→</span>
       </button>`).join('');
-    // El onclick necesita pasar los datos — guardar en window temporalmente
-    window._rolPendiente = { uid, email, admData, userData };
+    // Guardar en caché para poder volver desde cualquier panel
+    window._rolPendiente = { uid, email, roles, admData, userData };
     // Reescribir onclick con closure real
     document.getElementById('rss-lista').querySelectorAll('button').forEach((btn,i)=>{
       const r = roles[i];
@@ -9968,6 +9973,34 @@ function _initLogin(){
     });
     document.getElementById('rol-select-screen').style.display='flex';
   }
+
+  window._volverSelectorRol = function(){
+    const p = window._rolPendiente;
+    if(p && p.roles && p.roles.length > 1){
+      document.getElementById('super-admin-panel').style.display='none';
+      localStorage.removeItem(LOGIN_KEY);
+      _mostrarSelectorRol(p.uid, p.email, p.roles, p.admData, p.userData);
+      return;
+    }
+    // Si no hay caché (sesión restaurada directo), re-consultar Firebase
+    const user = firebase.auth().currentUser;
+    if(!user) return;
+    const uid = user.uid; const email = user.email;
+    Promise.all([
+      _db.ref('config/superAdminUid').once('value'),
+      _db.ref('admins/'+uid).once('value'),
+      _db.ref('users/'+uid).once('value')
+    ]).then(([snapSA, snapAdm, snapUser])=>{
+      const roles = [];
+      if(snapSA.val()===uid) roles.push('superadmin');
+      if(snapAdm.exists()) roles.push('admin');
+      if(snapUser.exists()) roles.push((snapUser.val().rol||'dueno')==='dueno'?'dueno':'asesor');
+      if(roles.length<=1){ toast('Solo tienes un perfil disponible'); return; }
+      document.getElementById('super-admin-panel').style.display='none';
+      localStorage.removeItem(LOGIN_KEY);
+      _mostrarSelectorRol(uid, email, roles, snapAdm.val(), snapUser.val());
+    });
+  };
 
   window._cerrarSesionRol = function(){
     document.getElementById('rol-select-screen').style.display='none';
