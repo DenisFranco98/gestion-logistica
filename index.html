@@ -1907,6 +1907,7 @@ header h1{font-size:1.05rem;font-weight:700;}
           <input id="mig-rec-newuid" type="text" placeholder="UID nuevo de Firebase Auth" style="flex:1;min-width:200px;padding:7px 11px;border:1.5px solid #fecaca;border-radius:8px;font-size:.75rem;outline:none;font-family:inherit;"/>
           <button onclick="_migRecuperar()" style="background:#dc2626;color:white;border:none;border-radius:8px;padding:7px 16px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">Recuperar datos</button>
         </div>
+        <div id="mig-rec-log" style="display:none;margin-top:10px;background:#fff;border:1px solid #fecaca;border-radius:8px;padding:10px;font-size:.7rem;color:#475569;max-height:160px;overflow-y:auto;line-height:1.9;"></div>
       </div>
       <div id="mig-loading" style="text-align:center;color:#94a3b8;padding:20px;font-size:.8rem;">Cargando usuarios...</div>
       <div id="mig-lista" style="display:flex;flex-direction:column;gap:10px;"></div>
@@ -9796,6 +9797,9 @@ const _fbApp = firebase.initializeApp({
 });
 const _db = firebase.database();
 
+// Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
+function _gsKey(){ return window._currentTiendaId || window._currentUsername; }
+
 // ===== LOGIN =====
 function _initLogin(){
   const LOGIN_KEY = 'lgs_auth';
@@ -9901,8 +9905,7 @@ function _initLogin(){
     window._gdMostrarModeSelect(asesor);
   }
 
-  // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario
-  function _gsKey(){ return window._currentTiendaId || window._currentUsername; }
+  // _gsKey definida globalmente abajo
 
   let _pendingUser = null, _pendingPass = null;
 
@@ -10443,11 +10446,13 @@ window._migUsuario = async function(oldKey){
 window._migRecuperar = async function(){
   const oldKey = (document.getElementById('mig-rec-oldkey').value||'').trim();
   const newUid = (document.getElementById('mig-rec-newuid').value||'').trim();
-  const log = document.getElementById('mig-log');
-  if(!oldKey||!newUid){ toast('⚠️ Ingresa la clave antigua y el UID nuevo'); return; }
+  const log = document.getElementById('mig-rec-log');
+  if(!oldKey||!newUid){ alert('Ingresa la clave antigua y el UID nuevo'); return; }
   log.style.display='block';
+  log.innerHTML = '';
   const _log = msg=>{ log.innerHTML += '• '+msg+'<br>'; log.scrollTop=9999; };
   _log('🔍 Buscando datos bajo la clave "'+oldKey+'"...');
+  try{
 
   // historial_diario directo (como dueño)
   const snapHD = await _db.ref('historial_diario/'+oldKey).once('value');
@@ -10508,7 +10513,11 @@ window._migRecuperar = async function(){
   if(Object.keys(eaUpdates).length){ await _db.ref().update(eaUpdates); _log('✅ empresa_asesores actualizado'); }
 
   _log('🎉 Recuperación completada. Datos de "'+oldKey+'" movidos a UID '+newUid);
-  toast('✅ Datos recuperados correctamente');
+  alert('✅ Recuperación completada correctamente');
+  } catch(err){
+    console.error('_migRecuperar error:', err);
+    _log('❌ Error: '+(err.message||err));
+  }
 };
 
 // --- Designar Super Admin Gmail ---
