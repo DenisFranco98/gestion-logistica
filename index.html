@@ -1104,10 +1104,24 @@ header h1{font-size:1.05rem;font-weight:700;}
 
       <!-- TAB: EQUIPO -->
       <div id="adm-tab-equipo" style="display:none;">
-        <div class="equipo-header">
-          <input class="equipo-search" id="equipo-search" placeholder="Buscar asesor o tienda..." oninput="_equiSearch(this.value)"/>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;">
+          <input class="equipo-search" id="equipo-search" placeholder="Buscar nombre o correo..." oninput="_buildEquipoList()" style="flex:1;min-width:160px;"/>
+          <select id="equipo-filter-tienda" onchange="_buildEquipoList()" style="background:white;border:1.5px solid #d6d2cc;border-radius:9px;padding:8px 12px;font-size:.76rem;color:#1e293b;cursor:pointer;outline:none;max-width:180px;">
+            <option value="">Todas las tiendas</option>
+          </select>
+          <select id="equipo-filter-rol" onchange="_buildEquipoList()" style="background:white;border:1.5px solid #d6d2cc;border-radius:9px;padding:8px 12px;font-size:.76rem;color:#1e293b;cursor:pointer;outline:none;">
+            <option value="">Todos los roles</option>
+            <option value="dueno">👑 Dueño</option>
+            <option value="asesor">👤 Asesor</option>
+          </select>
+          <select id="equipo-filter-estado" onchange="_buildEquipoList()" style="background:white;border:1.5px solid #d6d2cc;border-radius:9px;padding:8px 12px;font-size:.76rem;color:#1e293b;cursor:pointer;outline:none;">
+            <option value="">Cualquier estado</option>
+            <option value="online">🟢 En línea</option>
+            <option value="offline">⚫ Desconectado</option>
+          </select>
           <button class="adm-add-btn" onclick="_admAbrirAgregar()">+ Agregar usuario</button>
         </div>
+        <div id="equipo-contador" style="font-size:.63rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;"></div>
         <div class="adm-user-list" id="adm-users-list">
           <div class="adm-empty">Cargando equipo...</div>
         </div>
@@ -10695,6 +10709,7 @@ function _admTab(tab){
     const btn = document.getElementById('tab-btn-'+t);
     if(btn) btn.classList.toggle('active', t===tab);
   });
+  if(tab==='equipo') _cargarEquipoGlobal();
   if(tab==='analitica') _anlInicializar();
   if(tab==='ranking') _rnkInicializar();
   if(tab==='empresas') _admCargarEmpresas();
@@ -10881,7 +10896,7 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     });
 
     _buildEnliveCards(usuarios, presencia);
-    _buildEquipoList(usuarios, presencia);
+    // Equipo carga globalmente al abrir su tab
   });
 
   if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener=null; }
@@ -10957,7 +10972,7 @@ function _admCargarDashboardLegacy(){
       return ((presencia[b.uid]||{}).lastSeen||0)-((presencia[a.uid]||{}).lastSeen||0);
     });
     _buildEnliveCards(usuarios, presencia);
-    _buildEquipoList(usuarios, presencia);
+    // Equipo carga globalmente al abrir su tab
   }
   function _cargarUsuarios(presencia){
     _db.ref('users').once('value', snapUsers=>{
@@ -11066,36 +11081,95 @@ function _mkEnliveCard(u, p, isOnline){
   return card;
 }
 
-function _buildEquipoList(usuarios, presencia){
-  const list=document.getElementById('adm-users-list');
-  const q=((document.getElementById('equipo-search')||{}).value||'').toLowerCase();
+window._admEquipoTodos = [];
+
+function _cargarEquipoGlobal(){
+  const adminId = localStorage.getItem('lgs_admin_id');
+  if(!adminId) return;
+  const list = document.getElementById('adm-users-list');
+  if(list) list.innerHTML = '<div class="adm-empty">Cargando equipo...</div>';
+  Promise.all([
+    _db.ref('admin_empresas/'+adminId).once('value'),
+    _db.ref('empresas').once('value'),
+    _db.ref('empresa_asesores').once('value'),
+    _db.ref('users').once('value'),
+    _db.ref('presence').once('value')
+  ]).then(([snapAE, snapEmpresas, snapEAse, snapUsers, snapPresence])=>{
+    const empresasIds = Object.keys(snapAE.val()||{});
+    const empresas = snapEmpresas.val()||{};
+    const empresaAsesores = snapEAse.val()||{};
+    const users = snapUsers.val()||{};
+    _admPresenciaCache = snapPresence.val()||{};
+    const todos = [];
+    empresasIds.forEach(empId=>{
+      const emp = empresas[empId]; if(!emp) return;
+      Object.keys(empresaAsesores[empId]||{}).forEach(uid=>{
+        const u = users[uid]||{};
+        todos.push({ uid, asesor:u.asesor||u.email||uid, email:u.email||'', rol:u.rol||'asesor', tiendaId:empId, tiendaNombre:emp.nombre||empId });
+      });
+    });
+    window._admEquipoTodos = todos;
+    // Poblar selector de tienda
+    const sel = document.getElementById('equipo-filter-tienda');
+    if(sel){
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">Todas las tiendas ('+empresasIds.length+')</option>';
+      empresasIds.forEach(empId=>{
+        const emp = empresas[empId]; if(!emp) return;
+        const o = document.createElement('option');
+        o.value = empId; o.textContent = emp.nombre||empId;
+        if(empId===cur) o.selected=true;
+        sel.appendChild(o);
+      });
+    }
+    _buildEquipoList();
+  });
+}
+
+function _buildEquipoList(){
+  const list = document.getElementById('adm-users-list');
+  if(!list) return;
+  const presencia = _admPresenciaCache||{};
+  const todos = window._admEquipoTodos||[];
+  const q = ((document.getElementById('equipo-search')||{}).value||'').toLowerCase();
+  const fTienda = (document.getElementById('equipo-filter-tienda')||{}).value||'';
+  const fRol = (document.getElementById('equipo-filter-rol')||{}).value||'';
+  const fEstado = (document.getElementById('equipo-filter-estado')||{}).value||'';
+  if(!todos.length){ list.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
+  const sorted = [...todos].sort((a,b)=>{
+    const pa=presencia[a.uid]||{}, pb=presencia[b.uid]||{};
+    const ao=!!pa.online&&(Date.now()-(pa.lastSeen||0))<120000;
+    const bo=!!pb.online&&(Date.now()-(pb.lastSeen||0))<120000;
+    if(ao!==bo) return bo-ao;
+    return (pb.lastSeen||0)-(pa.lastSeen||0);
+  });
   list.innerHTML='';
-  if(!usuarios.length){list.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>';return;}
   let visible=0;
-  usuarios.forEach(u=>{
-    if(!u.uid) return;
+  sorted.forEach(u=>{
     const p=presencia[u.uid]||{};
     const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
-    const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.email||u.uid);
-    const tienda=isOnline&&p.tienda?p.tienda:(u.tienda||'');
-    const emailDisplay=u.email||'';
-    if(q&&!name.toLowerCase().includes(q)&&!tienda.toLowerCase().includes(q)&&!emailDisplay.toLowerCase().includes(q)) return;
+    const name=isOnline&&p.asesor?p.asesor:u.asesor;
+    if(fTienda && u.tiendaId!==fTienda) return;
+    if(fRol && u.rol!==fRol) return;
+    if(fEstado==='online'&&!isOnline) return;
+    if(fEstado==='offline'&&isOnline) return;
+    if(q&&!name.toLowerCase().includes(q)&&!u.email.toLowerCase().includes(q)&&!u.tiendaNombre.toLowerCase().includes(q)) return;
     visible++;
     const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
     const cont=p.contestaron||0,noCont=p.noContestaron||0,wa=p.waEnviados||0,fin=p.finalizados||0;
     const statsHtml=isOnline
-      ? '<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">'+
-          (cont?'<span style="background:#1e40af15;color:#60a5fa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">✅ '+cont+'</span>':'')+
-          (noCont?'<span style="background:#7f1d1d15;color:#f87171;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">❌ '+noCont+'</span>':'')+
-          (wa?'<span style="background:#4c1d9515;color:#a78bfa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">📱 '+wa+'</span>':'')+
-          (fin?'<span style="background:#14532d15;color:#4ade80;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">🏁 '+fin+'</span>':'')+
-          (!cont&&!noCont&&!wa&&!fin?'<span style="color:#0e1c2e;font-size:.6rem;">Sin gestiones</span>':'')+
-        '</div>'
-      : '';
+      ?'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">'+
+        (cont?'<span style="background:#1e40af15;color:#60a5fa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">✅ '+cont+'</span>':'')+
+        (noCont?'<span style="background:#7f1d1d15;color:#f87171;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">❌ '+noCont+'</span>':'')+
+        (wa?'<span style="background:#4c1d9515;color:#a78bfa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">📱 '+wa+'</span>':'')+
+        (fin?'<span style="background:#14532d15;color:#4ade80;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">🏁 '+fin+'</span>':'')+
+        (!cont&&!noCont&&!wa&&!fin?'<span style="color:#94a3b8;font-size:.6rem;">Sin gestiones</span>':'')+
+        '</div>':''
+    ;
     const safeU=u.uid.replace(/'/g,"\\'");
-    const safeEmail=emailDisplay.replace(/'/g,"\\'");
-    const safeA=(u.asesor||'').replace(/'/g,"\\'");
-    const safeT=(u.tienda||'').replace(/'/g,"\\'");
+    const safeEmail=u.email.replace(/'/g,"\\'");
+    const safeA=u.asesor.replace(/'/g,"\\'");
+    const safeT=u.tiendaNombre.replace(/'/g,"\\'");
     const row=document.createElement('div');
     row.className='adm-user-row'+(isOnline?' online':'');
     row.innerHTML=
@@ -11103,11 +11177,11 @@ function _buildEquipoList(usuarios, presencia){
       '<div class="adm-user-row-info" style="flex:1;">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
           '<div>'+
-            '<div class="adm-user-row-name">'+name+(emailDisplay&&name!==emailDisplay?'<span style="color:#0e1c2e;font-size:.65rem;font-weight:400;margin-left:6px;">'+emailDisplay+'</span>':'')+'</div>'+
-            '<div class="adm-user-row-meta">'+(tienda?'🏪 '+tienda+' · ':'')+(u.rol==='dueno'?'<span style="color:#7c3aed;font-weight:700;">👑 Dueño</span>':'<span style="color:#0891b2;font-weight:700;">👤 Asesor</span>')+'</div>'+
+            '<div class="adm-user-row-name">'+name+(u.email&&name!==u.email?'<span style="color:#94a3b8;font-size:.65rem;font-weight:400;margin-left:6px;">'+u.email+'</span>':'')+'</div>'+
+            '<div class="adm-user-row-meta">🏪 '+u.tiendaNombre+' · '+(u.rol==='dueno'?'<span style="color:#7c3aed;font-weight:700;">👑 Dueño</span>':'<span style="color:#0891b2;font-weight:700;">👤 Asesor</span>')+'</div>'+
           '</div>'+
-          '<div style="font-size:.63rem;font-weight:600;color:'+(isOnline?'#10b981':'#0e1c2e')+'">'+
-            (isOnline?'🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:''):(p.lastSeen?'⚫ '+_fmtTiempo(p.lastSeen):''))+
+          '<div style="font-size:.63rem;font-weight:600;color:'+(isOnline?'#10b981':'#94a3b8')+'">'+
+            (isOnline?'🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:''):(p.lastSeen?'⚫ '+_fmtTiempo(p.lastSeen):'Sin conexión'))+
           '</div>'+
         '</div>'+statsHtml+
       '</div>'+
@@ -11118,7 +11192,9 @@ function _buildEquipoList(usuarios, presencia){
       '</div>';
     list.appendChild(row);
   });
-  if(!visible) list.innerHTML='<div class="adm-empty">Sin resultados para "'+q+'"</div>';
+  const contador=document.getElementById('equipo-contador');
+  if(contador) contador.textContent=visible+' usuario'+(visible!==1?'s':'')+' · '+todos.length+' en total';
+  if(!visible) list.innerHTML='<div class="adm-empty">Sin resultados para los filtros aplicados</div>';
 }
 
 // ===== ANALÍTICA =====
@@ -11743,11 +11819,6 @@ function _admEliminarUsuario(uid){
   },'danger');
 }
 
-function _equiSearch(q){
-  document.querySelectorAll('#adm-users-list .adm-user-row').forEach(row=>{
-    row.style.display=!q||row.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';
-  });
-}
 
 function _rnkCargar(){
   const userFilter=document.getElementById('rnk-user-filter').value;
