@@ -1898,6 +1898,16 @@ header h1{font-size:1.05rem;font-weight:700;}
         3. Clic en <strong>Migrar</strong> — el sistema crea su cuenta Firebase y mueve todos sus datos (historial, tiendas, gestiones) al nuevo UID<br>
         4. El asesor recibe un email para cambiar su contraseña
       </div>
+      <!-- Recuperación de datos de migraciones anteriores incompletas -->
+      <div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:.78rem;font-weight:800;color:#991b1b;margin-bottom:6px;">🔧 Recuperar datos de migración anterior</div>
+        <div style="font-size:.7rem;color:#7f1d1d;margin-bottom:10px;">Usa esto si un usuario ya fue migrado pero perdió su historial/gestiones. Necesitas la <strong>clave vieja</strong> (ej: "frankaro") y el <strong>UID nuevo</strong> de Firebase Auth.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="mig-rec-oldkey" type="text" placeholder="Clave antigua (ej: frankaro)" style="flex:1;min-width:120px;padding:7px 11px;border:1.5px solid #fecaca;border-radius:8px;font-size:.75rem;outline:none;font-family:inherit;"/>
+          <input id="mig-rec-newuid" type="text" placeholder="UID nuevo de Firebase Auth" style="flex:1;min-width:200px;padding:7px 11px;border:1.5px solid #fecaca;border-radius:8px;font-size:.75rem;outline:none;font-family:inherit;"/>
+          <button onclick="_migRecuperar()" style="background:#dc2626;color:white;border:none;border-radius:8px;padding:7px 16px;font-size:.74rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">Recuperar datos</button>
+        </div>
+      </div>
       <div id="mig-loading" style="text-align:center;color:#94a3b8;padding:20px;font-size:.8rem;">Cargando usuarios...</div>
       <div id="mig-lista" style="display:flex;flex-direction:column;gap:10px;"></div>
       <div id="mig-log" style="margin-top:16px;background:#f8fafc;border-radius:10px;padding:12px;font-size:.7rem;color:#475569;display:none;max-height:200px;overflow-y:auto;line-height:1.8;"></div>
@@ -10357,14 +10367,31 @@ window._migUsuario = async function(oldKey){
     });
     if(Object.keys(eaUpdates).length){ await _db.ref().update(eaUpdates); _log('✅ Empresa_asesores actualizado'); }
 
-    // Migrar historial_diario para cada tienda
-    for(const tiendaId of Object.keys(tiendas)){
+    // Migrar historial_diario directo (usuario como dueño/tienda)
+    const snapHDirect = await _db.ref('historial_diario/'+oldKey).once('value');
+    if(snapHDirect.exists()){
+      await _db.ref('historial_diario/'+newUid).set(snapHDirect.val());
+      await _db.ref('historial_diario/'+oldKey).remove();
+      _log('✅ Historial propio migrado (historial_diario/'+oldKey+' → '+newUid+')');
+    }
+
+    // Migrar historial_diario como asesor dentro de otras tiendas
+    const snapEAAll = await _db.ref('empresa_asesores').once('value');
+    for(const [tiendaId] of Object.entries(snapEAAll.val()||{})){
       const snapH = await _db.ref('historial_diario/'+tiendaId+'/'+oldKey).once('value');
       if(snapH.exists()){
         await _db.ref('historial_diario/'+tiendaId+'/'+newUid).set(snapH.val());
         await _db.ref('historial_diario/'+tiendaId+'/'+oldKey).remove();
-        _log('✅ Historial migrado para tienda '+tiendaId);
+        _log('✅ Historial como asesor migrado en tienda '+tiendaId);
       }
+    }
+
+    // Migrar gestiones_sync
+    const snapGS = await _db.ref('gestiones_sync/'+oldKey).once('value');
+    if(snapGS.exists()){
+      await _db.ref('gestiones_sync/'+newUid).set(snapGS.val());
+      await _db.ref('gestiones_sync/'+oldKey).remove();
+      _log('✅ Gestiones sync migradas');
     }
 
     // Eliminar datos viejos
@@ -10391,6 +10418,64 @@ window._migUsuario = async function(oldKey){
     btn.disabled=false; btn.textContent='Reintentar';
     toast('⚠️ Error: '+e.message);
   }
+};
+
+window._migRecuperar = async function(){
+  const oldKey = (document.getElementById('mig-rec-oldkey').value||'').trim();
+  const newUid = (document.getElementById('mig-rec-newuid').value||'').trim();
+  const log = document.getElementById('mig-log');
+  if(!oldKey||!newUid){ toast('⚠️ Ingresa la clave antigua y el UID nuevo'); return; }
+  log.style.display='block';
+  const _log = msg=>{ log.innerHTML += '• '+msg+'<br>'; log.scrollTop=9999; };
+  _log('🔍 Buscando datos bajo la clave "'+oldKey+'"...');
+
+  // historial_diario directo (como dueño)
+  const snapHD = await _db.ref('historial_diario/'+oldKey).once('value');
+  if(snapHD.exists()){
+    await _db.ref('historial_diario/'+newUid).update(snapHD.val());
+    await _db.ref('historial_diario/'+oldKey).remove();
+    _log('✅ Historial propio recuperado ('+Object.keys(snapHD.val()).length+' entradas)');
+  } else { _log('ℹ️ Sin historial directo en historial_diario/'+oldKey); }
+
+  // historial_diario como asesor en otras tiendas
+  const snapEA = await _db.ref('empresa_asesores').once('value');
+  for(const tiendaId of Object.keys(snapEA.val()||{})){
+    const snapH = await _db.ref('historial_diario/'+tiendaId+'/'+oldKey).once('value');
+    if(snapH.exists()){
+      await _db.ref('historial_diario/'+tiendaId+'/'+newUid).update(snapH.val());
+      await _db.ref('historial_diario/'+tiendaId+'/'+oldKey).remove();
+      _log('✅ Historial como asesor recuperado en tienda '+tiendaId);
+    }
+  }
+
+  // gestiones_sync
+  const snapGS = await _db.ref('gestiones_sync/'+oldKey).once('value');
+  if(snapGS.exists()){
+    await _db.ref('gestiones_sync/'+newUid).update(snapGS.val());
+    await _db.ref('gestiones_sync/'+oldKey).remove();
+    _log('✅ Gestiones sync recuperadas');
+  } else { _log('ℹ️ Sin gestiones_sync bajo "'+oldKey+'"'); }
+
+  // user_tiendas
+  const snapUT = await _db.ref('user_tiendas/'+oldKey).once('value');
+  if(snapUT.exists()){
+    await _db.ref('user_tiendas/'+newUid).update(snapUT.val());
+    await _db.ref('user_tiendas/'+oldKey).remove();
+    _log('✅ user_tiendas recuperado');
+  }
+
+  // empresa_asesores: reemplazar oldKey por newUid
+  const eaUpdates = {};
+  Object.entries(snapEA.val()||{}).forEach(([empId, asesores])=>{
+    if(asesores[oldKey]!==undefined){
+      eaUpdates['empresa_asesores/'+empId+'/'+newUid] = true;
+      eaUpdates['empresa_asesores/'+empId+'/'+oldKey] = null;
+    }
+  });
+  if(Object.keys(eaUpdates).length){ await _db.ref().update(eaUpdates); _log('✅ empresa_asesores actualizado'); }
+
+  _log('🎉 Recuperación completada. Datos de "'+oldKey+'" movidos a UID '+newUid);
+  toast('✅ Datos recuperados correctamente');
 };
 
 // --- Designar Super Admin Gmail ---
