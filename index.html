@@ -913,8 +913,13 @@ header h1{font-size:1.05rem;font-weight:700;}
 .adm-section-title{color:#94a3b8;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
 
 /* ===== LOGIN SCREEN ===== */
-#login-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;}
+#login-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:none;align-items:center;justify-content:center;font-family:'Segoe UI',sans-serif;}
+#login-screen.visible{display:flex;}
 #login-screen.hidden{display:none;}
+#app-splash{position:fixed;inset:0;z-index:10000;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+#app-splash .splash-logo{font-size:2.8rem;}
+#app-splash .splash-spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:rgba(255,255,255,.7);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 .login-box{background:white;border-radius:20px;padding:48px 40px;width:100%;max-width:400px;box-shadow:0 25px 60px rgba(0,0,0,.5);text-align:center;}
 .login-logo{font-size:2.8rem;margin-bottom:8px;}
 .login-title{font-size:1.3rem;font-weight:800;color:#0f172a;margin-bottom:4px;letter-spacing:-.3px;}
@@ -1866,6 +1871,12 @@ header h1{font-size:1.05rem;font-weight:700;}
       </div>
     </div>
   </div>
+</div>
+
+<!-- ===== SPLASH (mientras Firebase inicializa) ===== -->
+<div id="app-splash">
+  <div class="splash-logo">📦</div>
+  <div class="splash-spinner"></div>
 </div>
 
 <!-- ===== LOGIN SCREEN ===== -->
@@ -9763,16 +9774,19 @@ function _initLogin(){
   let _heartbeatInterval = null;
   let _currentUsername = null;
 
+  function _hideSplash(){ const s=document.getElementById('app-splash'); if(s) s.style.display='none'; }
   function _loginShow(){
+    _hideSplash();
     document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-screen').classList.add('visible');
     document.getElementById('admin-panel').classList.remove('visible');
     document.getElementById('tienda-select-screen').style.display='none';
     const sp = document.getElementById('super-admin-panel');
     if(sp) sp.style.display='none';
   }
-  function _loginHide(){ document.getElementById('login-screen').classList.add('hidden'); }
-  function _showAdmin(){ document.getElementById('admin-panel').classList.add('visible'); _loginHide(); }
-  function _showSuperAdmin(){ document.getElementById('super-admin-panel').style.display='block'; _loginHide(); }
+  function _loginHide(){ document.getElementById('login-screen').classList.add('hidden'); document.getElementById('login-screen').classList.remove('visible'); }
+  function _showAdmin(){ _hideSplash(); document.getElementById('admin-panel').classList.add('visible'); _loginHide(); }
+  function _showSuperAdmin(){ _hideSplash(); document.getElementById('super-admin-panel').style.display='block'; _loginHide(); }
 
   // ── Presencia en Firebase ──
   function _registrarPresencia(username, tienda, asesor){
@@ -10163,6 +10177,7 @@ function _initLogin(){
 
   // Restauración de sesión via Firebase Auth
   firebase.auth().onAuthStateChanged(user=>{
+    _hideSplash();
     const savedSession = localStorage.getItem(LOGIN_KEY);
     if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); return; }
     if(savedSession==='superadmin'){ _showSuperAdmin(); _superAdmCargar(); return; }
