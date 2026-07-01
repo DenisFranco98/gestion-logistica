@@ -3190,7 +3190,7 @@ function _evtFbPush(guia,tipo){
   if(typeof _db==='undefined'||!window._currentUsername||!guia)return;
   const p=pedidos.find(x=>x.guia===guia);
   if(p&&p.dropiId){
-    _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)+'/eventos').push({tipo,ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')});
+    _db.ref('gestiones_sync/'+_gsKey()+'/'+_fbKey(p.dropiId)+'/eventos').push({tipo,ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')});
   }
 }
 function histRegistrar(guia){
@@ -3402,7 +3402,7 @@ let _fbHistGuias = {}; // {guia: {notas:[], eventos:[]}}
 
 function _fbCargarHistorialPropio(cb){
   if(!window._currentUsername||typeof _db==='undefined'){if(cb)cb();return;}
-  _db.ref('gestiones_sync/'+window._currentUsername).once('value').then(snap=>{
+  _db.ref('gestiones_sync/'+_gsKey()).once('value').then(snap=>{
     _fbHistGuias={};
     const data=snap.val()||{};
     Object.values(data).forEach(g=>{
@@ -5254,7 +5254,7 @@ function abrirHistorial(id){
     return;
   }
   // Fetch desde gestiones_sync (fuente única)
-  _db.ref('gestiones_sync/'+window._currentUsername).once('value').then(snap=>{
+  _db.ref('gestiones_sync/'+_gsKey()).once('value').then(snap=>{
     const data=snap.val()||{};
     const notasFb=[];const evtFb=[];
     Object.values(data).forEach(g=>{
@@ -9886,18 +9886,23 @@ function _initLogin(){
     _db.ref('presence/'+_currentUsername+'/sessionGestiones').transaction(v=>(v||0)+1);
   };
 
-  function _entrarApp(username, tienda, asesor){
+  function _entrarApp(username, tienda, asesor, empresaId){
     localStorage.setItem(LOGIN_KEY, '1');
     localStorage.setItem(TIENDA_KEY, tienda);
     localStorage.setItem(ASESOR_KEY, asesor);
     localStorage.setItem(USER_KEY, username);
     localStorage.setItem('lgs_rol', window._currentRol||'dueno');
+    localStorage.setItem('lgs_empresa_id', empresaId||'');
+    window._currentTiendaId = empresaId||null;
     document.getElementById('login-error').classList.remove('show');
     document.getElementById('login-error-campos').classList.remove('show');
     _loginHide();
     _registrarPresencia(username, tienda, asesor);
     window._gdMostrarModeSelect(asesor);
   }
+
+  // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario
+  function _gsKey(){ return window._currentTiendaId || window._currentUsername; }
 
   let _pendingUser = null, _pendingPass = null;
 
@@ -9966,8 +9971,11 @@ function _initLogin(){
     if(!a || !t){ document.getElementById('ls2-error').style.display='block'; return; }
     document.getElementById('ls2-asesor-lista').style.display='none';
     document.getElementById('login-step2-modal').classList.remove('open');
-    _entrarApp(_pendingUser, t, a);
-    _pendingUser = null;
+    const _pu = _pendingUser; _pendingUser = null;
+    _db.ref('user_tiendas/'+_pu).once('value', snapUT=>{
+      const ids = Object.keys(snapUT.val()||{});
+      _entrarApp(_pu, t, a, ids.length === 1 ? ids[0] : null);
+    });
   };
 
   // App secundaria para crear usuarios sin perder sesión del admin
@@ -10013,7 +10021,7 @@ function _initLogin(){
         if(!tiendaIds.length){ _pedirPerfil(uid, d.tienda||''); return; }
         if(tiendaIds.length===1){
           _db.ref('empresas/'+tiendaIds[0]).once('value', snapE=>{
-            _entrarApp(uid, (snapE.val()||{}).nombre||tiendaIds[0], nombreAsesor);
+            _entrarApp(uid, (snapE.val()||{}).nombre||tiendaIds[0], nombreAsesor, tiendaIds[0]);
           });
         } else {
           _mostrarSelectorTienda(uid, nombreAsesor, tiendaIds);
@@ -10197,7 +10205,7 @@ function _initLogin(){
         btn.onmouseout=()=>{btn.style.borderColor='#e2e8f0';btn.style.background='#f8fafc';};
         btn.onclick=()=>{
           document.getElementById('tienda-select-screen').style.display='none';
-          _entrarApp(username, nombre, nombreAsesor);
+          _entrarApp(username, nombre, nombreAsesor, empId);
         };
         lista.appendChild(btn);
       });
@@ -10225,6 +10233,7 @@ function _initLogin(){
     if(t && a){
       _loginHide();
       window._currentRol = localStorage.getItem('lgs_rol')||'dueno';
+      window._currentTiendaId = localStorage.getItem('lgs_empresa_id')||null;
       _registrarPresencia(uid, t, a);
       window._gdMostrarModeSelect(a);
     } else {
@@ -10386,12 +10395,23 @@ window._migUsuario = async function(oldKey){
       }
     }
 
-    // Migrar gestiones_sync
+    // Migrar gestiones_sync → a la empresa (tienda) del usuario, no al UID personal
     const snapGS = await _db.ref('gestiones_sync/'+oldKey).once('value');
     if(snapGS.exists()){
-      await _db.ref('gestiones_sync/'+newUid).set(snapGS.val());
+      const tiendaIds = Object.keys(tiendas);
+      if(tiendaIds.length === 1){
+        await _db.ref('gestiones_sync/'+tiendaIds[0]).update(snapGS.val());
+        _log('✅ Gestiones sync migradas a empresa '+tiendaIds[0]);
+      } else if(tiendaIds.length > 1){
+        // Varios tiendas: mover al primero (más común: una tienda por dueño)
+        await _db.ref('gestiones_sync/'+tiendaIds[0]).update(snapGS.val());
+        _log('✅ Gestiones sync migradas a empresa '+tiendaIds[0]+' (múltiples tiendas — verifica manualmente)');
+      } else {
+        // Sin tienda asignada todavía: dejar bajo newUid como fallback
+        await _db.ref('gestiones_sync/'+newUid).set(snapGS.val());
+        _log('⚠️ Sin tienda asignada — gestiones sync temporalmente en '+newUid);
+      }
       await _db.ref('gestiones_sync/'+oldKey).remove();
-      _log('✅ Gestiones sync migradas');
     }
 
     // Eliminar datos viejos
@@ -10448,13 +10468,26 @@ window._migRecuperar = async function(){
     }
   }
 
-  // gestiones_sync
+  // gestiones_sync → mover a la empresa del usuario, no al UID personal
   const snapGS = await _db.ref('gestiones_sync/'+oldKey).once('value');
+  const snapUTR = await _db.ref('user_tiendas/'+newUid).once('value');
+  const empIdsR = Object.keys(snapUTR.val()||{});
   if(snapGS.exists()){
-    await _db.ref('gestiones_sync/'+newUid).update(snapGS.val());
+    const destGS = empIdsR.length >= 1 ? empIdsR[0] : newUid;
+    await _db.ref('gestiones_sync/'+destGS).update(snapGS.val());
     await _db.ref('gestiones_sync/'+oldKey).remove();
-    _log('✅ Gestiones sync recuperadas');
-  } else { _log('ℹ️ Sin gestiones_sync bajo "'+oldKey+'"'); }
+    _log('✅ Gestiones sync recuperadas → empresa '+destGS);
+  } else {
+    // Buscar si ya hay gestiones bajo el UID (del fallback anterior) y mover a empresa
+    if(empIdsR.length >= 1){
+      const snapGSUid = await _db.ref('gestiones_sync/'+newUid).once('value');
+      if(snapGSUid.exists()){
+        await _db.ref('gestiones_sync/'+empIdsR[0]).update(snapGSUid.val());
+        await _db.ref('gestiones_sync/'+newUid).remove();
+        _log('✅ Gestiones sync movidas de UID a empresa '+empIdsR[0]);
+      } else { _log('ℹ️ Sin gestiones_sync para recuperar'); }
+    } else { _log('ℹ️ Sin gestiones_sync bajo "'+oldKey+'"'); }
+  }
 
   // user_tiendas
   const snapUT = await _db.ref('user_tiendas/'+oldKey).once('value');
@@ -10807,7 +10840,9 @@ function _fbSyncGestion(id){
   if(p.nombre)  g._nombre=p.nombre;
   if(p.telefono) g._tel=p.telefono.replace(/^57/,'');
   if(p.ciudad)  g._ciudad=p.ciudad;
-  _db.ref('gestiones_sync/'+window._currentUsername+'/'+_fbKey(p.dropiId)).update(g);
+  const _asesorActual = window.getLoginAsesor ? window.getLoginAsesor() : '';
+  if(_asesorActual) g._asesor = _asesorActual;
+  _db.ref('gestiones_sync/'+_gsKey()+'/'+_fbKey(p.dropiId)).update(g);
   // Rastrear última actividad para monitoreo del admin
   const g0=gestiones[id]||{};
   let _actLabel='🔄 Gestionando pedido';
@@ -10867,7 +10902,7 @@ function _fbActualizarHistorial(){
 
 function _fbRestaurarGestiones(cb){
   if(typeof _db==='undefined'||!window._currentUsername){if(cb)cb();return;}
-  _db.ref('gestiones_sync/'+window._currentUsername).once('value',snap=>{
+  _db.ref('gestiones_sync/'+_gsKey()).once('value',snap=>{
     const fb=snap.val()||{};
     if(!Object.keys(fb).length){if(cb)cb();return;}
     let changed=false;
@@ -10924,7 +10959,7 @@ function _fbGuardarRechazado(id){ _fbSyncGestion(id); }
 // Al cargar nuevo Excel: marcar automáticamente rechazados ya registrados en gestiones_sync
 function _fbRestaurarRechazados(cb){
   if(typeof _db==='undefined'||!window._currentUsername){if(cb)cb();return;}
-  _db.ref('gestiones_sync/'+window._currentUsername).once('value', snap=>{
+  _db.ref('gestiones_sync/'+_gsKey()).once('value', snap=>{
     const data=snap.val()||{};
     const rechPorGuia={};
     Object.values(data).forEach(g=>{
@@ -12235,7 +12270,7 @@ window._admEntrarTienda = function(empId, empNombre){
     window._cameFromAdmin = true;
     const btnV = document.getElementById('mss-btn-volver-admin');
     if(btnV) btnV.style.display = 'block';
-    _entrarApp(adminId, empNombre, nombreAsesor);
+    _entrarApp(adminId, empNombre, nombreAsesor, empId);
   });
 };
 
@@ -12658,55 +12693,32 @@ function _admBuscarOrden(){
   const qN = _bordNorm(q);
   const esNumero = /^[\d\s\-]+$/.test(q.replace(/\s/g,''));
 
-  _db.ref('empresa_asesores/'+empresaId).once('value', snapEA=>{
-    const usernames = Object.keys(snapEA.val()||{});
-    if(!usernames.length){ document.getElementById('bord-results').innerHTML='<div class="adm-empty">Esta empresa no tiene asesores</div>'; return; }
-
-    // Buscar en gestiones_sync de cada asesor en paralelo
+  // gestiones_sync ahora es por tienda — una sola lectura cubre todos los asesores
+  _db.ref('gestiones_sync/'+empresaId).once('value', snapGest=>{
+    const gestTienda = snapGest.val()||{};
     const resultadosPorGuia = {};
-    const _debug = {asesores: usernames.length, gests:0};
+    const _debug = {asesores:1, gests: Object.keys(gestTienda).length};
 
-    Promise.all(usernames.map(username=>
-      Promise.all([
-        _db.ref('gestiones_sync/'+username).once('value'),
-        _db.ref('users').orderByChild('username').equalTo(username).once('value')
-      ]).then(([snapGest, snapUser])=>{
-        const gestiones = snapGest.val()||{};
-        const userInfo = Object.values(snapUser.val()||{})[0]||{};
-        const nombreAsesor = userInfo.asesor || username;
-        const tiendaAsesor = userInfo.tienda || '—';
-
-        function _registrarEnMapa(guia, nombre, cb){
-          if(!guia) return;
-          if(!resultadosPorGuia[guia]) resultadosPorGuia[guia]={guia,nombre:nombre||'',asesores:{}};
-          else if(nombre && !resultadosPorGuia[guia].nombre) resultadosPorGuia[guia].nombre=nombre;
-          if(!resultadosPorGuia[guia].asesores[username])
-            resultadosPorGuia[guia].asesores[username]={nombreAsesor,tiendaAsesor,notas:[],gestion:null,events:[]};
-          if(cb) cb(resultadosPorGuia[guia].asesores[username]);
-        }
-
-        _debug.gests += Object.keys(gestiones).length;
-        Object.entries(gestiones).forEach(([dropiKey, g])=>{
-          const matchKey    = _bordNorm(dropiKey).includes(qN);
-          const matchGuia   = g._guia   && _bordNorm(g._guia).includes(qN);
-          const matchNombre = g._nombre && _bordNorm(g._nombre).includes(qN);
-          const matchTel    = esNumero  && g._tel && g._tel.replace(/\D/g,'').includes(qN.replace(/\D/g,''));
-          const matchCiudad = g._ciudad && _bordNorm(g._ciudad).includes(qN);
-          if(matchKey || matchGuia || matchNombre || matchTel || matchCiudad){
-            const displayGuia = g._guia || dropiKey;
-            _registrarEnMapa(displayGuia, g._nombre||'', slot=>{
-              slot.gestion=g;
-              if(g.notas&&Array.isArray(g.notas)) g.notas.forEach(n=>slot.notas.push(n));
-              if(g.eventos) Object.values(g.eventos).forEach(e=>slot.events.push(e));
-            });
-          }
-        });
-      })
-    )).then(()=>{
-      _bordMostrarResultados(resultadosPorGuia, q, _debug);
-    }).catch(()=>{
-      document.getElementById('bord-results').innerHTML='<div class="adm-empty">❌ Error al buscar. Intenta de nuevo.</div>';
+    Object.entries(gestTienda).forEach(([dropiKey, g])=>{
+      const matchKey    = _bordNorm(dropiKey).includes(qN);
+      const matchGuia   = g._guia   && _bordNorm(g._guia).includes(qN);
+      const matchNombre = g._nombre && _bordNorm(g._nombre).includes(qN);
+      const matchTel    = esNumero  && g._tel && g._tel.replace(/\D/g,'').includes(qN.replace(/\D/g,''));
+      const matchCiudad = g._ciudad && _bordNorm(g._ciudad).includes(qN);
+      if(matchKey || matchGuia || matchNombre || matchTel || matchCiudad){
+        const displayGuia = g._guia || dropiKey;
+        if(!resultadosPorGuia[displayGuia])
+          resultadosPorGuia[displayGuia]={guia:displayGuia,nombre:g._nombre||'',asesores:{}};
+        const asesorKey = g._asesor||'—';
+        if(!resultadosPorGuia[displayGuia].asesores[asesorKey])
+          resultadosPorGuia[displayGuia].asesores[asesorKey]={nombreAsesor:asesorKey,tiendaAsesor:'',notas:[],gestion:null,events:[]};
+        const slot = resultadosPorGuia[displayGuia].asesores[asesorKey];
+        slot.gestion = g;
+        if(g.notas&&Array.isArray(g.notas)) g.notas.forEach(n=>slot.notas.push(n));
+        if(g.eventos) Object.values(g.eventos).forEach(e=>slot.events.push(e));
+      }
     });
+    _bordMostrarResultados(resultadosPorGuia, q, _debug);
   });
 }
 
