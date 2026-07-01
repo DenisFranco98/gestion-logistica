@@ -9993,12 +9993,14 @@ function _initLogin(){
     Promise.all([
       _db.ref('config/superAdminUid').once('value'),
       _db.ref('admins/'+uid).once('value'),
-      _db.ref('users/'+uid).once('value')
-    ]).then(([snapSA, snapAdm, snapUser])=>{
+      _db.ref('users/'+uid).once('value'),
+      _db.ref('user_tiendas/'+uid).once('value')
+    ]).then(([snapSA, snapAdm, snapUser, snapTiendas])=>{
       const roles = [];
       if(snapSA.val()===uid) roles.push('superadmin');
       if(snapAdm.exists()) roles.push('admin');
-      if(snapUser.exists()) roles.push((snapUser.val().rol||'dueno')==='dueno'?'dueno':'asesor');
+      const hasTiendas = snapTiendas.exists() && Object.keys(snapTiendas.val()||{}).length > 0;
+      if(snapUser.exists()||hasTiendas) roles.push(((snapUser.val()||{}).rol||'dueno')==='dueno'?'dueno':'asesor');
       if(roles.length<=1){ toast('Solo tienes un perfil disponible'); return; }
       document.getElementById('super-admin-panel').style.display='none';
       document.getElementById('admin-panel').classList.remove('visible');
@@ -10039,14 +10041,16 @@ function _initLogin(){
         return Promise.all([
           _db.ref('config/superAdminUid').once('value'),
           _db.ref('admins/'+uid).once('value'),
-          _db.ref('users/'+uid).once('value')
-        ]).then(([snapSA, snapAdm, snapUser])=>{
+          _db.ref('users/'+uid).once('value'),
+          _db.ref('user_tiendas/'+uid).once('value')
+        ]).then(([snapSA, snapAdm, snapUser, snapTiendas])=>{
           if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
           const roles = [];
           if(snapSA.val() === uid) roles.push('superadmin');
           if(snapAdm.exists()) roles.push('admin');
-          if(snapUser.exists()){
-            const rol = (snapUser.val().rol||'dueno');
+          const hasTiendas = snapTiendas.exists() && Object.keys(snapTiendas.val()||{}).length > 0;
+          if(snapUser.exists() || hasTiendas){
+            const rol = (snapUser.val()||{}).rol||'dueno';
             roles.push(rol==='dueno'?'dueno':'asesor');
           }
           if(!roles.length){
@@ -11968,13 +11972,31 @@ window._mgaFiltrar = function(q){
   }).join('');
 };
 
-window._mgaAgregarAsesor = function(username){
+window._mgaAgregarAsesor = function(uid){
   if(!_mgaEmpresaId) return;
-  _db.ref('empresa_asesores/'+_mgaEmpresaId+'/'+username).set(true).then(()=>{
-    toast('✅ '+username+' agregado a la empresa');
-    _admGestionarEmpresa(_mgaEmpresaId);
-    _admCargarEmpresas();
-    _admCargarDashboard();
+  // Asegurar que exista /users/{uid} y /user_tiendas/{uid}/{empresaId}
+  _db.ref('users/'+uid).once('value', snapU=>{
+    const finalize = ()=>{
+      const updates = {};
+      updates['empresa_asesores/'+_mgaEmpresaId+'/'+uid] = true;
+      updates['user_tiendas/'+uid+'/'+_mgaEmpresaId] = true;
+      _db.ref().update(updates).then(()=>{
+        toast('✅ Agregado a la tienda');
+        _admGestionarEmpresa(_mgaEmpresaId);
+        _admCargarEmpresas();
+        _admCargarDashboard();
+      });
+    };
+    if(!snapU.exists()){
+      // Crear registro mínimo si viene de /admins
+      _db.ref('admins/'+uid).once('value', snapAdm=>{
+        const email = (snapAdm.val()||{}).email||'';
+        const asesor = (snapAdm.val()||{}).asesor||email;
+        _db.ref('users/'+uid).set({ email, asesor, rol:'dueno', createdAt: Date.now() }).then(finalize);
+      });
+    } else {
+      finalize();
+    }
   });
 };
 
