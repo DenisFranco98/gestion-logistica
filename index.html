@@ -1515,7 +1515,10 @@ header h1{font-size:1.05rem;font-weight:700;}
         </div>
       </button>
     </div>
-    <button onclick="_cerrarSesion()" style="margin-top:24px;background:none;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:600;color:#94a3b8;cursor:pointer;width:100%;transition:all .15s;font-family:inherit;" onmouseover="this.style.borderColor='#dc2626';this.style.color='#dc2626';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8';">
+    <button id="mss-btn-volver-admin" onclick="_volverAlAdmin()" style="display:none;margin-top:16px;background:#0f172a;color:white;border:none;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:700;cursor:pointer;width:100%;font-family:inherit;">
+      ← Volver al Panel Admin
+    </button>
+    <button onclick="_cerrarSesion()" style="margin-top:8px;background:none;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:600;color:#94a3b8;cursor:pointer;width:100%;transition:all .15s;font-family:inherit;" onmouseover="this.style.borderColor='#dc2626';this.style.color='#dc2626';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8';">
       Cerrar sesión
     </button>
   </div>
@@ -10844,6 +10847,17 @@ function _admCargarDashboard(){
     return;
   }
 
+  // Mostrar "Cambiar perfil" si la cuenta tiene otros roles
+  Promise.all([
+    _db.ref('config/superAdminUid').once('value'),
+    _db.ref('users/'+adminId).once('value'),
+    _db.ref('user_tiendas/'+adminId).once('value')
+  ]).then(([snapSA, snapU, snapT])=>{
+    const hasOtherRoles = snapSA.val()===adminId || snapU.exists() || (snapT.exists()&&Object.keys(snapT.val()||{}).length>0);
+    const btn = document.getElementById('btn-volver-roles-adm');
+    if(btn) btn.style.display = hasOtherRoles ? 'inline-block' : 'none';
+  });
+
   _db.ref('admin_empresas/'+adminId).once('value', snapAE=>{
     const misEmpresasIds = Object.keys(snapAE.val()||{});
     if(!misEmpresasIds.length){
@@ -11944,6 +11958,7 @@ function _admCargarEmpresas(){
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <div style="font-weight:800;color:#1e293b;font-size:.9rem;">🏢 ${emp.nombre}</div>
           <div style="display:flex;gap:6px;">
+            <button onclick="_admEntrarTienda('${empId}','${emp.nombre.replace(/'/g,"\\'")}')" style="background:#1e293b;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;">→ Entrar a tienda</button>
             <button onclick="_admGestionarEmpresa('${empId}')" style="background:#f8fafc;color:#475569;border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;">Gestionar asesores</button>
           </div>
         </div>
@@ -11953,6 +11968,34 @@ function _admCargarEmpresas(){
     });
   });
 }
+
+window._admEntrarTienda = function(empId, empNombre){
+  const adminId = localStorage.getItem('lgs_admin_id');
+  const adminEmail = localStorage.getItem('lgs_admin_user')||'';
+  if(!adminId) return;
+  _db.ref('users/'+adminId).once('value', snapU=>{
+    const u = snapU.val()||{};
+    const nombreAsesor = u.asesor || adminEmail.split('@')[0] || 'Admin';
+    window._currentRol = u.rol||'dueno';
+    // Ocultar panel admin y entrar a la tienda
+    document.getElementById('admin-panel').classList.remove('visible');
+    window._cameFromAdmin = true;
+    const btnV = document.getElementById('mss-btn-volver-admin');
+    if(btnV) btnV.style.display = 'block';
+    _entrarApp(adminId, empNombre, nombreAsesor);
+  });
+};
+
+window._volverAlAdmin = function(){
+  window._cameFromAdmin = false;
+  const btnV = document.getElementById('mss-btn-volver-admin');
+  if(btnV) btnV.style.display = 'none';
+  _ocultarTodosModos();
+  document.getElementById('mode-select-screen').style.display = 'none';
+  localStorage.setItem('lgs_auth','admin');
+  _showAdmin();
+  _admCargarDashboard();
+};
 
 window._admAbrirCrearEmpresa = function(){
   const err = document.getElementById('modal-empresa-error');
