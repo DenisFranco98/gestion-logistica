@@ -972,6 +972,7 @@ header h1{font-size:1.05rem;font-weight:700;}
     </div>
     <div class="adm-header-right">
       <div class="adm-live-badge"><span class="adm-live-dot"></span>EN VIVO</div>
+      <button id="btn-volver-roles-adm" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🎭 Cambiar perfil</button>
       <button class="adm-logout" onclick="_admLogout()">Salir</button>
     </div>
   </div>
@@ -9915,8 +9916,10 @@ function _initLogin(){
     document.getElementById('rol-select-screen').style.display='none';
     // Mostrar botón "Cambiar perfil" solo si la cuenta tiene múltiples roles
     const tieneMultiRol = window._rolPendiente && window._rolPendiente.roles && window._rolPendiente.roles.length > 1;
-    const btnVolver = document.getElementById('btn-volver-roles-sa');
-    if(btnVolver) btnVolver.style.display = tieneMultiRol ? 'inline-block' : 'none';
+    ['btn-volver-roles-sa','btn-volver-roles-adm'].forEach(id=>{
+      const b = document.getElementById(id);
+      if(b) b.style.display = tieneMultiRol ? 'inline-block' : 'none';
+    });
     if(rolTipo === 'superadmin'){
       localStorage.setItem(LOGIN_KEY,'superadmin');
       _showSuperAdmin(); _superAdmCargar();
@@ -9978,6 +9981,7 @@ function _initLogin(){
     const p = window._rolPendiente;
     if(p && p.roles && p.roles.length > 1){
       document.getElementById('super-admin-panel').style.display='none';
+      document.getElementById('admin-panel').classList.remove('visible');
       localStorage.removeItem(LOGIN_KEY);
       _mostrarSelectorRol(p.uid, p.email, p.roles, p.admData, p.userData);
       return;
@@ -9997,6 +10001,7 @@ function _initLogin(){
       if(snapUser.exists()) roles.push((snapUser.val().rol||'dueno')==='dueno'?'dueno':'asesor');
       if(roles.length<=1){ toast('Solo tienes un perfil disponible'); return; }
       document.getElementById('super-admin-panel').style.display='none';
+      document.getElementById('admin-panel').classList.remove('visible');
       localStorage.removeItem(LOGIN_KEY);
       _mostrarSelectorRol(uid, email, roles, snapAdm.val(), snapUser.val());
     });
