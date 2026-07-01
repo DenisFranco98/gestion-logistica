@@ -6972,8 +6972,15 @@ window._gdMostrarModeSelect = function(asesor){
   _ocultarTodosModos();
   const ms=document.getElementById('mode-select-screen');
   ms.style.display='flex';
-  const nombre=(asesor||'').trim().split(' ')[0];
+  // Si el nombre es un email, usar solo la parte antes del @
+  let nombreRaw=(asesor||'').trim();
+  if(nombreRaw.includes('@')) nombreRaw=nombreRaw.split('@')[0];
+  const nombre=nombreRaw.split(' ')[0];
   document.getElementById('mss-greeting').textContent=nombre?'¡Hola, '+nombre+'!':'¡Hola!';
+  // Mostrar "Volver al admin" si la cuenta tiene rol de admin
+  const adminId = localStorage.getItem('lgs_admin_id');
+  const btnVolver = document.getElementById('mss-btn-volver-admin');
+  if(btnVolver) btnVolver.style.display = (adminId && window._rolPendiente?.roles?.includes('admin')) || window._cameFromAdmin ? 'block' : 'none';
   // Control Financiero solo para dueños
   const rol=window._currentRol||localStorage.getItem('lgs_rol')||'dueno';
   const btnCF=document.querySelector('#mode-select-screen .mss-btn[onclick="_modoFinanciero()"]');
@@ -12111,7 +12118,8 @@ window._mgaAgregarAsesor = function(uid){
       // Crear registro mínimo si viene de /admins
       _db.ref('admins/'+uid).once('value', snapAdm=>{
         const email = (snapAdm.val()||{}).email||'';
-        const asesor = (snapAdm.val()||{}).asesor||email;
+        // Usar nombre real si existe, si no el prefijo del email
+        const asesor = (snapAdm.val()||{}).asesor || (email.includes('@') ? email.split('@')[0] : email) || uid;
         _db.ref('users/'+uid).set({ email, asesor, rol:'dueno', createdAt: Date.now() }).then(finalize);
       });
     } else {
