@@ -12033,17 +12033,23 @@ window._admGestionarEmpresa = function(empresaId){
   Promise.all([
     _db.ref('empresa_asesores/'+empresaId).once('value'),
     _db.ref('users').once('value'),
+    _db.ref('admins').once('value'),
     _db.ref('empresas/'+empresaId).once('value')
-  ]).then(([snapEA, snapUsers, snapEmp])=>{
+  ]).then(([snapEA, snapUsers, snapAdmins, snapEmp])=>{
     const asignados = Object.keys(snapEA.val()||{});
     const todosUsers = Object.entries(snapUsers.val()||{}).map(([uid,d])=>({uid,...d}));
+    // Incluir admins que no estén ya en /users
+    Object.entries(snapAdmins.val()||{}).forEach(([uid,d])=>{
+      if(!todosUsers.find(u=>u.uid===uid))
+        todosUsers.push({uid, email:d.email||'', asesor:d.asesor||d.email||uid, rol:'dueno'});
+    });
     const empNombre = (snapEmp.val()||{}).nombre||'Empresa';
     _mgaDisponibles = todosUsers.filter(u=>!asignados.includes(u.uid));
 
     document.getElementById('mga-titulo').textContent = empNombre;
     document.getElementById('mga-search').value = '';
 
-    // Asesores actuales
+    // Asesores actuales (busca en users + admins)
     const actDiv = document.getElementById('mga-actuales');
     if(!asignados.length){
       actDiv.innerHTML='<div style="color:#94a3b8;font-size:.75rem;font-style:italic;">Sin asesores asignados</div>';
