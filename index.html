@@ -3821,6 +3821,17 @@ function renderAll(){
   });
 }
 
+// Reconstruye solo la card de un pedido (sin tocar el resto del DOM)
+function _actualizarCard(id){
+  const p=_pedidoMap.get(id); if(!p)return;
+  const old=document.getElementById('card-'+id); if(!old)return;
+  const est=ESTADOS.find(e=>e.key===p.estadoKey); if(!est)return;
+  old.replaceWith(_mkCardEl(p,est,false));
+  renderStats();
+  if(_renderAllTimer)clearTimeout(_renderAllTimer);
+  _renderAllTimer=setTimeout(renderAll,3000);
+}
+
 // Actualiza contadores y progress sin reconstruir las tarjetas (operación rápida)
 function renderStats(){
   renderPills(); renderProgress(); renderResumen();
@@ -4724,7 +4735,7 @@ function marcarWANov(id){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].wa_nov_enviado=true;
   gestiones[id].wa_nov_idx=(gestiones[id].wa_nov_idx||0)+1;
-  guardar();renderAll();
+  guardar();_actualizarCard(id);
 }
 
 // ── CARD PENDIENTE SIN GUÍA ──────────────────────────────────────────
@@ -4948,7 +4959,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
     delete gestiones[id].wa_enviado;delete gestiones[id].nueva_entrega;
     delete gestiones[id].chatepro;delete gestiones[id].gestion_final;
     delete gestiones[id].mensajes_listos;
-    guardar();_fbSyncGestion(id);renderAll();
+    guardar();_fbSyncGestion(id);_actualizarCard(id);
   } else {
     gestiones[id].llamada=resultado;
     gestiones[id].llamada_fecha=new Date().toLocaleDateString('es-CO');
@@ -5110,7 +5121,7 @@ function marcarWA(id,estadoKey){ultimaGestion=Date.now();
   if(estadoKey==='transito'){
     animarCompletado(id,()=>_completarYLimpiar(id),'\uD83D\uDCE8');
   } else {
-    setTimeout(()=>renderAll(),600);
+    _actualizarCard(id);
   }
 }
 
@@ -5167,7 +5178,7 @@ function marcarTransitoSinGestion(id, btn){
         if(!gestiones[id])gestiones[id]={};
         gestiones[id].transito_sin_gestion=true;
         gestiones[id]._ts=Date.now();
-        guardar();_fbSyncGestion(id);renderAll();
+        guardar();_fbSyncGestion(id);_completarYLimpiar(id);
         toast('🚚 En tránsito sin novedad — no cuenta como gestionado');
       },200);
     },380);
@@ -5176,7 +5187,7 @@ function marcarTransitoSinGestion(id, btn){
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].transito_sin_gestion=true;
   gestiones[id]._ts=Date.now();
-  guardar();_fbSyncGestion(id);renderAll();
+  guardar();_fbSyncGestion(id);_completarYLimpiar(id);
   toast('🚚 En tránsito sin novedad — no cuenta como gestionado');
 }
 
@@ -5200,7 +5211,7 @@ function marcarRechazadoGestionado(id, btn){
     gestiones[id].rechazado_gestionado=true;
     delete gestiones[id].rechazado_sin_gestion;
     gestiones[id]._ts=Date.now();
-    guardar();_fbSyncGestion(id);_fbGuardarRechazado(id);renderAll();
+    guardar();_fbSyncGestion(id);_fbGuardarRechazado(id);_completarYLimpiar(id);
     toast('✅ Rechazado gestionado — contará en las métricas');
   };
   if(btn) _animarBtnRechazo(btn,'#16a34a',_do); else _do();
@@ -5212,7 +5223,7 @@ function marcarRechazadoSinGestion(id, btn){
     gestiones[id].rechazado_sin_gestion=true;
     delete gestiones[id].rechazado_gestionado;
     gestiones[id]._ts=Date.now();
-    guardar();_fbSyncGestion(id);_fbGuardarRechazado(id);renderAll();
+    guardar();_fbSyncGestion(id);_fbGuardarRechazado(id);_completarYLimpiar(id);
     toast('🚫 Marcado como rechazado sin gestión');
   };
   if(btn) _animarBtnRechazo(btn,'#be123c',_do); else _do();
@@ -5338,7 +5349,7 @@ function marcarFinalizado(id){ultimaGestion=Date.now();
     guardar();_fbSyncGestion(id);
     animarCompletado(id,()=>_completarYLimpiar(id),'✅');
   } else {
-    guardar();_fbSyncGestion(id);renderAll();
+    guardar();_fbSyncGestion(id);_actualizarCard(id);
   }
 }
 
@@ -5350,7 +5361,7 @@ function marcarDevolucion(id){
     _mConfirm('¿Quitar devolución?','¿Seguro que quieres quitar la marca de devolución para este pedido?',()=>{
       gestiones[id].devolucion=false;
       delete gestiones[id].devolucion_razon;
-      guardar();_fbSyncGestion(id);renderAll();
+      guardar();_fbSyncGestion(id);_actualizarCard(id);
       toast('↩️ Devolución desmarcada');
     });
     return;
