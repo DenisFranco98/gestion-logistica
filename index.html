@@ -10307,7 +10307,7 @@ function _initLogin(){
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
 
-  function _mostrarSelectorTienda(username, nombreAsesor, tiendaIds){
+  window._mostrarSelectorTienda = function _mostrarSelectorTienda(username, nombreAsesor, tiendaIds){
     _db.ref('empresas').once('value', snapE=>{
       const todasEmpresas = snapE.val()||{};
       const lista = document.getElementById('tss-lista');
@@ -10330,7 +10330,7 @@ function _initLogin(){
       _loginHide();
       document.getElementById('tienda-select-screen').style.display='flex';
     });
-  }
+  };
 
   ['login-user','login-pass'].forEach(function(id){
     document.getElementById(id).addEventListener('keydown', function(e){ if(e.key==='Enter') window._loginCheck(); });
