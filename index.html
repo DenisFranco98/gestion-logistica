@@ -1526,6 +1526,9 @@ header h1{font-size:1.05rem;font-weight:700;}
     <button id="mss-btn-volver-admin" onclick="_volverAlAdmin()" style="display:none;margin-top:16px;background:#0f172a;color:white;border:none;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:700;cursor:pointer;width:100%;font-family:inherit;">
       ← Volver al Panel Admin
     </button>
+    <button id="mss-btn-cambiar-tienda" onclick="_cambiarTienda()" style="display:none;margin-top:8px;background:#334155;color:white;border:none;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:700;cursor:pointer;width:100%;font-family:inherit;">
+      🏪 Cambiar tienda
+    </button>
     <button onclick="_cerrarSesion()" style="margin-top:8px;background:none;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:600;color:#94a3b8;cursor:pointer;width:100%;transition:all .15s;font-family:inherit;" onmouseover="this.style.borderColor='#dc2626';this.style.color='#dc2626';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8';">
       Cerrar sesión
     </button>
@@ -7036,6 +7039,16 @@ window._gdMostrarModeSelect = function(asesor){
   const rol=window._currentRol||localStorage.getItem('lgs_rol')||'dueno';
   const btnCF=document.querySelector('#mode-select-screen .mss-btn[onclick="_modoFinanciero()"]');
   if(btnCF) btnCF.style.display=rol==='asesor'?'none':'flex';
+  // Mostrar "Cambiar tienda" solo si el usuario tiene más de una tienda
+  const btnCambiarTienda = document.getElementById('mss-btn-cambiar-tienda');
+  if(btnCambiarTienda) btnCambiarTienda.style.display = (window._currentTiendaIds && window._currentTiendaIds.length > 1) ? 'block' : 'none';
+};
+window._cambiarTienda = function(){
+  const uid = localStorage.getItem('lgs_user');
+  const asesor = localStorage.getItem('lgs_asesor');
+  if(!uid || !window._currentTiendaIds || !window._currentTiendaIds.length) return;
+  document.getElementById('mode-select-screen').style.display='none';
+  _mostrarSelectorTienda(uid, asesor, window._currentTiendaIds);
 };
 function _modoLogistica(){
   _ocultarTodosModos();
@@ -10024,6 +10037,7 @@ function _initLogin(){
       const nombreAsesor = d.asesor||email;
       const _resolverTiendas = snapT=>{
         const tiendaIds = Object.keys(snapT.val()||{});
+        window._currentTiendaIds = tiendaIds;
         console.log('[LOGIN] tiendas:', tiendaIds, '| asesor:', d.asesor, '| tienda:', d.tienda);
         toast('🔍 tiendas:'+tiendaIds.length+' | asesor:"'+(d.asesor||'')+ '" | tienda:"'+(d.tienda||'')+'"', 8000);
         if(!tiendaIds.length){
