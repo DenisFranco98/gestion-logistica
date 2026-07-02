@@ -12553,8 +12553,11 @@ window._mgaAgregarAsesor = function(uid){
 
 window._mgaQuitarAsesor = function(username){
   if(!_mgaEmpresaId) return;
-  _db.ref('empresa_asesores/'+_mgaEmpresaId+'/'+username).remove().then(()=>{
-    toast('↩️ '+username+' quitado de la empresa');
+  const updates = {};
+  updates['empresa_asesores/'+_mgaEmpresaId+'/'+username] = null;
+  updates['user_tiendas/'+username+'/'+_mgaEmpresaId] = null;
+  _db.ref().update(updates).then(()=>{
+    toast('↩️ Asesor quitado de la empresa');
     _admGestionarEmpresa(_mgaEmpresaId);
     _admCargarEmpresas();
     _admCargarDashboard();
