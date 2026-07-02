@@ -3821,6 +3821,30 @@ function renderAll(){
   });
 }
 
+// Actualiza contadores y progress sin reconstruir las tarjetas (operación rápida)
+function renderStats(){
+  renderPills(); renderProgress(); renderResumen();
+  actualizarBtnRapid(); actualizarBtnSeguimiento(); actualizarBtnTransp();
+  actualizarBadgeSinGuia();
+}
+
+// Desvanece la tarjeta completada sin reconstruir todo el DOM.
+// Solo actualiza los contadores rápido y difiere el renderAll completo 3s,
+// así el usuario puede copiar el teléfono del siguiente pedido inmediatamente.
+let _renderAllTimer=null;
+function _completarYLimpiar(id){
+  const card=document.getElementById('card-'+id);
+  if(card){
+    card.style.transition='opacity .25s,transform .25s';
+    card.style.opacity='0';
+    card.style.transform='scale(.96)';
+    setTimeout(()=>{ if(card.parentNode)card.remove(); },260);
+  }
+  renderStats();
+  if(_renderAllTimer)clearTimeout(_renderAllTimer);
+  _renderAllTimer=setTimeout(renderAll,3000);
+}
+
 const TRANSP_DB=[
   {keys:['coordinadora'],          label:'Coordinadora',    color:'#e11d48', url:'https://coordinadora.com/'},
   {keys:['envia'],                  label:'Envia',           color:'#f59e0b', url:'https://envia.co/'},
@@ -4939,7 +4963,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
       if(p&&p.estadoKey==='oficina'){
         if(tieneNotaHoy(id)){
           // Ya tiene nota → gestionar normal con animación
-          animarCompletado(id,()=>renderAll(),'✅');
+          animarCompletado(id,()=>_completarYLimpiar(id),'✅');
         } else {
           // Sin nota → quedarse en lugar y pedir nota
           const est=ESTADOS.find(e=>e.key===p.estadoKey);
@@ -4960,7 +4984,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
           },150);
         }
       } else {
-        animarCompletado(id,()=>renderAll(),'✅');
+        animarCompletado(id,()=>_completarYLimpiar(id),'✅');
       }
     } else {
       renderAll();
@@ -5084,7 +5108,7 @@ function marcarWA(id,estadoKey){ultimaGestion=Date.now();
   guardar();_fbSyncGestion(id);
   // En tránsito, enviar WA = gestión completa → animar
   if(estadoKey==='transito'){
-    animarCompletado(id,()=>renderAll(),'\uD83D\uDCE8');
+    animarCompletado(id,()=>_completarYLimpiar(id),'\uD83D\uDCE8');
   } else {
     setTimeout(()=>renderAll(),600);
   }
@@ -5103,7 +5127,7 @@ function marcarGuiaReportada(id, btn){
   gestiones[id].guia_generada_hoy=true;
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);
-  animarCompletado(id,()=>renderAll(),'✅');
+  animarCompletado(id,()=>_completarYLimpiar(id),'✅');
   toast('✅ Guía reportada y gestionada');
 }
 
@@ -5113,7 +5137,7 @@ function marcarGuiaGeneradaHoy(id, btn){
   gestiones[id].guia_generada_hoy=true;
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);
-  animarCompletado(id,()=>renderAll(),'📦');
+  animarCompletado(id,()=>_completarYLimpiar(id),'📦');
   toast('📦 Guía generada hoy — movida a gestionados');
 }
 
@@ -5125,7 +5149,7 @@ function marcarTransitoGestionado(id, btn){
   delete gestiones[id].transito_sin_gestion;
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);
-  animarCompletado(id,()=>renderAll(),'✅');
+  animarCompletado(id,()=>_completarYLimpiar(id),'✅');
 }
 
 function marcarTransitoSinGestion(id, btn){
@@ -5312,7 +5336,7 @@ function marcarFinalizado(id){ultimaGestion=Date.now();
     const p=_pedidoMap.get(id);
     if(p&&p.guia)histRegistrarFin(p.guia);
     guardar();_fbSyncGestion(id);
-    animarCompletado(id,()=>renderAll(),'✅');
+    animarCompletado(id,()=>_completarYLimpiar(id),'✅');
   } else {
     guardar();_fbSyncGestion(id);renderAll();
   }
@@ -5338,7 +5362,7 @@ function marcarDevolucion(id){
   gestiones[id].devolucion=true;
   gestiones[id].devolucion_razon=notas[notas.length-1].texto;
   guardar();_fbSyncGestion(id);_roSyncFromGestion(id);
-  animarCompletado(id,()=>renderAll(),'🔄');
+  animarCompletado(id,()=>_completarYLimpiar(id),'🔄');
 }
 
 function _getMesCargado(){
