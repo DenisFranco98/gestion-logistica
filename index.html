@@ -8663,10 +8663,8 @@ function _gdResumenDebounce(){
 function _gdGuardar(){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   document.getElementById('gd-save-st').textContent='Guardando...';
-  const base=_gdBasePath();
   const nombre=window.getLoginAsesor?window.getLoginAsesor():'';
-  _db.ref(base+'/dias').set(_gdData);
-  _db.ref(base+'/_nombre').set(nombre).then(()=>{
+  _db.ref(_gdBasePath()).update({dias:_gdData,_nombre:nombre}).then(()=>{
     document.getElementById('gd-save-st').textContent='✓ Guardado';
     setTimeout(()=>{ const el=document.getElementById('gd-save-st'); if(el)el.textContent=''; },2000);
   });
@@ -9619,15 +9617,19 @@ function _antEliminar(tipo,id){
 // ── ADMIN: CONSOLIDADO GD ───────────────────────────────────────────────
 let _gdadmData={}, _gdadmAsesores=[], _gdadmDias=31, _gdadmSubtabActual='ranking';
 
+let _gdadmListarTimer=null;
 function _gdadmListarTiendas(q){
-  // Auto-suggest: lista tiendas del nodo gestiones_diarias/ que coincidan
+  // Debounce: no hacer lectura Firebase en cada tecla
+  if(_gdadmListarTimer) clearTimeout(_gdadmListarTimer);
   if(!q||typeof _db==='undefined') return;
-  _db.ref('gestiones_diarias').orderByKey().limitToFirst(20).once('value',snap=>{
-    if(!snap.exists()) return;
-    const keys=Object.keys(snap.val()||{}).filter(k=>k.includes(q.toLowerCase()));
-    const el=document.getElementById('gdadm-tiendas-lista');
-    if(el) el.textContent=keys.length?'Tiendas: '+keys.join(', '):'';
-  });
+  _gdadmListarTimer=setTimeout(()=>{
+    _db.ref('gestiones_diarias').orderByKey().limitToFirst(20).once('value',snap=>{
+      if(!snap.exists()) return;
+      const keys=Object.keys(snap.val()||{}).filter(k=>k.includes(q.toLowerCase()));
+      const el=document.getElementById('gdadm-tiendas-lista');
+      if(el) el.textContent=keys.length?'Tiendas: '+keys.join(', '):'';
+    });
+  },400);
 }
 
 function _gdadmCargar(){
@@ -9789,12 +9791,12 @@ function _gdadmRenderTipo(){
   }
   const tEfect=_pct(tConf,tTotal), tCancelPct=_pct(tCancel,tTotal);
   // KPIs
-  const maxDia=Math.max(...Array.from({length:_gdadmDias},(_,i)=>{
-    let t=0; _gdadmAsesores.forEach(a=>{const d=a.dias[i+1]||{};t+=(d.conf||0)+(d.cancel||0)+(d.soluc||0)+(d.recupNov||0)+(d.recupCarri||0)+(d.ventasWpp||0);}); return t;
-  }));
-  const minDia=Math.min(...Array.from({length:_gdadmDias},(_,i)=>{
-    let t=0; _gdadmAsesores.forEach(a=>{const d=a.dias[i+1]||{};t+=(d.conf||0)+(d.cancel||0)+(d.soluc||0)+(d.recupNov||0)+(d.recupCarri||0)+(d.ventasWpp||0);}); return t;
-  }));
+  let maxDia=0,minDia=Infinity;
+  for(let i=1;i<=_gdadmDias;i++){
+    let t=0; _gdadmAsesores.forEach(a=>{const d=a.dias[i]||{};t+=(d.conf||0)+(d.cancel||0)+(d.soluc||0)+(d.recupNov||0)+(d.recupCarri||0)+(d.ventasWpp||0);});
+    if(t>maxDia)maxDia=t; if(t<minDia)minDia=t;
+  }
+  if(minDia===Infinity)minDia=0;
   el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:#1e293b;margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO POR TIPO DE GESTIÓN</div>
   <div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr>
