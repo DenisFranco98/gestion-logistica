@@ -8854,9 +8854,8 @@ function _novInit(){
     _novData={};
     snap.forEach(ch=>{ _novData[ch.key]=ch.val(); });
     _novRender();
-    // Recalcular contadores de todos los días con novedades
-    const dias=[...new Set(Object.values(_novData).map(n=>n.dia).filter(Boolean))];
-    dias.forEach(d=>_novSyncGD(d));
+    // _novSyncGD removido: ya sincroniza al mutar. Sincronizar N días en cada
+    // apertura del tab generaba N lecturas+escrituras Firebase innecesarias.
   });
 }
 
@@ -9297,7 +9296,8 @@ function _antEntChip(tipo,e,btn){
   if(btn)btn.classList.add('on');
   _antRender(tipo);
 }
-function _novSearch(q){_novFilter.q=q;_novRender();}
+let _novSearchTimer=null;
+function _novSearch(q){_novFilter.q=q;if(_novSearchTimer)clearTimeout(_novSearchTimer);_novSearchTimer=setTimeout(_novRender,200);}
 function _novSolChip(s,btn){
   _novFilter.sol=s;
   document.querySelectorAll('#nov-sol-chips .tab-chip').forEach(b=>b.classList.remove('on'));
@@ -11737,7 +11737,8 @@ function _anlCargar(){
   if(!fechas.length) return;
 
   const asesorFilter = document.getElementById('anl-asesor-filter')?.value||'';
-  const tiendaName = userFilter ? ((_admUsuariosCache.find(u=>u.uid===userFilter)||{}).tienda||userFilter) : 'Todas las tiendas';
+  const _anlUserMap=new Map(_admUsuariosCache.map(u=>[u.uid,u]));
+  const tiendaName = userFilter ? ((_anlUserMap.get(userFilter)||{}).tienda||userFilter) : 'Todas las tiendas';
   const asesorName = asesorFilter ? document.getElementById('anl-asesor-filter').options[document.getElementById('anl-asesor-filter').selectedIndex]?.text : '';
   const periodLabel = period==='today'?'Hoy':period==='yesterday'?'Ayer':period==='custom'?'Rango personalizado':'Últimos '+period+' días';
   document.getElementById('anl-chart-title').textContent = (asesorName||tiendaName) + ' — ' + periodLabel;
@@ -11827,20 +11828,17 @@ function _anlCargar(){
     });
 
     const labels = fechas.map(f=>{ const [,m,d]=f.split('-'); return d+'/'+m; });
-    const tot = k => Object.values(byFecha).reduce((s,d)=>s+d[k],0);
 
-    // KPIs
-    const totMin   = tot('minutos');
-    const totFin   = tot('finalizados');
-    const totCont  = tot('contestaron');
-    const totNoCont= tot('noContestaron');
-    const totWA    = tot('waEnviados');
-    const totDev   = tot('devoluciones');
-    const totGSG   = tot('guiasSinGestion');
-    const totTSG   = tot('transitoSinGestion');
-    const totRG    = tot('rechazadosGestionados');
-    const totRSG   = tot('rechazadosSinGestion');
-    const totTP    = tot('totalPedidos');
+    // KPIs — un solo loop en lugar de 10 reduce separados
+    let totMin=0,totFin=0,totCont=0,totNoCont=0,totWA=0,totDev=0,
+        totGSG=0,totTSG=0,totRG=0,totRSG=0,totTP=0;
+    Object.values(byFecha).forEach(d=>{
+      totMin+=d.minutos; totFin+=d.finalizados; totCont+=d.contestaron;
+      totNoCont+=d.noContestaron; totWA+=d.waEnviados; totDev+=d.devoluciones;
+      totGSG+=d.guiasSinGestion||0; totTSG+=d.transitoSinGestion||0;
+      totRG+=d.rechazadosGestionados||0; totRSG+=d.rechazadosSinGestion||0;
+      totTP+=d.totalPedidos||0;
+    });
     const totGest  = totCont + totNoCont + totWA;
     const gpm = totMin>0 ? (totFin/totMin).toFixed(2) : '—';
     const tasaContacto = totTP>0 ? Math.round(totCont/totTP*100) : (totGest>0 ? Math.round(totCont/totGest*100) : null);
@@ -12280,7 +12278,8 @@ function _rnkCargar(){
     for(let i=dias-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);fechas.push(d.toISOString().slice(0,10));}
   }
   const users=userFilter?[userFilter]:_admUsuariosCache.filter(u=>u.uid).map(u=>u.uid);
-  const promises=users.map(u=>_db.ref('historial_diario/'+u).once('value').then(s=>({u,data:s.val()||{},obj:_admUsuariosCache.find(x=>x.uid===u)||{uid:u}})));
+  const _rnkUserMap=new Map(_admUsuariosCache.map(u=>[u.uid,u]));
+  const promises=users.map(u=>_db.ref('historial_diario/'+u).once('value').then(s=>({u,data:s.val()||{},obj:_rnkUserMap.get(u)||{uid:u}})));
   Promise.all(promises).then(results=>{
     const asesores=[];
     results.forEach(({data,obj})=>{
