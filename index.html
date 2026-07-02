@@ -3425,12 +3425,17 @@ function _fbCargarHistorialPropio(cb){
 }
 
 // ── STORAGE ────────────────────────────────────────────────────────────
+let _guardarTimer=null;
 function guardar(){
-  try{
-    localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,contadorAlertasInactividad,estadosDesactivados:[...estadosDesactivados],ordenSecciones:ordenSecciones||[],mesCargado:window._mesCargado||null,ts:Date.now()}));
-    const now=new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
-    document.getElementById('save-st').textContent='💾 '+now;
-  }catch(e){}
+  // Debounce: agrupar múltiples guardados seguidos en uno solo (máx 800ms de espera)
+  if(_guardarTimer) clearTimeout(_guardarTimer);
+  _guardarTimer = setTimeout(()=>{
+    try{
+      localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,contadorAlertasInactividad,estadosDesactivados:[...estadosDesactivados],ordenSecciones:ordenSecciones||[],mesCargado:window._mesCargado||null,ts:Date.now()}));
+      const now=new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+      const el=document.getElementById('save-st');if(el)el.textContent='💾 '+now;
+    }catch(e){}
+  }, 800);
 }
 
 function checkSesion(){
@@ -9848,8 +9853,9 @@ function _initLogin(){
   function _registrarPresencia(username, tienda, asesor){
     _currentUsername = username;
     window._currentUsername = username;
+    _cachedLoginTime = Date.now(); // cachear loginTime localmente para evitar lectura Firebase por acción
     const ref = _db.ref('presence/' + username);
-    ref.set({ online: true, lastSeen: Date.now(), loginTime: Date.now(), tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0, force_logout: false });
+    ref.set({ online: true, lastSeen: Date.now(), loginTime: _cachedLoginTime, tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0, force_logout: false });
     ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
     if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
     _heartbeatInterval = setInterval(()=>{ if(_currentUsername===username) ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
@@ -10899,6 +10905,30 @@ _initLogin(); _migracionInicial();
 // ===== FIREBASE SYNC GESTIONES =====
 function _fbKey(k){ return String(k).replace(/[.#$\[\]\/]/g,'_'); }
 
+// Calcula métricas de gestiones en un solo loop (evita 18 llamadas .filter separadas)
+function _calcMetricas(){
+  let contestaron=0,noContestaron=0,waEnviados=0,finalizados=0,devoluciones=0,
+      guiasSinGestion=0,transitoSinGestion=0,rechazadosGestionados=0,rechazadosSinGestion=0,total=0;
+  Object.values(gestiones).forEach(x=>{
+    if(x.llamada==='contestó') contestaron++;
+    else if(x.llamada==='no_contestó') noContestaron++;
+    if(x.wa_enviado) waEnviados++;
+    if(x.gestion_final) finalizados++;
+    if(x.devolucion) devoluciones++;
+    if(x.guia_generada_hoy) guiasSinGestion++;
+    if(x.transito_sin_gestion) transitoSinGestion++;
+    if(x.rechazado_gestionado) rechazadosGestionados++;
+    if(x.rechazado_sin_gestion) rechazadosSinGestion++;
+    if(x.llamada||x.wa_enviado||x.gestion_final) total++;
+  });
+  return{contestaron,noContestaron,waEnviados,finalizados,devoluciones,
+         guiasSinGestion,transitoSinGestion,rechazadosGestionados,rechazadosSinGestion,total};
+}
+
+let _fbSyncPresTimer=null;
+let _fbHistTimer=null;
+let _cachedLoginTime=null; // loginTime cacheado localmente para evitar lectura Firebase por acción
+
 function _fbSyncGestion(id){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   const p=pedidos.find(x=>x.id===id);
@@ -10906,7 +10936,6 @@ function _fbSyncGestion(id){
   const g=Object.assign({},gestiones[id]||{});
   delete g.mensajes_listos;
   g._ts=Date.now();
-  // Guardar datos del pedido para que el admin pueda buscar por guía/nombre/teléfono
   if(p.guia)    g._guia=p.guia;
   if(p.nombre)  g._nombre=p.nombre;
   if(p.telefono) g._tel=p.telefono.replace(/^57/,'');
@@ -10914,7 +10943,7 @@ function _fbSyncGestion(id){
   const _asesorActual = window.getLoginAsesor ? window.getLoginAsesor() : '';
   if(_asesorActual) g._asesor = _asesorActual;
   _db.ref('gestiones_sync/'+_gsKey()+'/'+_fbKey(p.dropiId)).update(g);
-  // Rastrear última actividad para monitoreo del admin
+  // Actualizar presence con label de acción (inmediato) y métricas (debounced 3s)
   const g0=gestiones[id]||{};
   let _actLabel='🔄 Gestionando pedido';
   if(g0.gestion_final)_actLabel='🏁 Finalizó pedido';
@@ -10922,53 +10951,49 @@ function _fbSyncGestion(id){
   else if(g0.llamada==='contestó')_actLabel='📞 Llamada contestada';
   else if(g0.llamada==='no_contestó')_actLabel='📵 Sin respuesta';
   else if(g0.wa_enviado)_actLabel='📱 WA enviado';
-  _db.ref('presence/'+window._currentUsername).update({lastActivity:Date.now(),lastActionLabel:_actLabel,lastActionPedido:p.nombre||(p.dropiId?'#'+p.dropiId:'')});
+  // Presencia + métricas en una sola escritura debounced (evita 2 writes por acción)
+  if(_fbSyncPresTimer) clearTimeout(_fbSyncPresTimer);
+  _fbSyncPresTimer = setTimeout(()=>{
+    const m=_calcMetricas();
+    _db.ref('presence/'+window._currentUsername).update({
+      lastActivity:Date.now(),lastActionLabel:_actLabel,
+      lastActionPedido:p.nombre||(p.dropiId?'#'+p.dropiId:''),
+      sessionGestiones:m.total, totalPedidos:pedidos.length,
+      contestaron:m.contestaron, noContestaron:m.noContestaron,
+      waEnviados:m.waEnviados, finalizados:m.finalizados,
+      devoluciones:m.devoluciones, guiasSinGestion:m.guiasSinGestion,
+      transitoSinGestion:m.transitoSinGestion,
+      rechazadosGestionados:m.rechazadosGestionados,
+      rechazadosSinGestion:m.rechazadosSinGestion,
+    });
+  }, 3000);
   _fbActualizarHistorial();
-  // Actualizar contador de sesión visible en el admin
-  const arr=Object.values(gestiones);
-  const total=(arr.filter(x=>x.llamada||x.wa_enviado||x.gestion_final)).length;
-  _db.ref('presence/'+window._currentUsername).update({
-    sessionGestiones: total,
-    totalPedidos: pedidos.length,
-    contestaron: arr.filter(x=>x.llamada==='contestó').length,
-    noContestaron: arr.filter(x=>x.llamada==='no_contestó').length,
-    waEnviados: arr.filter(x=>x.wa_enviado).length,
-    finalizados: arr.filter(x=>x.gestion_final).length,
-    devoluciones: arr.filter(x=>x.devolucion).length,
-    guiasSinGestion: arr.filter(x=>x.guia_generada_hoy).length,
-    transitoSinGestion: arr.filter(x=>x.transito_sin_gestion).length,
-    rechazadosGestionados: arr.filter(x=>x.rechazado_gestionado).length,
-    rechazadosSinGestion: arr.filter(x=>x.rechazado_sin_gestion).length,
-  });
 }
 
 function _fbActualizarHistorial(){
   if(typeof _db==='undefined'||!window._currentUsername)return;
-  const hoy=new Date().toISOString().slice(0,10);
-  const user=window._currentUsername;
-  // Normalizar nombre del asesor como clave
-  const asesorRaw=window.getLoginAsesor?window.getLoginAsesor():'';
-  const asesorKey=_fbKey((asesorRaw||user).trim().toLowerCase());
-  const arr=Object.values(gestiones);
-  const contestaron=arr.filter(g=>g.llamada==='contestó').length;
-  const noContestaron=arr.filter(g=>g.llamada==='no_contestó').length;
-  const waEnviados=arr.filter(g=>g.wa_enviado).length;
-  const finalizados=arr.filter(g=>g.gestion_final).length;
-  const devoluciones=arr.filter(g=>g.devolucion).length;
-  const guiasSinGestion=arr.filter(g=>g.guia_generada_hoy).length;
-  const transitoSinGestion=arr.filter(g=>g.transito_sin_gestion).length;
-  const rechazadosGestionados=arr.filter(g=>g.rechazado_gestionado).length;
-  const rechazadosSinGestion=arr.filter(g=>g.rechazado_sin_gestion).length;
-  _db.ref('presence/'+user+'/loginTime').once('value',snap=>{
-    const loginTime=snap.val()||Date.now();
+  // Debounce: historial_diario solo se escribe como máximo 1 vez cada 30s
+  if(_fbHistTimer) clearTimeout(_fbHistTimer);
+  _fbHistTimer = setTimeout(()=>{
+    const hoy=new Date().toISOString().slice(0,10);
+    const user=window._currentUsername;
+    const asesorRaw=window.getLoginAsesor?window.getLoginAsesor():'';
+    const asesorKey=_fbKey((asesorRaw||user).trim().toLowerCase());
+    const m=_calcMetricas();
+    // Usar loginTime cacheado localmente (se setea en _registrarPresencia)
+    const loginTime=_cachedLoginTime||Date.now();
     const minutos=Math.max(1,Math.floor((Date.now()-loginTime)/60000));
-    // Guardar bajo tienda/asesor/fecha
     _db.ref('historial_diario/'+user+'/'+asesorKey+'/'+hoy).set({
-      asesorNombre: asesorRaw||user,
-      totalPedidos: pedidos.length,
-      contestaron,noContestaron,waEnviados,finalizados,devoluciones,guiasSinGestion,transitoSinGestion,rechazadosGestionados,rechazadosSinGestion,minutos,_ts:Date.now()
+      asesorNombre:asesorRaw||user, totalPedidos:pedidos.length,
+      contestaron:m.contestaron, noContestaron:m.noContestaron,
+      waEnviados:m.waEnviados, finalizados:m.finalizados,
+      devoluciones:m.devoluciones, guiasSinGestion:m.guiasSinGestion,
+      transitoSinGestion:m.transitoSinGestion,
+      rechazadosGestionados:m.rechazadosGestionados,
+      rechazadosSinGestion:m.rechazadosSinGestion,
+      minutos,_ts:Date.now()
     });
-  });
+  }, 30000);
 }
 
 function _fbRestaurarGestiones(cb){
