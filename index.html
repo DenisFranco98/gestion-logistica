@@ -11103,6 +11103,8 @@ let _anlChart = null, _anlDonut = null, _anlCierreChart = null, _anlCompChart = 
 let _admUsuariosCache = [];
 let _admPresenceListener = null;
 let _admPresenciaCache = {};
+let _admAsesorUidsCache = null;
+let _admPresenceRenderTimer = null;
 
 function _admTab(tab){
   ['enlive','ranking','equipo','analitica','empresas','buscar','gdconsolid','auditoria'].forEach(t=>{
@@ -11314,17 +11316,31 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     // Equipo carga globalmente al abrir su tab
   });
 
+  // Cachear los UIDs de asesores de la empresa actual para no releer en cada heartbeat
+  _admAsesorUidsCache = usuarios.map(u=>u.uid);
+
   if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener=null; }
+  if(_admPresenceRenderTimer){ clearTimeout(_admPresenceRenderTimer); _admPresenceRenderTimer=null; }
   _admPresenceListener = _db.ref('presence').on('value', snapP=>{
     _admPresenciaCache = snapP.val()||{};
-    const emp = localStorage.getItem('lgs_empresa_actual');
-    if(emp){
-      _db.ref('empresa_asesores/'+emp).once('value', snapEA=>{
-        const unames = Object.keys(snapEA.val()||{});
-        const usuarios = _admUsuariosCache.filter(u=>unames.includes(u.uid));
-        _buildEnliveCards(usuarios, _admPresenciaCache);
-      });
-    }
+    // Debounce: agrupar actualizaciones (con 10 asesores hay heartbeats cada ~3s)
+    if(_admPresenceRenderTimer) clearTimeout(_admPresenceRenderTimer);
+    _admPresenceRenderTimer = setTimeout(()=>{
+      const uids = _admAsesorUidsCache;
+      if(uids){
+        const usrs = _admUsuariosCache.filter(u=>uids.includes(u.uid));
+        _buildEnliveCards(usrs, _admPresenciaCache);
+        // Actualizar stats
+        const online=usrs.filter(u=>((_admPresenciaCache[u.uid]||{}).online)&&(Date.now()-((_admPresenciaCache[u.uid]||{}).lastSeen||0))<120000).length;
+        const totalGest=usrs.reduce((s,u)=>s+(_admPresenciaCache[u.uid]?.sessionGestiones||0),0);
+        const totalFin=usrs.reduce((s,u)=>s+(_admPresenciaCache[u.uid]?.finalizados||0),0);
+        const totalTP=usrs.reduce((s,u)=>s+(_admPresenciaCache[u.uid]?.totalPedidos||0),0);
+        document.getElementById('adm-stat-online').textContent=online;
+        document.getElementById('adm-stat-gest').textContent=totalGest;
+        document.getElementById('adm-stat-fin').textContent=totalFin;
+        document.getElementById('adm-stat-tp').textContent=totalTP||'—';
+      }
+    }, 5000); // 5s debounce: agrupa todos los heartbeats del periodo
   });
 }
 
@@ -11352,6 +11368,8 @@ function _admActualizarSelectorEmpresa(adminId, empresasIds, todasEmpresas, empr
 
 window._admCambiarEmpresa = function(empresaId){
   localStorage.setItem('lgs_empresa_actual', empresaId);
+  _admAsesorUidsCache = null; // Limpiar caché al cambiar empresa
+  _admUsuariosCache = [];
   _admCargarDashboard();
 };
 
@@ -11399,7 +11417,17 @@ function _admCargarDashboardLegacy(){
     });
   }
   _admPresenceListener = _db.ref('presence').on('value', snapPresence=>{
-    _cargarUsuarios(snapPresence.val()||{});
+    const presencia = snapPresence.val()||{};
+    _admPresenciaCache = presencia;
+    if(_admPresenceRenderTimer) clearTimeout(_admPresenceRenderTimer);
+    _admPresenceRenderTimer = setTimeout(()=>{
+      if(_admUsuariosCache && _admUsuariosCache.length){
+        // Ya tenemos usuarios: solo actualizar presencia y re-renderizar (sin Firebase read)
+        _procesarDatos(presencia, _admUsuariosCache);
+      } else {
+        _cargarUsuarios(presencia);
+      }
+    }, 5000);
   }, err=>{ _cargarUsuarios({}); });
 }
 
