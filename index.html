@@ -2919,6 +2919,7 @@ const WA_MSGS={
 };
 
 let pedidos=[], gestiones={}, filtroActivo=null, filtrosSeccion={}, filtroTiendas=[];
+let _pedidoMap=new Map(); // Índice O(1) por id para evitar pedidos.find() lineal
 let waCounters={reparto:0,oficina:0,transito:0,novedad:0,rechazado:0};
 let vistaActual=localStorage.getItem('lgs_vista')||'grid';
 
@@ -3457,6 +3458,7 @@ function restaurar(){
     const d=JSON.parse(localStorage.getItem(LS_KEY));
     if(!d||!Array.isArray(d.pedidos)||!d.pedidos.length){toast('⚠️ No se pudo restaurar: datos inválidos o vacíos.');return;}
     pedidos=d.pedidos;gestiones=d.gestiones||{};
+    _pedidoMap=new Map(pedidos.map(p=>[p.id,p]));
     if(d.mesCargado) window._mesCargado=d.mesCargado;
     // Limpiar mensajes_listos al restaurar — la cola se controla manualmente cada sesión
     Object.values(gestiones).forEach(g=>{ delete g.mensajes_listos; });
@@ -3525,6 +3527,7 @@ function _cargarArchivo(file){
       }catch(e){}
     }
     pedidos=nuevosPedidos;
+    _pedidoMap=new Map(pedidos.map(p=>[p.id,p]));
     // Detectar el mes del Excel desde las fechas de los pedidos
     (function(){
       const mesesConteo={};
@@ -3654,11 +3657,13 @@ function buildSecNav(){
     dots.appendChild(d);
   });
   _secIdx=0;
-  ct.addEventListener('scroll',()=>{
-    const w=ct.offsetWidth;
-    const idx=Math.round(ct.scrollLeft/w);
+  // Remover listener anterior antes de agregar uno nuevo para evitar acumulación
+  if(ct._secScrollHandler) ct.removeEventListener('scroll',ct._secScrollHandler,{passive:true});
+  ct._secScrollHandler=()=>{
+    const w=ct.offsetWidth;const idx=Math.round(ct.scrollLeft/w);
     if(idx!==_secIdx){_secIdx=idx;updateDots();}
-  },{passive:true});
+  };
+  ct.addEventListener('scroll',ct._secScrollHandler,{passive:true});
 }
 function updateDots(){
   const dots=[...document.getElementById('sec-dots').children];
@@ -3804,7 +3809,17 @@ function cerrarBienvenida(){
 
 
 
-function renderAll(){renderPills();renderCards();renderProgress();renderResumen();actualizarBtnRapid();actualizarBtnSeguimiento();actualizarBtnTransp();actualizarBadgeSinGuia();buildSecNav();renderTranspLinks();}
+let _renderAllPending=false;
+function renderAll(){
+  if(_renderAllPending)return; // Ya hay un render programado, ignorar duplicados
+  _renderAllPending=true;
+  requestAnimationFrame(()=>{
+    _renderAllPending=false;
+    renderPills();renderCards();renderProgress();renderResumen();
+    actualizarBtnRapid();actualizarBtnSeguimiento();actualizarBtnTransp();
+    actualizarBadgeSinGuia();buildSecNav();renderTranspLinks();
+  });
+}
 
 const TRANSP_DB=[
   {keys:['coordinadora'],          label:'Coordinadora',    color:'#e11d48', url:'https://coordinadora.com/'},
@@ -4916,11 +4931,11 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
     gestiones[id].llamada_ts=Date.now();
     // Al marcar no_contestó limpiamos mensajes_listos para que no se auto-vaya al fondo
     if(resultado==='no_contestó') delete gestiones[id].mensajes_listos;
-    const p=pedidos.find(x=>x.id===id);
+    const p=_pedidoMap.get(id);
     if(p&&p.guia)histRegistrarContacto(p.guia,resultado);
     guardar();_fbSyncGestion(id);_roSyncFromGestion(id);
     if(resultado==='contestó'){
-      const p=pedidos.find(x=>x.id===id);
+      const p=_pedidoMap.get(id);
       if(p&&p.estadoKey==='oficina'){
         if(tieneNotaHoy(id)){
           // Ya tiene nota → gestionar normal con animación
@@ -4960,7 +4975,7 @@ function setCheck(id,campo,valor){ultimaGestion=Date.now();
   // Sincronizar estado "solucionada en Dropi" con el registro GD
   if(campo==='nov_solucionada') _novSyncSolucionadaGD(id, valor);
   // Actualizar solo el ícono de la fila sin re-renderizar toda la pantalla
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
   if(p){
     const icoEl=document.querySelector('#card-'+id+' .cf-gest-ico, .cf-wrap .cf-gest-ico');
     const g=gestiones[id]||{};
@@ -4975,7 +4990,7 @@ function setCheck(id,campo,valor){ultimaGestion=Date.now();
 async function _novSyncSolucionadaGD(id, solucionada){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   const g=gestiones[id]||{};
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
 
   const mes=_getMesCargado();
   const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
@@ -5064,7 +5079,7 @@ function marcarWA(id,estadoKey){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].wa_enviado=true;
   waCounters[estadoKey]=(waCounters[estadoKey]||0)+1;
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
   if(p&&p.guia)histRegistrar(p.guia);
   guardar();_fbSyncGestion(id);
   // En tránsito, enviar WA = gestión completa → animar
@@ -5180,7 +5195,7 @@ function marcarRechazadoSinGestion(id, btn){
 }
 
 function copiarDatosCliente(id){
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
   if(!p)return;
   const tel=(p.telefono||'').replace(/^57/,'');
   const partes=[
@@ -5237,7 +5252,7 @@ function _renderHistorial(todasNotas, todosEvt){
   document.getElementById('hist-body').innerHTML=html;
 }
 function abrirHistorial(id){
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
   if(!p)return;
   const g=gestiones[id]||{};
   const guia=p.guia||'';
@@ -5294,7 +5309,7 @@ function marcarFinalizado(id){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].gestion_final=!gestiones[id].gestion_final;
   if(gestiones[id].gestion_final){
-    const p=pedidos.find(x=>x.id===id);
+    const p=_pedidoMap.get(id);
     if(p&&p.guia)histRegistrarFin(p.guia);
     guardar();_fbSyncGestion(id);
     animarCompletado(id,()=>renderAll(),'✅');
@@ -5348,7 +5363,7 @@ function _novIncrGDCounter(dia, campo, delta){
 
 function _syncNovToGD(id){
   if(typeof _db==='undefined'||!window._currentUsername)return;
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
   if(!p||!p.guia)return;
   const g=gestiones[id]||{};
   if(g.gdNovKey){return;} // ya sincronizado
@@ -5386,7 +5401,7 @@ let _novEvId=null, _novEvTipoActivo='img';
 
 function _novEvidenciaModal(id){
   _novEvId=id;
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
   const g=gestiones[id]||{};
   if(!p)return;
   // Si aún no tiene gdNovKey, sincronizar primero
@@ -5585,7 +5600,7 @@ function getUltimaNota(id){
   if(g.notas&&g.notas.length)return g.notas[g.notas.length-1];
   // Fallback: buscar en almacén estable por guía
   try{
-    const p=pedidos.find(x=>x.id===id);
+    const p=_pedidoMap.get(id);
     if(p&&p.guia){
       const lsN=JSON.parse(localStorage.getItem(LS_NOTES)||'{}');
       const arr=lsN[p.guia];
@@ -9419,7 +9434,7 @@ function _roAutoSync(){
 function _roSyncFromGestion(id){
   try{
     if(typeof _db==='undefined'||!window._currentUsername)return;
-    const p=pedidos.find(x=>x.id===id);
+    const p=_pedidoMap.get(id);
     if(!p||p.estadoKey!=='oficina'||!p.guia)return;
     const g=gestiones[id]||{};
     const notas=g.notas||(g.nota?[{texto:g.nota,fecha:new Date().toLocaleDateString('es-CO'),ts:Date.now()}]:[]);
@@ -10931,7 +10946,7 @@ let _cachedLoginTime=null; // loginTime cacheado localmente para evitar lectura 
 
 function _fbSyncGestion(id){
   if(typeof _db==='undefined'||!window._currentUsername)return;
-  const p=pedidos.find(x=>x.id===id);
+  const p=_pedidoMap.get(id);
   if(!p||!p.dropiId)return;
   const g=Object.assign({},gestiones[id]||{});
   delete g.mensajes_listos;
