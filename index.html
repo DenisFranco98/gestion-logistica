@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>Gestión Logística Diaria</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚚</text></svg>"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -9995,7 +9998,7 @@ function _initLogin(){
   window._fbSecAuth = _fbSecApp.auth();
 
   // Entrar al panel según el rol elegido
-  function _entrarConRol(uid, email, rolTipo, admData, userData){
+  function _entrarConRol(uid, email, rolTipo, admData, userData, snapTiendasPrefetch){
     const btn = document.querySelector('.login-btn');
     if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
     document.getElementById('rol-select-screen').style.display='none';
@@ -10019,9 +10022,20 @@ function _initLogin(){
       _auditLogin(email,'exito');
       window._currentRol = d.rol||'dueno';
       const nombreAsesor = d.asesor||email;
-      _db.ref('user_tiendas/'+uid).once('value', snapT=>{
+      const _resolverTiendas = snapT=>{
         const tiendaIds = Object.keys(snapT.val()||{});
-        if(!tiendaIds.length){ _pedirPerfil(uid, d.tienda||''); return; }
+        toast('🔍 tiendas:'+tiendaIds.length+' | asesor:"'+(d.asesor||'')+ '" | tienda:"'+(d.tienda||'')+'"', 8000);
+        if(!tiendaIds.length){
+          // Si el perfil ya tiene nombre y tienda (cuenta creada por admin), entrar directo
+          if(d.asesor && d.tienda){
+            toast('🚀 Entrando a la app...', 4000);
+            _entrarApp(uid, d.tienda, d.asesor, null);
+          } else {
+            toast('⚠️ Falta asesor o tienda → pidiendo perfil', 6000);
+            _pedirPerfil(uid, d.tienda||'');
+          }
+          return;
+        }
         if(tiendaIds.length===1){
           _db.ref('empresas/'+tiendaIds[0]).once('value', snapE=>{
             _entrarApp(uid, (snapE.val()||{}).nombre||tiendaIds[0], nombreAsesor, tiendaIds[0]);
@@ -10029,7 +10043,10 @@ function _initLogin(){
         } else {
           _mostrarSelectorTienda(uid, nombreAsesor, tiendaIds);
         }
-      });
+      };
+      // Usar datos ya cargados si están disponibles (evita segunda lectura que puede colgarse)
+      if(snapTiendasPrefetch){ _resolverTiendas(snapTiendasPrefetch); }
+      else { _db.ref('user_tiendas/'+uid).once('value', _resolverTiendas); }
     }
   }
 
@@ -10119,47 +10136,71 @@ function _initLogin(){
     const btn = document.querySelector('.login-btn');
     if(btn){ btn.disabled=true; btn.textContent='Verificando...'; }
 
+    // Timeout de seguridad: si Firebase RTDB no responde en 12s, mostrar error
+    let _loginDone = false;
+    const _loginTimeout = setTimeout(()=>{
+      if(_loginDone) return;
+      _loginDone = true;
+      if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
+      err.textContent='Error de conexión con la base de datos. Recarga la página e intenta de nuevo.';
+      err.classList.add('show');
+      firebase.auth().signOut();
+    }, 12000);
+
     firebase.auth().signInWithEmailAndPassword(email, p)
       .then(cred=>{
         const uid = cred.user.uid;
-        // Consultar los 3 nodos en paralelo
-        return Promise.all([
-          _db.ref('config/superAdminUid').once('value'),
-          _db.ref('admins/'+uid).once('value'),
-          _db.ref('users/'+uid).once('value'),
-          _db.ref('user_tiendas/'+uid).once('value')
-        ]).then(([snapSA, snapAdm, snapUser, snapTiendas])=>{
-          if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
-          const roles = [];
-          if(snapSA.val() === uid) roles.push('superadmin');
-          if(snapAdm.exists()) roles.push('admin');
-          const hasTiendas = snapTiendas.exists() && Object.keys(snapTiendas.val()||{}).length > 0;
-          if(snapUser.exists() || hasTiendas){
-            const rol = (snapUser.val()||{}).rol||'dueno';
-            roles.push(rol==='dueno'?'dueno':'asesor');
-          }
-          if(!roles.length){
-            _auditLogin(email,'fallo_usuario');
-            err.textContent='Cuenta no autorizada. Contacta al administrador.';
-            err.classList.add('show');
-            firebase.auth().signOut(); return;
-          }
-          _auditLogin(email,'exito');
-          const admData = snapAdm.val();
-          const userData = snapUser.val();
-          if(roles.length === 1){
-            _entrarConRol(uid, email, roles[0], admData, userData);
-          } else {
-            _mostrarSelectorRol(uid, email, roles, admData, userData);
-          }
+        // Leer solo users/uid para determinar el rol (lectura mínima)
+        return _db.ref('users/'+uid).once('value').then(snapUser=>{
+          // Verificar superAdmin y admin en paralelo sólo si es necesario
+          return Promise.all([
+            _db.ref('config/superAdminUid').once('value'),
+            _db.ref('admins/'+uid).once('value'),
+            _db.ref('user_tiendas/'+uid).once('value')
+          ]).then(([snapSA, snapAdm, snapTiendas])=>{
+            if(_loginDone) return; _loginDone = true;
+            clearTimeout(_loginTimeout);
+            if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
+            const roles = [];
+            if(snapSA.val() === uid) roles.push('superadmin');
+            if(snapAdm.exists()) roles.push('admin');
+            const hasTiendas = snapTiendas.exists() && Object.keys(snapTiendas.val()||{}).length > 0;
+            if(snapUser.exists() || hasTiendas){
+              const rol = (snapUser.val()||{}).rol||'dueno';
+              roles.push(rol==='dueno'?'dueno':'asesor');
+            }
+            if(!roles.length){
+              _auditLogin(email,'fallo_usuario');
+              err.textContent='Cuenta no autorizada. Contacta al administrador.';
+              err.classList.add('show');
+              firebase.auth().signOut(); return;
+            }
+            toast('✅ ROL: '+roles.join(',')+' | user:'+(snapUser.exists()?'SI':'NO')+' tiendas:'+(snapTiendas.exists()?'SI':'NO'), 6000);
+            _auditLogin(email,'exito');
+            const admData = snapAdm.val();
+            const userData = snapUser.val();
+            try {
+              if(roles.length === 1){
+                _entrarConRol(uid, email, roles[0], admData, userData, snapTiendas);
+              } else {
+                _mostrarSelectorRol(uid, email, roles, admData, userData);
+              }
+            } catch(ex) {
+              console.error('Error al entrar con rol:', ex);
+              toast('❌ Error JS: '+ex.message, 10000);
+            }
+          });
         });
       })
       .catch(e=>{
+        if(_loginDone) return; _loginDone = true;
+        clearTimeout(_loginTimeout);
         if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
         let msg = 'Correo o contraseña incorrectos';
         if(e.code==='auth/user-not-found'||e.code==='auth/invalid-email') msg='Correo no registrado';
         else if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential') msg='Contraseña incorrecta';
         else if(e.code==='auth/too-many-requests') msg='Demasiados intentos. Intenta más tarde.';
+        else msg='Error: '+(e.code||e.message||'desconocido');
         _auditLogin(email, (e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')?'fallo_password':'fallo_usuario');
         err.textContent=msg; err.classList.add('show');
         document.getElementById('login-pass').value=''; document.getElementById('login-pass').focus();
@@ -10244,7 +10285,11 @@ function _initLogin(){
         if(!snap.exists()){ firebase.auth().signOut(); return; }
         const d = snap.val();
         window._currentRol = d.rol||'dueno';
-        _pedirPerfil(uid, d.tienda||'');
+        if(d.asesor && d.tienda){
+          _entrarApp(uid, d.tienda, d.asesor, null);
+        } else {
+          _pedirPerfil(uid, d.tienda||'');
+        }
       });
     }
   });
@@ -11029,6 +11074,8 @@ let _audAllData=[], _audFilter='';
 async function _auditLogin(username, resultado){
   try{
     if(typeof _db==='undefined')return;
+    // Firebase no permite ".", "#", "$", "[", "]" en rutas — sanitizar el email
+    const safeKey = String(username).replace(/[.#$[\]]/g,'_');
     // Obtener IP y ubicación via API gratuita (sin API key)
     let ip='—', ciudad='—', pais='—', isp='—', region='—';
     try{
@@ -11051,7 +11098,7 @@ async function _auditLogin(username, resultado){
       navegador, tz,
       ua:ua.slice(0,120) // truncar para no exceder límites
     };
-    await _db.ref('login_audit/'+username).push(record);
+    await _db.ref('login_audit/'+safeKey).push(record);
   }catch(e){ console.warn('[audit]',e); }
 }
 
