@@ -212,7 +212,7 @@ header h1{font-size:1.05rem;font-weight:700;}
 .rrow{display:flex;justify-content:space-between;gap:12px;}
 .rdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;}
 .rtotal{font-weight:700;color:#e2e8f0;}
-.toast{position:fixed;top:62px;right:16px;background:#1e293b;color:white;padding:8px 15px;border-radius:9px;font-size:.77rem;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:200;opacity:0;transition:opacity .3s;pointer-events:none;}
+.toast{position:fixed;top:62px;right:16px;background:#1e293b;color:white;padding:8px 15px;border-radius:9px;font-size:.77rem;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:99999;opacity:0;transition:opacity .3s;pointer-events:none;}
 .toast.show{opacity:1;}
 .empty-s{text-align:center;padding:28px;color:#94a3b8;font-size:.83rem;}
 /* BUSCADOR */
@@ -10024,6 +10024,7 @@ function _initLogin(){
       const nombreAsesor = d.asesor||email;
       const _resolverTiendas = snapT=>{
         const tiendaIds = Object.keys(snapT.val()||{});
+        console.log('[LOGIN] tiendas:', tiendaIds, '| asesor:', d.asesor, '| tienda:', d.tienda);
         toast('🔍 tiendas:'+tiendaIds.length+' | asesor:"'+(d.asesor||'')+ '" | tienda:"'+(d.tienda||'')+'"', 8000);
         if(!tiendaIds.length){
           // Si el perfil ya tiene nombre y tienda (cuenta creada por admin), entrar directo
@@ -10175,6 +10176,7 @@ function _initLogin(){
               err.classList.add('show');
               firebase.auth().signOut(); return;
             }
+            console.log('[LOGIN] roles:', roles, '| user:', snapUser.val(), '| tiendas:', snapTiendas.val());
             toast('✅ ROL: '+roles.join(',')+' | user:'+(snapUser.exists()?'SI':'NO')+' tiendas:'+(snapTiendas.exists()?'SI':'NO'), 6000);
             _auditLogin(email,'exito');
             const admData = snapAdm.val();
