@@ -9309,14 +9309,16 @@ let _roFilter={q:'',estado:''};
 let _antFilter={con:{q:'',transport:'',entrega:''},sin:{q:'',transport:'',entrega:''}};
 let _novFilter={q:'',sol:''};
 
-function _roSearch(q){_roFilter.q=q;_roRender();}
+let _roSearchTimer=null;
+function _roSearch(q){_roFilter.q=q;if(_roSearchTimer)clearTimeout(_roSearchTimer);_roSearchTimer=setTimeout(_roRender,200);}
 function _roEstChip(e,btn){
   _roFilter.estado=e;
   document.querySelectorAll('#ro-est-chips .tab-chip').forEach(b=>b.classList.remove('on'));
   if(btn)btn.classList.add('on');
   _roRender();
 }
-function _antSearch(tipo,q){_antFilter[tipo].q=q;_antRender(tipo);}
+let _antSearchTimer=null;
+function _antSearch(tipo,q){_antFilter[tipo].q=q;if(_antSearchTimer)clearTimeout(_antSearchTimer);_antSearchTimer=setTimeout(()=>_antRender(tipo),200);}
 function _antTransChip(tipo,t,btn){
   _antFilter[tipo].transport=t;
   const grp=btn&&btn.closest('.tab-chips');
@@ -11274,11 +11276,22 @@ async function _audCargar(){
     _audAllData=[];
     snap.forEach(ch=>_audAllData.unshift({...ch.val(),_key:ch.key}));
   } else {
-    const snapAll=await _db.ref('login_audit').once('value');
+    // Consultar por usuario con límite en vez de bajar todo el árbol
+    // (login_audit crece sin tope; la descarga completa se vuelve lenta con el tiempo)
+    const sel=document.getElementById('aud-user-sel');
+    const usuarios=sel?[...sel.options].map(o=>o.value).filter(Boolean):[];
     _audAllData=[];
-    (snapAll.val()||{})&&Object.entries(snapAll.val()||{}).forEach(([user,regs])=>{
-      Object.entries(regs||{}).forEach(([k,r])=>_audAllData.push({...r,_key:k,username:r.username||user}));
-    });
+    if(usuarios.length){
+      const snaps=await Promise.all(usuarios.map(u=>
+        _db.ref('login_audit/'+String(u).replace(/[.#$[\]]/g,'_')).orderByChild('ts').limitToLast(30).once('value')
+      ));
+      snaps.forEach((s,i)=>{ s.forEach(ch=>{ _audAllData.push({...ch.val(),_key:ch.key,username:ch.val().username||usuarios[i]}); }); });
+    } else {
+      const snapAll=await _db.ref('login_audit').limitToLast(50).once('value');
+      Object.entries(snapAll.val()||{}).forEach(([user,regs])=>{
+        Object.entries(regs||{}).forEach(([k,r])=>_audAllData.push({...r,_key:k,username:r.username||user}));
+      });
+    }
     _audAllData.sort((a,b)=>(b.ts||0)-(a.ts||0));
     _audAllData=_audAllData.slice(0,300);
   }
