@@ -9870,8 +9870,34 @@ const _fbApp = firebase.initializeApp({
 });
 const _db = firebase.database();
 
+// Diagnóstico: listar nodos de historial_diario con estructura vieja ({fecha} directo
+// en vez de {asesor}/{fecha}). Ejecutar desde la consola: _auditHistorialEstructura()
+window._auditHistorialEstructura = function(){
+  _db.ref('historial_diario').once('value', snap=>{
+    const data = snap.val()||{};
+    const viejos = [], nuevos = [];
+    Object.entries(data).forEach(([uid, contenido])=>{
+      const keys = Object.keys(contenido||{});
+      if(!keys.length) return;
+      const esViejo = keys[0].match(/^\d{4}-\d{2}-\d{2}$/);
+      (esViejo ? viejos : nuevos).push(uid);
+    });
+    console.log('%c[AUDIT historial_diario]','font-weight:bold');
+    console.log('Estructura NUEVA ({asesor}/{fecha}):', nuevos.length, nuevos);
+    console.log('Estructura VIEJA ({fecha} directo) — candidatos a migrar:', viejos.length, viejos);
+    if(viejos.length) console.log('Usa la herramienta de migración del superadmin para actualizar estos nodos.');
+  });
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
-function _gsKey(){ return window._currentTiendaId || window._currentUsername; }
+let _gsKeyWarned=false;
+function _gsKey(){
+  if(!window._currentTiendaId && window._currentUsername && !_gsKeyWarned){
+    _gsKeyWarned=true;
+    console.warn('[SYNC] Sin empresaId — gestiones_sync se guardará bajo el username "'+window._currentUsername+'". El admin no verá estas gestiones al filtrar por tienda.');
+  }
+  return window._currentTiendaId || window._currentUsername;
+}
 
 // ===== LOGIN =====
 function _initLogin(){
@@ -9926,8 +9952,12 @@ function _initLogin(){
           _db.ref('session_hist/'+_currentUsername+'/'+window._currentSessionKey).update({ end: Date.now() });
       });
     }
-    // Escuchar si el admin fuerza cierre de sesión
-    ref.child('force_logout').on('value', snap=>{
+    // Escuchar si el admin fuerza cierre de sesión.
+    // Detach del listener anterior: sin esto cada login/logout acumula
+    // listeners y el cierre forzado se dispararía múltiples veces.
+    if(window._forceLogoutRef){ window._forceLogoutRef.off('value'); }
+    window._forceLogoutRef = ref.child('force_logout');
+    window._forceLogoutRef.on('value', snap=>{
       if(snap.val()===true){
         // Detener heartbeat PRIMERO antes de cualquier operación async
         // para evitar que sobreescriba online:false con online:true
@@ -9945,6 +9975,7 @@ function _initLogin(){
   }
 
   function _limpiarPresencia(){
+    if(window._forceLogoutRef){ window._forceLogoutRef.off('value'); window._forceLogoutRef = null; }
     if(_currentUsername){
       const ref = _db.ref('presence/'+_currentUsername);
       ref.onDisconnect().cancel();
@@ -9972,6 +10003,21 @@ function _initLogin(){
     localStorage.setItem('lgs_rol', window._currentRol||'dueno');
     localStorage.setItem('lgs_empresa_id', empresaId||'');
     window._currentTiendaId = empresaId||null;
+    // Sin empresaId las gestiones se guardarían bajo el username y el admin
+    // (que lee por tienda) no las vería. Resolver el id por nombre de tienda.
+    if(!empresaId && tienda){
+      _db.ref('empresas').once('value', snapE=>{
+        const emps = snapE.val()||{};
+        const match = Object.entries(emps).find(([,e])=>(e.nombre||'').trim().toLowerCase()===String(tienda).trim().toLowerCase());
+        if(match){
+          window._currentTiendaId = match[0];
+          localStorage.setItem('lgs_empresa_id', match[0]);
+          console.log('[LOGIN] empresaId resuelto por nombre de tienda:', match[0]);
+        } else {
+          console.warn('[LOGIN] Sin empresaId y tienda "'+tienda+'" no existe en /empresas — gestiones_sync usará el username como clave');
+        }
+      });
+    }
     document.getElementById('login-error').classList.remove('show');
     document.getElementById('login-error-campos').classList.remove('show');
     _loginHide();
@@ -12262,11 +12308,20 @@ function _admGuardarEdicion(){
   const err    = document.getElementById('adm-edit-error');
   if(!asesor){ err.textContent='El nombre es obligatorio'; err.style.display='block'; return; }
   const checkboxes = document.querySelectorAll('#adm-edit-tiendas input[type=checkbox]');
-  const tiendasUpdate = {};
-  checkboxes.forEach(cb=>{ tiendasUpdate[cb.dataset.empid] = cb.checked ? true : null; });
-  const updates = { asesor, tienda: tienda||asesor, rol };
-  _db.ref('users/'+uid).update(updates).then(()=>{
-    _db.ref('user_tiendas/'+uid).update(tiendasUpdate);
+  // Update multi-path atómico: users + user_tiendas + empresa_asesores (simétrico)
+  // + presence (nombre visible en el panel En Vivo sin esperar re-login)
+  const updates = {};
+  updates['users/'+uid+'/asesor'] = asesor;
+  updates['users/'+uid+'/tienda'] = tienda||asesor;
+  updates['users/'+uid+'/rol'] = rol;
+  checkboxes.forEach(cb=>{
+    const val = cb.checked ? true : null;
+    updates['user_tiendas/'+uid+'/'+cb.dataset.empid] = val;
+    updates['empresa_asesores/'+cb.dataset.empid+'/'+uid] = val;
+  });
+  updates['presence/'+uid+'/asesor'] = asesor;
+  updates['presence/'+uid+'/tienda'] = tienda||asesor;
+  _db.ref().update(updates).then(()=>{
     _admCerrarEditar();
     _admCargarDashboard();
     toast('✅ Usuario actualizado');
@@ -12290,10 +12345,20 @@ function _admForzarLogout(uid){
 
 function _admEliminarUsuario(uid){
   _mConfirm('¿Eliminar usuario?','Esta acción eliminará permanentemente al usuario. No se puede deshacer.',()=>{
-    _db.ref('users/'+uid).remove();
-    _db.ref('presence/'+uid).remove();
-    _admCargarDashboard();
-    toast('🗑️ Usuario eliminado');
+    // Leer sus tiendas primero para limpiar también empresa_asesores (simetría)
+    _db.ref('user_tiendas/'+uid).once('value', snapT=>{
+      const updates = {};
+      updates['users/'+uid] = null;
+      updates['presence/'+uid] = null;
+      updates['user_tiendas/'+uid] = null;
+      Object.keys(snapT.val()||{}).forEach(empId=>{
+        updates['empresa_asesores/'+empId+'/'+uid] = null;
+      });
+      _db.ref().update(updates).then(()=>{
+        _admCargarDashboard();
+        toast('🗑️ Usuario eliminado');
+      });
+    });
   },'danger');
 }
 
