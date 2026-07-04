@@ -530,17 +530,17 @@ body.data-loaded #sidebar-actions{display:flex;}
 .xls tbody tr:hover td{background:var(--bg-hover);}
 .xls td.xls-n{text-align:center;color:var(--text-2);font-weight:800;font-size:.62rem;padding:0 3px;background:var(--bg-elevated);}
 .xls td.xls-r{text-align:right;color:var(--text-2);padding:0 4px;}
-.xls td.xls-auto{text-align:right;color:var(--text-3);background:rgba(255,255,255,.025);padding:0 4px;}
-.xls td.xls-pos{color:var(--success);font-weight:800;text-align:center;}
-.xls td.xls-neg{color:var(--danger);font-weight:800;text-align:center;}
-.xls td.xls-ant{background:rgba(255,255,255,.025);color:var(--text-3);text-align:right;padding:0 4px;}
+.xls td.xls-auto{text-align:right;color:var(--text-3);background:rgba(255,255,255,.03);padding:0 4px;}
+.xls td.xls-pos{color:var(--success);font-weight:800;text-align:center;background:rgba(255,255,255,.03);}
+.xls td.xls-neg{color:var(--danger);font-weight:800;text-align:center;background:rgba(255,255,255,.03);}
+.xls td.xls-ant{background:rgba(255,255,255,.03);color:var(--text-3);text-align:right;padding:0 4px;}
 .xls td.xls-ads{text-align:right;padding:0 4px;color:#9B59E6;}
-.xls td.xls-cpa{text-align:right;padding:0 4px;color:#67e8f9;font-weight:700;background:rgba(255,255,255,.025);}
+.xls td.xls-cpa{text-align:right;padding:0 4px;color:#67e8f9;font-weight:700;background:rgba(255,255,255,.03);}
 .xls td.xls-wpp{text-align:center;color:#E6823A;font-weight:700;}
 .xls td.xls-shopn{text-align:center;color:#3971E6;font-weight:700;}
 .xls td.xls-tot{text-align:center;font-weight:900;color:var(--text-1);background:rgba(255,255,255,.03);}
 .xls td.xls-nota{padding:0 3px;}
-[data-theme="light"] .xls td.xls-auto,[data-theme="light"] .xls td.xls-ant,[data-theme="light"] .xls td.xls-cpa{background:rgba(0,0,0,.03);}
+[data-theme="light"] .xls td.xls-auto,[data-theme="light"] .xls td.xls-ant,[data-theme="light"] .xls td.xls-cpa,[data-theme="light"] .xls td.xls-pos,[data-theme="light"] .xls td.xls-neg{background:rgba(0,0,0,.03);}
 [data-theme="light"] .xls td.xls-tot{background:rgba(0,0,0,.04);}
 [data-theme="light"] .xls th.xls-cpa,[data-theme="light"] .xls td.xls-cpa{color:#0891b2;}
 .xls tr.xls-today td{background:rgba(57,113,230,.08)!important;}
@@ -7647,8 +7647,8 @@ function _cfRenderMes(){
     const dow=new Date(_cfMes+'-'+dd).getDay();
     const esSab=dow===6,esDom=dow===0;
 
-    dRows+=`<tr class="${isToday?'xls-today':''}" style="${esDom||esSab?'background:var(--bg-hover);':''}">
-      <td class="xls-n xls-sep" style="${isToday?'color:var(--accent);':esDom?'color:var(--text-3);':''}">${dd}</td>
+    dRows+=`<tr class="${isToday?'xls-today':''}">
+      <td class="xls-n xls-sep" style="${isToday?'color:var(--accent);':(esDom||esSab)?'color:var(--text-3);opacity:.65;':''}">${dd}${(esDom||esSab)&&!isToday?'<span style="font-size:.42rem;opacity:.8;display:block;line-height:.5;margin-top:-2px;">'+(esDom?'DOM':'SÁB')+'</span>':''}</td>
       <td class="xls-ant" style="text-align:right;padding:0 4px;">${prevTotalM?_cf$(prevTotalM):''}</td>
       <td class="xls-ant xls-sep" style="text-align:center;">${prevTotN||''}</td>
       <td class="xls-wpp"><input class="xls-inp" type="text" inputmode="numeric" value="${wppM?'$ '+Math.round(wppM).toLocaleString('es-CO'):''}" placeholder="" style="color:var(--warning);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','wppMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''"></td>
