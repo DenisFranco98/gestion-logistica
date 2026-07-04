@@ -7495,11 +7495,15 @@ function _cfPdfGenerar(){
       .map(x=>({...x,_nom:nameKey==='prod'?x.prod:x.n,_desp:(x.ent||0)+(x.proc||0)+(x.dev||0)}))
       .sort((a,b)=>(b.num||0)-(a.num||0)).slice(0,15);
     if(!items.length)return '';
+    // % Devolución = devueltos ÷ despachados · semáforo rojo ≥25%, ámbar ≥15%
+    const pdC=v=>{const n=parseFloat(v);return isNaN(n)?C.t3:n>=25?C.bad:n>=15?C.warn:C.t2;};
     return secT(titulo)+tbl(
-      [{l:'#'},{l:nameKey==='prod'?'Producto':'Nombre',a:'left'},{l:'Total'},{l:'Entregados'},{l:'En proceso'},{l:'Devueltos'},{l:'Efectividad'}],
-      items.map((x,i)=>{const e=ef(x.ent||0,x.proc||0,x.dev||0);
-        return `<tr style="${i%2?'background:#f6f8fa;':''}">${td(i+1,'center',C.t3)}${td(x._nom,'left',C.t1,true)}${td(x.num||0,'center',C.t1,true)}${td(x.ent||0,'center',C.ok)}${td(x.proc||0,'center',C.info)}${td(x.dev||0,'center',C.bad)}${td(e,'center',efC(e),true)}</tr>`;})
-    );
+      [{l:'#'},{l:nameKey==='prod'?'Producto':'Nombre',a:'left'},{l:'Total'},{l:'Entregados'},{l:'En proceso'},{l:'Devueltos'},{l:'% Devolución'},{l:'Efectividad'}],
+      items.map((x,i)=>{
+        const e=ef(x.ent||0,x.proc||0,x.dev||0);
+        const pd=x._desp>0?((x.dev||0)/x._desp*100).toFixed(1)+'%':'—';
+        return `<tr style="${i%2?'background:#f6f8fa;':''}">${td(i+1,'center',C.t3)}${td(x._nom,'left',C.t1,true)}${td(x.num||0,'center',C.t1,true)}${td(x.ent||0,'center',C.ok)}${td(x.proc||0,'center',C.info)}${td(x.dev||0,'center',C.bad)}${td(pd,'center',pdC(pd),true)}${td(e,'center',efC(e),true)}</tr>`;})
+    )+`<div style="font-size:8px;color:${C.t3};margin-top:3px;">Efectividad = Entregados ÷ Despachados · % Devolución = Devueltos ÷ Despachados (excluyen cancelados/pendientes)</div>`;
   };
   if(sel.ciudades&&ua.byCiudad)html+=analSec('🏙️ ANALÍTICA DE CIUDADES — TOP 15',ua.byCiudad,'n');
   if(sel.trans&&ua.byTrans)html+=analSec('🚛 ANALÍTICA DE TRANSPORTADORAS',ua.byTrans,'n');
