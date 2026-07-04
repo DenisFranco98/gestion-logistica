@@ -262,7 +262,8 @@ body.data-loaded #sidebar-actions{display:flex;}
 .card.nc-pend{border-left-style:dashed;}
 .card.gest{opacity:.42;border-left-color:var(--text-3)!important;}.card.gest *:not(.btn-dev){pointer-events:none;}.card.gest .btn-dev{pointer-events:auto;}
 .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
-.card-guia{font-size:.66rem;color:var(--text-3);font-weight:600;letter-spacing:.3px;}.card-guia.copiable{cursor:pointer;}.card-guia.copiable:hover{color:var(--text-2);}
+.card-guia{font-size:.66rem;color:var(--text-3);font-weight:600;letter-spacing:.3px;}
+.ico{filter:grayscale(1);opacity:.65;}.card-guia.copiable{cursor:pointer;}.card-guia.copiable:hover{color:var(--text-2);}
 .card-name{font-size:1rem;font-weight:700;line-height:1.2;}
 .card-phone{font-size:.88rem;color:var(--text-2);font-weight:600;margin-top:2px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;}
 .card-phone:hover{opacity:.75;}
@@ -4490,7 +4491,7 @@ function crearCard(p,est,esGest){
   const card=document.createElement('div');
   card.className='card'+(esGest?' gest':ncPend?' nc-pend':'');
   const tiendaColor=p.tienda?getTiendaColor(p.tienda):null;
-  card.style.borderLeftColor=esGest?'#94a3b8':(tiendaColor||est.color);
+  card.style.borderLeftColor=esGest?'var(--text-3)':est.color;
   card.id='card-'+p.id;
   const intentos=g.intentos||0;
   const prodSimple=getProductoSimple(p.productos);
@@ -4499,12 +4500,12 @@ function crearCard(p,est,esGest){
   let html=
     '<div class="card-top">'+
       '<div style="flex:1;min-width:0">'+
-        '<div class="card-guia copiable" '+(p.guia?'data-val="'+p.guia+'" onclick="event.stopPropagation();copiarTexto(this.dataset.val)"':'')+'>'+(p.guia?'\u{1F4E6} '+p.guia+' <span style="font-size:.58rem;color:var(--text-3)">copiar</span>':'Sin guía')+'</div>'+
+        '<div class="card-guia copiable" '+(p.guia?'data-val="'+p.guia+'" onclick="event.stopPropagation();copiarTexto(this.dataset.val)"':'')+'>'+(p.guia?'<span class="ico">\u{1F4E6}</span> '+p.guia+' <span style="font-size:.58rem;color:var(--text-3)">copiar</span>':'Sin guía')+'</div>'+
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
           '<div class="card-name">'+p.nombre+'</div>'+
-          (p.tienda?'<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:6px;border:1px solid '+(tiendaColor||'var(--border-strong)')+';color:'+(tiendaColor||'var(--text-2)')+'">'+p.tienda+'</span>':'')+
+          (p.tienda?'<span style="font-size:.62rem;font-weight:600;padding:1px 7px;border-radius:6px;border:1px solid var(--border);color:var(--text-2);display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:'+(tiendaColor||'var(--text-3)')+';display:inline-block;"></span>'+p.tienda+'</span>':'')+
         '</div>'+
-        (telDisplay?'<div class="card-phone" onclick="event.stopPropagation();copiarTel(\''+p.telefono+'\')">📞 '+telDisplay+'<span class="copy-hint">copiar</span></div>':'<div style="font-size:.78rem;color:var(--text-3)">Sin teléfono</div>')+
+        (telDisplay?'<div class="card-phone" onclick="event.stopPropagation();copiarTel(\''+p.telefono+'\')"><span class="ico">📞</span> '+telDisplay+'<span class="copy-hint">copiar</span></div>':'<div style="font-size:.78rem;color:var(--text-3)">Sin teléfono</div>')+
       '</div>'+
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">'+
         (g.devolucion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--danger-soft);color:var(--danger)">🔄 Devolución</span>':g.guia_generada_hoy?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--info-soft);color:var(--info)">📦 Sin gestión</span>':g.transito_gestionado?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--success-soft);color:var(--success)">✅ Gestionado</span>':g.transito_sin_gestion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--info-soft);color:var(--info)">🚚 Sin novedad</span>':g.rechazado_gestionado?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--success-soft);color:var(--success)">✅ Gestionado</span>':g.rechazado_sin_gestion?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--danger-soft);color:var(--danger)">🚫 Sin gestión</span>':esGest?'<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--success-soft);color:var(--success)">✅ Listo</span>':'')+
@@ -4513,12 +4514,12 @@ function crearCard(p,est,esGest){
     '</div>';
 
   html+='<div class="card-meta">';
-  if(p.ciudad)html+='<span class="meta-chip ciudad">\u{1F4CD} '+p.ciudad+(p.depto?', '+p.depto:'')+'</span>';
-  if(p.transportadora)html+='<span class="meta-chip transp">📮 '+p.transportadora+'</span>';
+  if(p.ciudad)html+='<span class="meta-chip ciudad"><span class="ico">\u{1F4CD}</span> '+p.ciudad+(p.depto?', '+p.depto:'')+'</span>';
+  if(p.transportadora)html+='<span class="meta-chip transp"><span class="ico">📮</span> '+p.transportadora+'</span>';
   html+='</div>';
-  if(prodSimple)html+='<div class="card-producto">🛍️ '+prodSimple+'</div>';
-  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block">💰 '+vf+'</div>';}
-  if(p.direccion)html+='<div class="card-addr">\u{1F4CD} '+p.direccion+'</div>';
+  if(prodSimple)html+='<div class="card-producto"><span class="ico">🛍️</span> '+prodSimple+'</div>';
+  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block"><span class="ico">💰</span> '+vf+'</div>';}
+  if(p.direccion)html+='<div class="card-addr"><span class="ico">\u{1F4CD}</span> '+p.direccion+'</div>';
   if(p.novedad&&est.key==='telemercadeo')html+='<div class="card-nov">⚠️ '+p.novedad+'</div>';
 
   // Badge historial para todas las secciones
@@ -4633,7 +4634,7 @@ function crearCard(p,est,esGest){
       '</div>';
     }
     if(est.key!=='rechazado'){
-      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--danger)')+';cursor:pointer;">'+
+      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid '+(g.devolucion?'var(--danger)':'var(--border-strong)')+';background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--text-2)')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
     html+=_btnHistHtml(p);
@@ -4768,7 +4769,7 @@ function crearCard(p,est,esGest){
     }
     // Botón devolución — visible en todas las categorías excepto rechazados
     if(est.key!=='rechazado'){
-      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--danger)')+';cursor:pointer;">'+
+      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid '+(g.devolucion?'var(--danger)':'var(--border-strong)')+';background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--text-2)')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
     html+=_btnHistHtml(p);
@@ -4880,8 +4881,8 @@ function crearCardNovedad(p){
   '</div>';
   // Producto
   const prod=getProductoSimple(p.productos);
-  if(prod)html+='<div class="card-producto">🛍️ '+prod+'</div>';
-  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block">💰 '+vf+'</div>';}
+  if(prod)html+='<div class="card-producto"><span class="ico">🛍️</span> '+prod+'</div>';
+  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block"><span class="ico">💰</span> '+vf+'</div>';}
   // Badge novedad
   const tipoLabel=(p.tipoNovedad||p.novedad||'Novedad').toUpperCase();
   html+='<div class="nov-badge" style="background:'+cfg.bg+';color:'+cfg.color+'">'+cfg.icon+' '+tipoLabel+'</div>';
@@ -4940,7 +4941,7 @@ function crearCardNovedad(p){
     // Botón evidencia — siempre visible en novedades
     const tieneSols=g.gdNovKey&&g.gdTieneSols;
     html+='<button onclick="_novEvidenciaModal('+p.id+')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;font-size:.75rem;font-weight:700;border:1.5px solid #7c3aed;background:'+(tieneSols?'#7c3aed':'transparent')+';color:'+(tieneSols?'white':'#7c3aed')+';cursor:pointer;font-family:inherit;">'+(tieneSols?'📸 Ver / agregar evidencias':'📸 Agregar evidencia')+'</button>';
-    html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--danger)')+';cursor:pointer;">'+
+    html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid '+(g.devolucion?'var(--danger)':'var(--border-strong)')+';background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--text-2)')+';cursor:pointer;">'+
       (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     html+=_btnHistHtml(p);
     html+='</div>';
@@ -5002,7 +5003,7 @@ function crearCardPendiente(p,color){
       (p.transportadora?'<span class="meta-chip transp">📮 '+p.transportadora+'</span>':'')+
     '</div>'+
     (prodSimple?'<div class="card-producto">🛍️ '+prodSimple+'</div>':'')+
-    (p.valor?(()=>{const vf=formatValor(p.valor);return vf?'<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block">💰 '+vf+'</div>':'';})():'')+
+    (p.valor?(()=>{const vf=formatValor(p.valor);return vf?'<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block"><span class="ico">💰</span> '+vf+'</div>':'';})():'')+
     (p.direccion?'<div class="card-addr">\u{1F4CD} '+p.direccion+'</div>':'')+
     (p.novedad?'<div class="card-nov">⚠️ '+p.novedad+'</div>':'')+
     (!gestiones[p.id]?.mensajes_listos?
@@ -5876,7 +5877,7 @@ function getUltimaNota(id){
 function btnLlamarHtml(id, telefono){
   if(!telefono) return '';
   return '<div class="btn-llamar-wrap">'+
-    '<button class="btn-llamar" id="btn-iris-'+id+'" onclick="registrarClick('+id+');llamarIRIS(\''+telefono+'\',\'btn-iris-'+id+'\')">📞 Llamada IRIS</button>'+
+    '<button class="btn-llamar" id="btn-iris-'+id+'" onclick="registrarClick('+id+');llamarIRIS(\''+telefono+'\',\'btn-iris-'+id+'\')"><span class="ico">📞</span> Llamada IRIS</button>'+
     '<button class="btn-llamar-talkyria" disabled title="Próximamente">📲 Talkyria<span class="talkyria-prox">Próximamente</span></button>'+
   '</div>';
 }
@@ -5892,7 +5893,7 @@ function llamarIRIS(telefono, btnId){
       btn.style.transition='all .2s';
       setTimeout(()=>{
         btn.style.transform='scale(1)';
-        setTimeout(()=>{btn.innerHTML='📞 Llamada IRIS';btn.style.background='';btn.style.transition='';},400);
+        setTimeout(()=>{btn.innerHTML='<span class="ico">📞</span> Llamada IRIS';btn.style.background='';btn.style.transition='';},400);
       },1800);
     }
   };
