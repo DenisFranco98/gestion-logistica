@@ -287,30 +287,30 @@ body.data-loaded #sidebar-actions{display:flex;}
 .dias-badge{display:inline-flex;align-items:center;gap:4px;font-size:.69rem;font-weight:700;padding:3px 9px;border-radius:9px;margin-top:6px;}
 .d-verde{background:var(--bg-inset);color:var(--text-2);}
 .d-amarillo{background:var(--bg-hover);color:var(--text-2);}
-.d-rojo{background:var(--danger-soft);color:#9f1239;animation:pulse 1.4s infinite;}
+.d-rojo{background:var(--danger-soft);color:var(--danger);animation:pulse 1.4s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
 .acciones{margin-top:10px;display:flex;flex-direction:column;gap:7px;}
 .llamada-row{display:flex;gap:6px;}
-.btn-llamar{display:flex;align-items:center;justify-content:center;gap:5px;background:linear-gradient(135deg,#3971E6,#2456C4);color:white;border:none;padding:9px 12px;border-radius:9px;font-size:.78rem;font-weight:600;cursor:pointer;text-decoration:none;flex:1;transition:all .18s;box-shadow:0 2px 8px rgba(57,113,230,.25);}
-.btn-llamar:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(57,113,230,.4);}
+.btn-llamar{display:flex;align-items:center;justify-content:center;gap:5px;background:var(--bg-inset);color:var(--text-1);border:1px solid var(--border-strong);padding:9px 12px;border-radius:9px;font-size:.78rem;font-weight:600;cursor:pointer;text-decoration:none;flex:1;transition:all .18s;}
+.btn-llamar:hover{border-color:var(--accent);color:var(--accent);}
 .btn-llamar-wrap{display:flex;gap:6px;margin-bottom:0;}
-.btn-llamar-talkyria{display:flex;align-items:center;justify-content:center;gap:5px;background:#64748b;color:white;border:none;padding:7px 12px;border-radius:7px;font-size:.74rem;font-weight:600;cursor:not-allowed;flex:1;opacity:.6;position:relative;}
+.btn-llamar-talkyria{display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;color:var(--text-3);border:1px dashed var(--border-strong);padding:7px 12px;border-radius:9px;font-size:.74rem;font-weight:600;cursor:not-allowed;flex:1;opacity:.7;position:relative;}
 .talkyria-prox{display:block;font-size:.58rem;font-weight:400;opacity:.75;letter-spacing:.2px;}
 .btn-a{flex:1;padding:8px 8px;border-radius:9px;font-size:.78rem;font-weight:600;border:1.5px solid;cursor:pointer;text-align:center;transition:all .15s;}
-.ba-c{border-color:#d1d5db;color:var(--text-2);background:var(--bg-card);}
+.ba-c{border-color:var(--border-strong);color:var(--text-2);background:transparent;}
 .ba-c:hover,.ba-c.sel{background:var(--success);color:white;border-color:var(--success);}
-.ba-nc{border-color:#d1d5db;color:var(--text-2);background:var(--bg-card);}
+.ba-nc{border-color:var(--border-strong);color:var(--text-2);background:transparent;}
 .ba-nc:hover,.ba-nc.sel{background:var(--danger);color:white;border-color:var(--danger);}
 .checks-wrap{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;}
 .check-row{display:flex;align-items:center;gap:7px;cursor:pointer;}
 .check-row input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:var(--text-1);}
 .check-row label{font-size:.76rem;color:var(--text-1);cursor:pointer;font-weight:500;}
 .check-row input:checked+label{color:var(--text-1);font-weight:600;}
-.btn-wa{display:flex;align-items:center;justify-content:center;gap:6px;background:#10b981;color:white;border:none;padding:9px 12px;border-radius:9px;font-size:.78rem;font-weight:600;cursor:pointer;text-decoration:none;width:100%;transition:all .18s;}
-.btn-wa:hover{background:#059669;transform:translateY(-1px);}
+.btn-wa{display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(16,185,129,.12);color:#34d399;border:1px solid rgba(16,185,129,.35);padding:9px 12px;border-radius:9px;font-size:.78rem;font-weight:600;cursor:pointer;text-decoration:none;width:100%;transition:all .18s;}
+.btn-wa:hover{background:#10b981;color:white;}
 .wa-msg-preview{font-size:.69rem;color:var(--text-2);background:var(--bg);border:1px solid var(--border-strong);border-radius:6px;padding:5px 8px;margin-top:4px;line-height:1.5;white-space:pre-wrap;}
-.btn-finalizar{width:100%;padding:9px;border-radius:9px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:linear-gradient(135deg,#16a34a,#15803d);color:white;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .18s;box-shadow:0 2px 8px rgba(22,163,74,.25);}
-.btn-finalizar:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(22,163,74,.4);}
+.btn-finalizar{width:100%;padding:9px;border-radius:9px;font-size:.76rem;font-weight:700;border:1px solid rgba(57,230,122,.35);cursor:pointer;background:rgba(57,230,122,.1);color:var(--success);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .18s;}
+.btn-finalizar:hover{background:var(--success);color:#0b1220;}
 .card-note{margin-top:7px;}
 .card-note input{width:100%;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.75rem;outline:none;color:var(--text-1);}
 .card-note input:focus{border-color:var(--text-1);}
@@ -483,7 +483,7 @@ body.data-loaded #sidebar-actions{display:flex;}
 .btn-transp-topbar:hover{opacity:.9;}
 .transp-badge-count{background:var(--bg-card);color:#0891b2;border-radius:10px;padding:0 5px;font-size:.68rem;font-weight:800;}
 .nov-parada-badge{display:inline-flex;align-items:center;gap:5px;font-size:.71rem;font-weight:800;padding:4px 10px;border-radius:8px;margin-top:6px;background:var(--danger-soft);color:var(--danger);border:1.5px solid #fca5a5;animation:pulse 1.4s infinite;}
-.btn-cas{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:7px 10px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #f59e0b;color:var(--warning);background:var(--warning-soft);cursor:pointer;margin-top:6px;transition:all .15s;}
+.btn-cas{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:7px 10px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,181,57,.35);color:var(--warning);background:transparent;cursor:pointer;margin-top:6px;transition:all .15s;}
 .btn-cas:hover{background:var(--warning-soft);border-color:#d97706;}
 .cas-preview{font-size:.69rem;color:var(--text-2);background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;padding:5px 8px;margin-top:4px;line-height:1.5;white-space:pre-wrap;display:none;}
 .cas-preview.show{display:block;}
@@ -870,11 +870,11 @@ body.data-loaded #sidebar-actions{display:flex;}
 .kb-hint.show{display:block;}
 /* QUÉ SIGUE */
 .que-sigue{display:flex;align-items:center;gap:6px;margin-top:7px;padding:5px 9px;border-radius:7px;font-size:.72rem;font-weight:700;border-left:3px solid;}
-.qs-call{background:var(--info-soft);color:var(--info);border-color:var(--info);}
-.qs-nota{background:var(--warning-soft);color:#a16207;border-color:#ca8a04;}
-.qs-wa{background:var(--success-soft);color:var(--success);border-color:var(--success);}
-.qs-fin{background:var(--bg-hover);color:var(--success);border-color:#4ade80;}
-.qs-listo{background:var(--bg-hover);color:var(--success);border-color:#4ade80;opacity:.7;}
+.qs-call{background:var(--bg-hover);color:var(--text-2);border-color:var(--info);}
+.qs-nota{background:var(--bg-hover);color:var(--text-2);border-color:var(--warning);}
+.qs-wa{background:var(--bg-hover);color:var(--text-2);border-color:var(--success);}
+.qs-fin{background:var(--bg-hover);color:var(--text-2);border-color:var(--success);}
+.qs-listo{background:var(--bg-hover);color:var(--text-3);border-color:var(--success);opacity:.7;}
 
 /* ── INFORME INICIAL ─────────────────────────────── */
 #inf-inicial{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;display:none;align-items:center;justify-content:center;}
@@ -4162,9 +4162,9 @@ function renderCards(){
           '<span style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</span>';
         antigBox.appendChild(d);
       };
-      mkAntig('🟢','Menos de 1 día',  p_ok.length,  '#f3f4f6','#525252');
-      mkAntig('⚠️','1 día — Revisar',p_warn.length,'#fefce8','#a16207');
-      mkAntig('🚨','Más de 2 días — Escalar YA',p_urg.length,'#fef2f2','#b91c1c');
+      mkAntig('🟢','Menos de 1 día',  p_ok.length,  'var(--bg-inset)','var(--text-2)');
+      mkAntig('⚠️','1 día — Revisar',p_warn.length,'var(--warning-soft)','var(--warning)');
+      mkAntig('🚨','Más de 2 días — Escalar YA',p_urg.length,'var(--danger-soft)','var(--danger)');
       sec.appendChild(antigBox);
 
       // ── Resumen por producto ──
@@ -4347,9 +4347,9 @@ function renderCards(){
           '<span style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</span>';
         antigBox2.appendChild(d);
       };
-      mkA('🟢','Menos de 1 día',  p_ok2.length,  '#f3f4f6','#525252');
-      mkA('⚠️','1 día — Revisar',p_warn2.length,'#fefce8','#a16207');
-      mkA('🚨','Más de 2 días — Escalar YA',p_urg2.length,'#fef2f2','#b91c1c');
+      mkA('🟢','Menos de 1 día',  p_ok2.length,  'var(--bg-inset)','var(--text-2)');
+      mkA('⚠️','1 día — Revisar',p_warn2.length,'var(--warning-soft)','var(--warning)');
+      mkA('🚨','Más de 2 días — Escalar YA',p_urg2.length,'var(--danger-soft)','var(--danger)');
       sec.appendChild(antigBox2);
       // ── Resumen por producto ──
       const byProd2={};
@@ -4499,10 +4499,10 @@ function crearCard(p,est,esGest){
   let html=
     '<div class="card-top">'+
       '<div style="flex:1;min-width:0">'+
-        '<div class="card-guia copiable" '+(p.guia?'data-val="'+p.guia+'" onclick="event.stopPropagation();copiarTexto(this.dataset.val)"':'')+'>'+(p.guia?'\u{1F4E6} '+p.guia+' <span style="font-size:.58rem;color:#cbd5e1">copiar</span>':'Sin guía')+'</div>'+
+        '<div class="card-guia copiable" '+(p.guia?'data-val="'+p.guia+'" onclick="event.stopPropagation();copiarTexto(this.dataset.val)"':'')+'>'+(p.guia?'\u{1F4E6} '+p.guia+' <span style="font-size:.58rem;color:var(--text-3)">copiar</span>':'Sin guía')+'</div>'+
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
           '<div class="card-name">'+p.nombre+'</div>'+
-          (p.tienda?'<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:6px;background:'+(tiendaColor||'#334155')+';color:white">'+p.tienda+'</span>':'')+
+          (p.tienda?'<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:6px;border:1px solid '+(tiendaColor||'var(--border-strong)')+';color:'+(tiendaColor||'var(--text-2)')+'">'+p.tienda+'</span>':'')+
         '</div>'+
         (telDisplay?'<div class="card-phone" onclick="event.stopPropagation();copiarTel(\''+p.telefono+'\')">📞 '+telDisplay+'<span class="copy-hint">copiar</span></div>':'<div style="font-size:.78rem;color:var(--text-3)">Sin teléfono</div>')+
       '</div>'+
@@ -4517,7 +4517,7 @@ function crearCard(p,est,esGest){
   if(p.transportadora)html+='<span class="meta-chip transp">📮 '+p.transportadora+'</span>';
   html+='</div>';
   if(prodSimple)html+='<div class="card-producto">🛍️ '+prodSimple+'</div>';
-  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.76rem;font-weight:700;color:var(--success);background:var(--success-soft);border:1px solid #bbf7d0;padding:3px 9px;border-radius:6px;margin-top:5px;display:inline-block">💰 '+vf+'</div>';}
+  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block">💰 '+vf+'</div>';}
   if(p.direccion)html+='<div class="card-addr">\u{1F4CD} '+p.direccion+'</div>';
   if(p.novedad&&est.key==='telemercadeo')html+='<div class="card-nov">⚠️ '+p.novedad+'</div>';
 
@@ -4555,7 +4555,7 @@ function crearCard(p,est,esGest){
       const resumen=(tn>0?tn+' nota'+(tn>1?'s':''):'')+(tn>0&&te>0?' · ':'')+(te>0?te+' acción'+(te>1?'es':''):'');
       html+=
         '<div onclick="event.stopPropagation();_verHistorialCliente(\''+p.guia.replace(/'/g,"\\'")+'\')" '+
-        'style="font-size:.67rem;background:var(--info-soft);border:1px solid #bfdbfe;border-radius:6px;padding:5px 9px;margin-top:6px;color:var(--info);cursor:pointer;display:flex;align-items:center;gap:6px;">'+
+        'style="font-size:.67rem;background:var(--bg-inset);border:1px solid var(--border);border-radius:6px;padding:5px 9px;margin-top:6px;color:var(--text-2);cursor:pointer;display:flex;align-items:center;gap:6px;">'+
           '<span>📋</span>'+
           '<span style="flex:1;min-width:0;">'+resumen+(ultima?' — <em style="color:var(--text-2)">'+ultima.texto.slice(0,40)+(ultima.texto.length>40?'...':'')+'</em>':'')+'</span>'+
           '<span style="opacity:.5;font-size:.6rem;flex-shrink:0;">ver historial →</span>'+
@@ -4575,7 +4575,7 @@ function crearCard(p,est,esGest){
       if(rest<=0){
         html+='<a href="http://reportes.interrapidisimo.com/Reportes/ExploradorEnvios/ExploradorEnvios.aspx" target="_blank" '+
           'style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:7px;'+
-          'background:#b91c1c;color:white;padding:7px 10px;border-radius:8px;font-size:.73rem;font-weight:700;text-decoration:none;">'+
+          'background:var(--danger-soft);color:var(--danger);border:1px solid rgba(230,57,70,.35);padding:7px 10px;border-radius:8px;font-size:.73rem;font-weight:700;text-decoration:none;">'+
           '\uD83D\uDD0D Validar dónde está realmente el paquete</a>';
       }
     } else if(est.key==='reparto'){
@@ -4592,7 +4592,7 @@ function crearCard(p,est,esGest){
       // Aviso CAS si lleva +3 días en reparto
       if(dRep>=3){
         const casIdR='cas-rep-'+p.id;
-        html+='<div style="background:var(--warning-soft);border:1.5px solid #f59e0b;border-radius:8px;padding:8px 10px;margin-top:6px;">'+
+        html+='<div style="background:var(--bg-hover);border:1px solid rgba(230,181,57,.3);border-radius:8px;padding:8px 10px;margin-top:6px;">'+
           '<div style="font-size:.7rem;font-weight:700;color:var(--warning);margin-bottom:5px;">📋 Abrir caso en Dropi → CAS</div>'+
           '<div style="font-size:.68rem;color:var(--text-2);margin-bottom:6px;font-style:italic;">Órdenes sin movimiento</div>'+
           '<button class="btn-cas" id="'+casIdR+'" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
@@ -4615,7 +4615,7 @@ function crearCard(p,est,esGest){
     const dMov=(p.diasSinMov!=null)?p.diasSinMov:(p.dias||0);
     if(dMov>=2){
       const casIdP='cas-proc-'+p.id;
-      html+='<div style="background:var(--warning-soft);border:1.5px solid #f59e0b;border-radius:8px;padding:8px 10px;margin-top:6px;">'+
+      html+='<div style="background:var(--bg-hover);border:1px solid rgba(230,181,57,.3);border-radius:8px;padding:8px 10px;margin-top:6px;">'+
         '<div style="font-size:.7rem;font-weight:700;color:var(--warning);margin-bottom:5px;">📋 Abrir caso en Dropi → CAS</div>'+
         '<div style="font-size:.68rem;color:var(--text-2);margin-bottom:6px;font-style:italic;">Órdenes sin movimiento · '+dMov+' días parado</div>'+
         '<button class="btn-cas" id="'+casIdP+'" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
@@ -4626,14 +4626,14 @@ function crearCard(p,est,esGest){
   if(esGest){
     const _ultG=getUltimaNota(p.id);
     if(_ultG){
-      html+='<div style="margin-top:8px;padding:6px 10px;background:var(--bg-hover);border-left:3px solid #6366f1;border-radius:0 6px 6px 0;font-size:.73rem;">'+
-        '<span style="color:#818cf8;margin-right:4px;">📝</span>'+
+      html+='<div style="margin-top:8px;padding:6px 10px;background:var(--bg-hover);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;font-size:.73rem;">'+
+        '<span style="color:var(--accent);margin-right:4px;">📝</span>'+
         '<span style="color:var(--text-3);">'+(_ultG.fecha||'')+'&nbsp;·&nbsp;</span>'+
         '<span style="color:var(--text-1);word-break:break-word;">'+_ultG.texto.replace(/</g,'&lt;')+'</span>'+
       '</div>';
     }
     if(est.key!=='rechazado'){
-      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
+      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--danger)')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
     html+=_btnHistHtml(p);
@@ -4656,9 +4656,9 @@ function crearCard(p,est,esGest){
           '<span style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</span>';
         antigBox2.appendChild(d);
       };
-      mkA('🟢','Menos de 1 día',  p_ok2.length,  '#f3f4f6','#525252');
-      mkA('⚠️','1 día — Revisar',p_warn2.length,'#fefce8','#a16207');
-      mkA('🚨','Más de 2 días — Escalar YA',p_urg2.length,'#fef2f2','#b91c1c');
+      mkA('🟢','Menos de 1 día',  p_ok2.length,  'var(--bg-inset)','var(--text-2)');
+      mkA('⚠️','1 día — Revisar',p_warn2.length,'var(--warning-soft)','var(--warning)');
+      mkA('🚨','Más de 2 días — Escalar YA',p_urg2.length,'var(--danger-soft)','var(--danger)');
       sec.appendChild(antigBox2);
       // ── Resumen por producto ──
       const byProd2={};
@@ -4768,7 +4768,7 @@ function crearCard(p,est,esGest){
     }
     // Botón devolución — visible en todas las categorías excepto rechazados
     if(est.key!=='rechazado'){
-      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
+      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--danger)')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
     html+=_btnHistHtml(p);
@@ -4881,7 +4881,7 @@ function crearCardNovedad(p){
   // Producto
   const prod=getProductoSimple(p.productos);
   if(prod)html+='<div class="card-producto">🛍️ '+prod+'</div>';
-  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.76rem;font-weight:700;color:var(--success);background:var(--success-soft);border:1px solid #bbf7d0;padding:3px 9px;border-radius:6px;margin-top:5px;display:inline-block">💰 '+vf+'</div>';}
+  if(p.valor){const vf=formatValor(p.valor);if(vf)html+='<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block">💰 '+vf+'</div>';}
   // Badge novedad
   const tipoLabel=(p.tipoNovedad||p.novedad||'Novedad').toUpperCase();
   html+='<div class="nov-badge" style="background:'+cfg.bg+';color:'+cfg.color+'">'+cfg.icon+' '+tipoLabel+'</div>';
@@ -4940,7 +4940,7 @@ function crearCardNovedad(p){
     // Botón evidencia — siempre visible en novedades
     const tieneSols=g.gdNovKey&&g.gdTieneSols;
     html+='<button onclick="_novEvidenciaModal('+p.id+')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;font-size:.75rem;font-weight:700;border:1.5px solid #7c3aed;background:'+(tieneSols?'#7c3aed':'transparent')+';color:'+(tieneSols?'white':'#7c3aed')+';cursor:pointer;font-family:inherit;">'+(tieneSols?'📸 Ver / agregar evidencias':'📸 Agregar evidencia')+'</button>';
-    html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1.5px solid #be123c;background:'+(g.devolucion?'#be123c':'transparent')+';color:'+(g.devolucion?'white':'#be123c')+';cursor:pointer;">'+
+    html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--danger)')+';cursor:pointer;">'+
       (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     html+=_btnHistHtml(p);
     html+='</div>';
@@ -4985,7 +4985,7 @@ function crearCardPendiente(p,color){
     '<div class="card-top">'+
       '<div style="flex:1;min-width:0">'+
         '<div class="card-guia copiable" data-val="'+p.dropiId+'" onclick="event.stopPropagation();copiarTexto(this.dataset.val)" title="Copiar ID orden">'+
-          '🧾 Orden: '+p.dropiId+' <span style="font-size:.58rem;color:#cbd5e1">copiar</span>'+
+          '🧾 Orden: '+p.dropiId+' <span style="font-size:.58rem;color:var(--text-3)">copiar</span>'+
         '</div>'+
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">'+
           '<div class="card-name">'+p.nombre+'</div>'+
@@ -5002,7 +5002,7 @@ function crearCardPendiente(p,color){
       (p.transportadora?'<span class="meta-chip transp">📮 '+p.transportadora+'</span>':'')+
     '</div>'+
     (prodSimple?'<div class="card-producto">🛍️ '+prodSimple+'</div>':'')+
-    (p.valor?(()=>{const vf=formatValor(p.valor);return vf?'<div style="font-size:.76rem;font-weight:700;color:var(--success);background:var(--success-soft);border:1px solid #bbf7d0;padding:3px 9px;border-radius:6px;margin-top:5px;display:inline-block">💰 '+vf+'</div>':'';})():'')+
+    (p.valor?(()=>{const vf=formatValor(p.valor);return vf?'<div style="font-size:.78rem;font-weight:800;color:var(--success);font-family:var(--f-mono);margin-top:5px;display:inline-block">💰 '+vf+'</div>':'';})():'')+
     (p.direccion?'<div class="card-addr">\u{1F4CD} '+p.direccion+'</div>':'')+
     (p.novedad?'<div class="card-nov">⚠️ '+p.novedad+'</div>':'')+
     (!gestiones[p.id]?.mensajes_listos?
