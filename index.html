@@ -8170,7 +8170,7 @@ function _cfRenderAnaliticas(){
           ${tdS(`<div>${c.ent}</div><div style="font-size:.5rem;color:var(--success);">${pEnt}%</div>`,'#16a34a')}
           ${tdS(`<div>${c.proc}</div><div style="font-size:.5rem;color:var(--info);">${pProc}%</div>`,'#0891b2')}
           ${tdS(`<div>${c.dev}</div><div style="font-size:.5rem;color:var(--danger);">${pDev}%</div>`,'#dc2626')}
-          ${tdS(c.canc,'#d97706')}
+          ${tdS(c.canc||0,'#d97706')}
           ${tdS(`<span style="font-size:.75rem;font-weight:900;color:${efCls(efv)};">${efv}%</span>`)}
           ${tdL(`${bar(volPct,'#6366f1')}`)}
         </tr>`;
@@ -8254,6 +8254,46 @@ function _cfRenderAnaliticas(){
       </tbody></table></div>`;
   }
 
+  // ── TOP PRODUCTOS CON MÁS DEVOLUCIONES ────────────────────────────
+  let devolHTML='<div style="color:var(--text-3);font-size:.7rem;padding:12px;">Sin devoluciones registradas — o sube el archivo de Órdenes por Producto.</div>';
+  const prodsDevol=prods
+    .filter(p=>(p.dev||0)>0)
+    .sort((a,b)=>(b.dev-a.dev)||((b.dev/Math.max(1,b.ent+b.proc+b.dev))-(a.dev/Math.max(1,a.ent+a.proc+a.dev))))
+    .slice(0,15);
+  if(prodsDevol.length){
+    const maxDev=prodsDevol[0].dev||1;
+    devolHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">
+      <thead><tr>
+        <th style="${thS}width:32px">#</th>
+        <th style="${thL}">Producto</th>
+        <th style="${thS}color:#f87171;">Devueltos</th>
+        <th style="${thS}">% Devolución</th>
+        <th style="${thS}">Despachados</th>
+        <th style="${thS}color:var(--success);">Entregados</th>
+        <th style="${thL}min-width:110px;">Impacto</th>
+      </tr></thead><tbody>
+      ${prodsDevol.map((p,i)=>{
+        const desp=(p.ent||0)+(p.proc||0)+(p.dev||0);
+        const pDev=desp>0?(p.dev/desp*100):0;
+        const pDevTxt=pDev.toFixed(1)+'%';
+        const devColor=pDev>=25?'#f87171':pDev>=15?'#fbbf24':'var(--text-2)';
+        const volPct=(p.dev/maxDev*100).toFixed(0);
+        const rowBg=i%2===0?'':'background:var(--bg-hover);';
+        return `<tr style="${rowBg}">
+          ${tdS(i+1,'#94a3b8')}
+          ${tdL(`<div style="font-weight:700;color:var(--text-1);max-width:200px;white-space:normal;line-height:1.2;">${p.prod}</div>`)}
+          ${tdS(`<span style="font-size:.78rem;font-weight:900;color:#f87171;">${p.dev}</span>`)}
+          ${tdS(`<span style="font-weight:800;color:${devColor};">${pDevTxt}</span>`)}
+          ${tdS(desp,'var(--text-2)')}
+          ${tdS(p.ent||0,'var(--success)')}
+          ${tdL(bar(volPct,'#E63946'))}
+        </tr>`;
+      }).join('')}
+      </tbody></table>
+      <div style="padding:8px 12px;font-size:.6rem;color:var(--text-3);">% Devolución = Devueltos ÷ Despachados. <span style="color:#f87171;font-weight:700;">Rojo ≥25%</span> · <span style="color:#fbbf24;font-weight:700;">Ámbar ≥15%</span> — candidatos a revisar calidad, expectativa del cliente o transportadora.</div>
+    </div>`;
+  }
+
   const fechaLbl=ua.fechaAplicado?`<span style="font-size:.58rem;color:var(--text-3);"> — datos del ${new Date(ua.fechaAplicado).toLocaleDateString('es-CO')}</span>`:'';
 
   el.innerHTML=`
@@ -8269,6 +8309,9 @@ function _cfRenderAnaliticas(){
 
     <div class="cf-sec"><div class="cf-sec-hdr">🚚 Efectividad por transportadora</div>
       <div class="cf-sec-body" style="padding:0;">${transHTML}</div></div>
+
+    <div class="cf-sec"><div class="cf-sec-hdr" style="color:#f87171;">🔄 Top productos con más devoluciones — Top 15</div>
+      <div class="cf-sec-body" style="padding:0;">${devolHTML}</div></div>
 
     <div class="cf-sec"><div class="cf-sec-hdr">📦 Ranking por producto — Top 40</div>
       <div class="cf-sec-body" style="padding:0;">${prodHTML}</div></div>
