@@ -2721,7 +2721,7 @@ function getTienda(valorAT){
 // ── MODAL CONFIG ──────────────────────────────────────────────────────────
 function cfgCheckPrimerUso(){
   cfgCargar();
-  document.querySelector('header h1').textContent='\uD83D\uDE9A '+(CFG.negocio||'Gestión Logística');
+  const _h1=document.querySelector('#topnav h1')||document.querySelector('header h1');if(_h1)_h1.textContent='\uD83D\uDE9A '+(CFG.negocio||'Gestión Logística');
 }
 
 
@@ -2910,7 +2910,7 @@ function cfgGuardar(){
       const sel=document.getElementById('cfg-map-'+encodeURIComponent(clave));
       CFG.mapeoAT[clave]=sel?sel.value:'';
     });
-    document.querySelector('header h1').textContent='\uD83D\uDE9A '+CFG.negocio;
+    const _h1b=document.querySelector('#topnav h1')||document.querySelector('header h1');if(_h1b)_h1b.textContent='\uD83D\uDE9A '+CFG.negocio;
     renderAll();
   } else if(_cfgSeccionActual==='cas'){
     CFG.casSinMovimiento=(document.getElementById('cfg-cas-sinmov')?.value||'').trim()||CAS_DEFAULT_SIN_MOVIMIENTO;
