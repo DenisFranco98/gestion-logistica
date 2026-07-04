@@ -7544,6 +7544,59 @@ function _cfRenderDash(){
 }
 
 // ── CONTROL MES ───────────────────────────────────────────────────────
+// Fila TOT del registro diario — usada por el render y por la actualización
+// en vivo (_cfSetDia) para que las sumas nunca queden desactualizadas
+function _cfTotRowHTML(){
+  const dias=_cfMD.dias||{};
+  const prevDias=_cfPrevMD.dias||{};
+  const feePct=(_cfCfg.limites||_CF_DEF.limites).comisionBancaria||1;
+  let prevMesTotalShopM=0, prevMesTotalN=0;
+  Object.values(prevDias).forEach(pd=>{
+    prevMesTotalShopM+=(pd.shopifyMonto||0)+(pd.wppMonto||0);
+    prevMesTotalN+=(pd.wppNum||0)+(pd.shopifyNum||0);
+  });
+  let totShopM=0,totWppM=0,totWppN=0,totShopN=0,totAdsFB=0,totAdsTT=0;
+  Object.values(dias).forEach(d=>{
+    totWppM+=d.wppMonto||0; totShopM+=d.shopifyMonto||0;
+    totWppN+=d.wppNum||0; totShopN+=d.shopifyNum||0;
+    totAdsFB+=d.adsFB||0; totAdsTT+=d.adsTiktok||0;
+  });
+  const crFmt=v=>v===null?'':(v>=0?'+':'')+v.toFixed(1)+'%';
+  const pct=(n,d)=>d>0?(n/d*100).toFixed(1)+'%':'—';
+  const totTotal=totWppN+totShopN, totAdsT=totAdsFB+totAdsTT;
+  const totFee=totAdsT*feePct/100, totAdsFee=totAdsT+totFee;
+  const totCpa=totTotal>0?_cf$(totAdsFee/totTotal):'';
+  const totTotalM=totWppM+totShopM;
+  const crMTot=prevMesTotalShopM>0?((totTotalM-prevMesTotalShopM)/prevMesTotalShopM*100):null;
+  const crNTot=prevMesTotalN>0?((totTotal-prevMesTotalN)/prevMesTotalN*100):null;
+  const crCls=v=>v===null?'':v>=0?'color:var(--success);font-weight:800;':'color:var(--danger);font-weight:800;';
+  return `<tr class="xls-totrow">
+    <td class="xls-sep" style="text-align:center;font-size:.55rem;letter-spacing:.3px;">TOT</td>
+    <td style="text-align:right;padding:0 4px;font-size:.6rem;">${prevMesTotalShopM?_cf$(prevMesTotalShopM):''}</td>
+    <td class="xls-sep" style="text-align:center;font-size:.6rem;">${prevMesTotalN||''}</td>
+    <td style="text-align:right;padding:0 4px;">
+      <div style="color:var(--warning);">${totWppM?_cf$(totWppM):''}</div>
+      <div style="font-size:.5rem;color:var(--warning);">${totTotalM>0?pct(totWppM,totTotalM):''}</div>
+    </td>
+    <td style="text-align:right;padding:0 4px;">
+      <div style="color:var(--info);">${totShopM?_cf$(totShopM):''}</div>
+      <div style="font-size:.5rem;color:var(--info);">${totTotalM>0?pct(totShopM,totTotalM):''}</div>
+    </td>
+    <td style="text-align:center;">${totWppN||''}</td>
+    <td style="text-align:center;">${totShopN||''}</td>
+    <td class="xls-sep" style="text-align:center;font-size:.65rem;">${totTotal}</td>
+    <td style="text-align:center;${crCls(crMTot)}">${crFmt(crMTot)}</td>
+    <td class="xls-sep" style="text-align:center;${crCls(crNTot)}">${crFmt(crNTot)}</td>
+    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsFB)}</td>
+    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsTT)}</td>
+    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsT)}</td>
+    <td style="text-align:right;padding:0 4px;color:var(--text-3);">${_cf$(totFee)}</td>
+    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsFee)}</td>
+    <td class="xls-sep" style="text-align:right;padding:0 4px;color:#67e8f9;">${totCpa}</td>
+    <td></td>
+  </tr>`;
+}
+
 function _cfRenderMes(){
   const el=document.getElementById('cf-tab-mes');
   const dias=_cfMD.dias||{};
@@ -7598,15 +7651,15 @@ function _cfRenderMes(){
       <td class="xls-n xls-sep" style="${isToday?'color:var(--accent);':esDom?'color:var(--text-3);':''}">${dd}</td>
       <td class="xls-ant" style="text-align:right;padding:0 4px;">${prevTotalM?_cf$(prevTotalM):''}</td>
       <td class="xls-ant xls-sep" style="text-align:center;">${prevTotN||''}</td>
-      <td class="xls-wpp"><input class="xls-inp" type="number" min="0" value="${wppM||''}" placeholder="" style="color:var(--warning);font-weight:700;" oninput="_cfSetDia('${dd}','wppMonto',this.value)"></td>
-      <td class="xls-shopn"><input class="xls-inp" type="number" min="0" value="${shopM||''}" placeholder="" style="color:var(--info);font-weight:700;" oninput="_cfSetDia('${dd}','shopifyMonto',this.value)"></td>
+      <td class="xls-wpp"><input class="xls-inp" type="text" inputmode="numeric" value="${wppM?'$ '+Math.round(wppM).toLocaleString('es-CO'):''}" placeholder="" style="color:var(--warning);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','wppMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''"></td>
+      <td class="xls-shopn"><input class="xls-inp" type="text" inputmode="numeric" value="${shopM?'$ '+Math.round(shopM).toLocaleString('es-CO'):''}" placeholder="" style="color:var(--info);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','shopifyMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''"></td>
       <td class="xls-wpp"><input class="xls-inp" type="number" min="0" value="${wppN||''}" placeholder="" style="color:var(--warning);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','wppNum',this.value)"></td>
       <td class="xls-shopn"><input class="xls-inp" type="number" min="0" value="${shopNSolo||''}" placeholder="" style="color:var(--info);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','shopifyNum',this.value)"></td>
       <td class="xls-tot xls-sep">${totN||''}</td>
       <td class="${crM===null?'xls-auto':crM>=0?'xls-pos':'xls-neg'}" style="text-align:center;">${crFmt(crM)}</td>
       <td class="${crN===null?'xls-auto xls-sep':crN>=0?'xls-pos xls-sep':'xls-neg xls-sep'}" style="text-align:center;">${crFmt(crN)}</td>
-      <td class="xls-ads"><input class="xls-inp" type="number" min="0" value="${adsFB||''}" placeholder="" style="color:var(--accent);" oninput="_cfSetDia('${dd}','adsFB',this.value)"></td>
-      <td class="xls-ads"><input class="xls-inp" type="number" min="0" value="${adsTT||''}" placeholder="" style="color:var(--accent);" oninput="_cfSetDia('${dd}','adsTiktok',this.value)"></td>
+      <td class="xls-ads"><input class="xls-inp" type="text" inputmode="numeric" value="${adsFB?'$ '+Math.round(adsFB).toLocaleString('es-CO'):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsFB',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''"></td>
+      <td class="xls-ads"><input class="xls-inp" type="text" inputmode="numeric" value="${adsTT?'$ '+Math.round(adsTT).toLocaleString('es-CO'):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsTiktok',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''"></td>
       <td class="xls-ads" style="text-align:right;padding:0 4px;">${adsT?_cf$(adsT):''}</td>
       <td class="xls-ads" style="text-align:right;padding:0 4px;color:#6b7280;">${fee?_cf$(fee):''}</td>
       <td class="xls-ads" style="text-align:right;padding:0 4px;font-weight:700;">${adsFee?_cf$(adsFee):''}</td>
@@ -7615,40 +7668,8 @@ function _cfRenderMes(){
     </tr>`;
   }
 
-  // Fila totales + porcentajes
-  const totTotal=totWppN+totShopN, totAdsT=totAdsFB+totAdsTT;
-  const totFee=totAdsT*feePct/100, totAdsFee=totAdsT+totFee;
-  const totCpa=totTotal>0?_cf$(totAdsFee/totTotal):'';
-  const totTotalM=totWppM+totShopM;
-  // Crecimiento global del mes vs mes anterior
-  const crMTot=prevMesTotalShopM>0?((totTotalM-prevMesTotalShopM)/prevMesTotalShopM*100):null;
-  const crNTot=prevMesTotalN>0?((totTotal-prevMesTotalN)/prevMesTotalN*100):null;
-  const crCls=v=>v===null?'':v>=0?'color:var(--success);font-weight:800;':'color:var(--danger);font-weight:800;';
-  dRows+=`<tr class="xls-totrow">
-    <td class="xls-sep" style="text-align:center;font-size:.55rem;letter-spacing:.3px;">TOT</td>
-    <td style="text-align:right;padding:0 4px;font-size:.6rem;">${prevMesTotalShopM?_cf$(prevMesTotalShopM):''}</td>
-    <td class="xls-sep" style="text-align:center;font-size:.6rem;">${prevMesTotalN||''}</td>
-    <td style="text-align:right;padding:0 4px;">
-      <div style="color:var(--warning);">${totWppM?_cf$(totWppM):''}</div>
-      <div style="font-size:.5rem;color:var(--warning);">${totTotalM>0?pct(totWppM,totTotalM):''}</div>
-    </td>
-    <td style="text-align:right;padding:0 4px;">
-      <div style="color:var(--info);">${totShopM?_cf$(totShopM):''}</div>
-      <div style="font-size:.5rem;color:var(--info);">${totTotalM>0?pct(totShopM,totTotalM):''}</div>
-    </td>
-    <td style="text-align:center;">${totWppN||''}</td>
-    <td style="text-align:center;">${totShopN||''}</td>
-    <td class="xls-sep" style="text-align:center;font-size:.65rem;">${totTotal}</td>
-    <td style="text-align:center;${crCls(crMTot)}">${crFmt(crMTot)}</td>
-    <td class="xls-sep" style="text-align:center;${crCls(crNTot)}">${crFmt(crNTot)}</td>
-    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsFB)}</td>
-    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsTT)}</td>
-    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsT)}</td>
-    <td style="text-align:right;padding:0 4px;color:var(--text-3);">${_cf$(totFee)}</td>
-    <td style="text-align:right;padding:0 4px;">${_cf$(totAdsFee)}</td>
-    <td class="xls-sep" style="text-align:right;padding:0 4px;color:#67e8f9;">${totCpa}</td>
-    <td></td>
-  </tr>`;
+  // Fila totales + porcentajes (función compartida con la actualización en vivo)
+  dRows+=_cfTotRowHTML();
 
   // ── Porcentajes COD ──────────────────────────────────────────────────
   const entN=(cod.entregados||{}).num||0;
@@ -7831,21 +7852,35 @@ function _cfSetDia(dd,k,v){
   const fee=adsT*((_cfCfg.limites||_CF_DEF.limites).comisionBancaria||1)/100;
   const adsFee=adsT+fee;
   const cpa=totalDia>0?adsFee/totalDia:0;
-  // Actualizar celdas auto de la fila en tiempo real
+  // Actualizar celdas auto de la fila en tiempo real (formato COMPLETO, nunca abreviado)
   const tbody=document.querySelector('#cf-tab-mes .xls tbody');
   if(tbody){
     const filas=tbody.querySelectorAll('tr');
+    // Crecimiento del día vs mismo día del mes anterior
+    const pd=(_cfPrevMD.dias||{})[dd]||{};
+    const prevTotalM=(pd.shopifyMonto||0)+(pd.wppMonto||0);
+    const prevTotN=(pd.wppNum||0)+(pd.shopifyNum||0);
+    const totalM=(d.shopifyMonto||0)+(d.wppMonto||0);
+    const crM=prevTotalM>0?((totalM-prevTotalM)/prevTotalM*100):null;
+    const crN=prevTotN>0?((totalDia-prevTotN)/prevTotN*100):null;
+    const crTxt=v=>v===null?'':(v>=0?'+':'')+v.toFixed(1)+'%';
     filas.forEach(tr=>{
+      if(tr.classList.contains('xls-totrow'))return;
       const fc=tr.querySelector('td');
-      if(!fc||fc.textContent.trim()!==String(parseInt(dd)))return;
+      if(!fc||parseInt(fc.textContent.trim(),10)!==parseInt(dd,10))return;
       const tds=tr.querySelectorAll('td');
-      // [7]=Tot#, [12]=AdsTotal, [13]=Fee, [14]=AdsFee, [15]=CPA
+      // [7]=Tot#, [8]=Crec$, [9]=Crec#, [12]=AdsTotal, [13]=Fee, [14]=AdsFee, [15]=CPA
       if(tds[7])tds[7].textContent=totalDia||'';
-      if(tds[12])tds[12].textContent=adsT?_cfM$(adsT):'';
-      if(tds[13])tds[13].textContent=fee?_cfM$(fee):'';
-      if(tds[14])tds[14].textContent=adsFee?_cfM$(adsFee):'';
+      if(tds[8]){tds[8].textContent=crTxt(crM);tds[8].className=crM===null?'xls-auto':crM>=0?'xls-pos':'xls-neg';}
+      if(tds[9]){tds[9].textContent=crTxt(crN);tds[9].className=(crN===null?'xls-auto':crN>=0?'xls-pos':'xls-neg')+' xls-sep';}
+      if(tds[12])tds[12].textContent=adsT?_cf$(adsT):'';
+      if(tds[13])tds[13].textContent=fee?_cf$(fee):'';
+      if(tds[14])tds[14].textContent=adsFee?_cf$(adsFee):'';
       if(tds[15])tds[15].textContent=cpa?_cf$(cpa):'';
     });
+    // Refrescar la fila TOT con las sumas actualizadas
+    const totRow=tbody.querySelector('tr.xls-totrow');
+    if(totRow) totRow.outerHTML=_cfTotRowHTML();
   }
 }
 
@@ -7891,9 +7926,9 @@ function _cfRenderER(){
       ${row('Fee bancaria ('+(r.lim.comisionBancaria||1)+'%)','-'+_cf$(r.fee),'cf-er-neg')}
       ${tot('Total Ads + Fee','-'+_cf$(r.adsFee),'cf-er-neg')}
       <div style="height:10px;"></div>
-      <div style="background:${r.utilNeta>=0?'#f0fdf4':'#fef2f2'};border-radius:10px;padding:14px 16px;border:2px solid ${r.utilNeta>=0?'#bbf7d0':'#fecaca'};display:flex;justify-content:space-between;align-items:center;">
+      <div style="background:${r.utilNeta>=0?'var(--success-soft)':'var(--danger-soft)'};border-radius:10px;padding:14px 16px;border:2px solid ${r.utilNeta>=0?'rgba(57,230,122,.35)':'rgba(230,57,70,.35)'};display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:.85rem;font-weight:900;color:var(--text-1);">💰 UTILIDAD NETA</span>
-        <span style="font-size:1.3rem;font-weight:900;color:${r.utilNeta>=0?'#16a34a':'#dc2626'};">${_cf$(r.utilNeta)}</span>
+        <span style="font-size:1.3rem;font-weight:900;font-family:var(--f-mono);color:${r.utilNeta>=0?'var(--success)':'var(--danger)'};">${_cf$(r.utilNeta)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 4px;">
         <span style="font-size:.75rem;color:var(--text-2);font-weight:600;">Margen Neto</span>
