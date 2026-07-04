@@ -517,36 +517,41 @@ body.data-loaded #sidebar-actions{display:flex;}
 .bv-orden-item.disabled .bv-drag-handle{pointer-events:none;}
 @media print{#pdf-modal{display:block!important;position:static;background:none;}#pdf-modal .pdf-btns{display:none;}.pdf-box{box-shadow:none;max-height:none;border-radius:0;}}
 /* ── CONTROL FINANCIERO ──────────────────────── */
-/* Tabla diaria — estilo hoja de cálculo */
-.xls-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-.xls{border-collapse:collapse;font-size:.6rem;font-family:inherit;white-space:nowrap;}
-.xls td,.xls th{border:1px solid #d1d5db;padding:0;margin:0;height:19px;line-height:19px;}
-.xls th{background:#1A2230;color:white;font-size:.55rem;font-weight:700;text-align:center;padding:0 4px;height:22px;line-height:22px;}
-.xls th.xls-ant{background:#475569;}
-.xls th.xls-ads{background:#312e81;}
-.xls th.xls-wpp{background:#78350f;}
-.xls th.xls-shop{background:#1e3a8a;}
-.xls th.xls-cpa{background:#0c4a6e;}
-.xls td.xls-n{text-align:center;color:var(--text-2);font-weight:800;font-size:.62rem;padding:0 3px;}
+/* Tabla diaria — rediseño REDKING (mismo lenguaje que Remisión Mensual) */
+.xls-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-card);}
+.xls{border-collapse:collapse;font-size:.62rem;font-family:var(--f-mono);white-space:nowrap;width:100%;}
+.xls td,.xls th{border:1px solid var(--border);padding:0;margin:0;height:21px;line-height:21px;}
+.xls th{background:var(--bg-elevated);color:var(--text-2);font-size:.55rem;font-weight:800;letter-spacing:.5px;text-align:center;padding:0 6px;height:25px;line-height:25px;font-family:var(--f-body);}
+.xls th.xls-ant{color:var(--text-3);box-shadow:inset 0 -2px 0 #8B9DB5;}
+.xls th.xls-ads{color:#9B59E6;box-shadow:inset 0 -2px 0 #9B59E6;}
+.xls th.xls-wpp{color:#E6823A;box-shadow:inset 0 -2px 0 #E6823A;}
+.xls th.xls-shop{color:#3971E6;box-shadow:inset 0 -2px 0 #3971E6;}
+.xls th.xls-cpa{color:#67e8f9;box-shadow:inset 0 -2px 0 #67e8f9;}
+.xls tbody tr:hover td{background:var(--bg-hover);}
+.xls td.xls-n{text-align:center;color:var(--text-2);font-weight:800;font-size:.62rem;padding:0 3px;background:var(--bg-elevated);}
 .xls td.xls-r{text-align:right;color:var(--text-2);padding:0 4px;}
-.xls td.xls-auto{text-align:right;color:var(--text-2);background:var(--bg-hover);padding:0 4px;}
-.xls td.xls-pos{color:var(--success);font-weight:700;text-align:center;background:var(--success-soft);}
-.xls td.xls-neg{color:var(--danger);font-weight:700;text-align:center;background:var(--danger-soft);}
-.xls td.xls-ant{background:var(--bg-hover);color:var(--text-3);text-align:right;padding:0 4px;}
-.xls td.xls-ads{background:var(--accent-soft);text-align:right;padding:0 4px;color:var(--accent);}
-.xls td.xls-cpa{background:var(--info-soft);text-align:right;padding:0 4px;color:#075985;font-weight:700;}
-.xls td.xls-wpp{background:var(--warning-soft);text-align:center;color:var(--warning);font-weight:700;}
-.xls td.xls-shopn{background:var(--info-soft);text-align:center;color:var(--info);font-weight:700;}
-.xls td.xls-tot{text-align:center;font-weight:900;color:var(--text-1);background:var(--bg-inset);}
+.xls td.xls-auto{text-align:right;color:var(--text-3);background:rgba(255,255,255,.025);padding:0 4px;}
+.xls td.xls-pos{color:var(--success);font-weight:800;text-align:center;}
+.xls td.xls-neg{color:var(--danger);font-weight:800;text-align:center;}
+.xls td.xls-ant{background:rgba(255,255,255,.025);color:var(--text-3);text-align:right;padding:0 4px;}
+.xls td.xls-ads{text-align:right;padding:0 4px;color:#9B59E6;}
+.xls td.xls-cpa{text-align:right;padding:0 4px;color:#67e8f9;font-weight:700;background:rgba(255,255,255,.025);}
+.xls td.xls-wpp{text-align:center;color:#E6823A;font-weight:700;}
+.xls td.xls-shopn{text-align:center;color:#3971E6;font-weight:700;}
+.xls td.xls-tot{text-align:center;font-weight:900;color:var(--text-1);background:rgba(255,255,255,.03);}
 .xls td.xls-nota{padding:0 3px;}
-.xls tr.xls-today td{outline:2px solid #6366f1;outline-offset:-1px;background:var(--warning-soft)!important;}
-.xls tr.xls-today td.xls-n{color:var(--accent);}
-.xls tr.xls-totrow td{background:#131920!important;color:white!important;font-weight:700;font-size:.6rem;}
-.xls-inp{width:100%;min-width:52px;height:19px;border:none;background:transparent;font-size:.6rem;font-family:inherit;text-align:right;padding:0 3px;outline:none;color:#111827;box-sizing:border-box;}
-.xls-inp:focus{background:var(--warning-soft);}
-.xls-inp.xls-inp-l{text-align:left;min-width:90px;}
+[data-theme="light"] .xls td.xls-auto,[data-theme="light"] .xls td.xls-ant,[data-theme="light"] .xls td.xls-cpa{background:rgba(0,0,0,.03);}
+[data-theme="light"] .xls td.xls-tot{background:rgba(0,0,0,.04);}
+[data-theme="light"] .xls th.xls-cpa,[data-theme="light"] .xls td.xls-cpa{color:#0891b2;}
+.xls tr.xls-today td{background:rgba(57,113,230,.08)!important;}
+.xls tr.xls-today td.xls-n{color:var(--accent);background:rgba(57,113,230,.16)!important;}
+.xls tr.xls-totrow td{background:var(--bg-elevated)!important;color:var(--text-1)!important;font-weight:800;font-size:.62rem;border-top:2px solid var(--border-strong);}
+.xls-inp{width:100%;min-width:52px;height:21px;border:none;background:transparent;font-size:.62rem;font-family:var(--f-mono);text-align:right;padding:0 3px;outline:none;color:var(--text-1);box-sizing:border-box;}
+.xls-inp::placeholder{color:var(--text-3);opacity:.35;}
+.xls-inp:focus{background:rgba(57,113,230,.12);box-shadow:0 0 0 1.5px var(--accent);border-radius:3px;}
+.xls-inp.xls-inp-l{text-align:left;min-width:90px;font-family:var(--f-body);}
 /* separador de grupos */
-.xls th.xls-sep,.xls td.xls-sep{border-left:2px solid #6b7280!important;}
+.xls th.xls-sep,.xls td.xls-sep{border-left:2px solid var(--border-strong)!important;}
 /* Metas/COD compacto */
 .cf-compact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-bottom:10px;}
 .cf-compact-item{display:flex;flex-direction:column;gap:2px;}
@@ -7629,7 +7634,7 @@ function _cfRenderMes(){
     </td>
     <td style="text-align:right;padding:0 4px;">
       <div style="color:var(--info);">${totShopM?_cf$(totShopM):''}</div>
-      <div style="font-size:.5rem;color:#1e40af;">${totTotalM>0?pct(totShopM,totTotalM):''}</div>
+      <div style="font-size:.5rem;color:var(--info);">${totTotalM>0?pct(totShopM,totTotalM):''}</div>
     </td>
     <td style="text-align:center;">${totWppN||''}</td>
     <td style="text-align:center;">${totShopN||''}</td>
@@ -7660,18 +7665,19 @@ function _cfRenderMes(){
 
 
   // Tarjeta editable de dinero — estilo visual igual al COD del mes
+  // Tarjetas estilo REDKING: superficie oscura, acento en borde izquierdo y label
   const mkCardM=(k,v,lbl,bg,bc,tc)=>{
     const rv=Math.round(v||0);const fv=rv>0?('$ '+rv.toLocaleString('es-CO')):'';
     const kb=k.replace(/this\.value/g,'_r');
-    return `<div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;background:${bg};border-radius:7px;padding:7px 10px;border-left:3px solid ${bc};">
-      <div style="font-size:.55rem;font-weight:800;color:${tc};text-transform:uppercase;letter-spacing:.3px;">${lbl}</div>
-      <input style="border:1.5px solid ${bc}70;border-radius:6px;padding:5px 9px;font-size:.82rem;font-weight:900;color:${tc};background:var(--bg-card);outline:none;text-align:right;width:130px;font-family:inherit;" type="text" value="${fv}" placeholder="$ 0" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="${k}" onblur="const _r=_cfPN(this.value);${kb};this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''">
+    return `<div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);border-left:3px solid ${bc};border-radius:8px;padding:7px 10px;">
+      <div style="font-size:.55rem;font-weight:800;color:${bc};text-transform:uppercase;letter-spacing:.3px;">${lbl}</div>
+      <input style="border:1px solid var(--border-strong);border-radius:6px;padding:5px 9px;font-size:.82rem;font-weight:900;color:${bc};background:transparent;outline:none;text-align:right;width:130px;font-family:var(--f-mono);" type="text" value="${fv}" placeholder="$ 0" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select();this.style.borderColor='${bc}'" onblur="const _r=_cfPN(this.value);${kb};this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):'';this.style.borderColor=''" oninput="${k}">
     </div>`;
   };
   // Tarjeta editable de conteo (número entero)
-  const mkCardN=(k,v,lbl,bg,bc,tc)=>`<div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;background:${bg};border-radius:7px;padding:7px 10px;border-left:3px solid ${bc};">
-    <div style="font-size:.55rem;font-weight:800;color:${tc};text-transform:uppercase;letter-spacing:.3px;">${lbl}</div>
-    <input style="border:1.5px solid ${bc}70;border-radius:6px;padding:5px 9px;font-size:.9rem;font-weight:900;color:${tc};background:var(--bg-card);outline:none;text-align:right;width:70px;font-family:inherit;" type="number" value="${v||''}" placeholder="0" oninput="${k}">
+  const mkCardN=(k,v,lbl,bg,bc,tc)=>`<div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);border-left:3px solid ${bc};border-radius:8px;padding:7px 10px;">
+    <div style="font-size:.55rem;font-weight:800;color:${bc};text-transform:uppercase;letter-spacing:.3px;">${lbl}</div>
+    <input style="border:1px solid var(--border-strong);border-radius:6px;padding:5px 9px;font-size:.9rem;font-weight:900;color:${bc};background:transparent;outline:none;text-align:right;width:70px;font-family:var(--f-mono);" type="number" value="${v||''}" placeholder="0" onfocus="this.style.borderColor='${bc}'" onblur="this.style.borderColor=''" oninput="${k}">
   </div>`;
 
   el.innerHTML=`
@@ -7697,7 +7703,7 @@ function _cfRenderMes(){
             <div style="display:grid;grid-template-columns:1fr auto;align-items:center;background:var(--success-soft);border-radius:7px;padding:6px 10px;border-left:3px solid #16a34a;">
               <div>
                 <div style="font-size:.55rem;font-weight:800;color:var(--success);text-transform:uppercase;letter-spacing:.3px;">✅ Entregados</div>
-                <div style="font-size:.88rem;font-weight:900;color:#14532d;">${_cf$((cod.entregados||{}).monto||0)}</div>
+                <div style="font-size:.88rem;font-weight:900;color:var(--text-1);font-family:var(--f-mono);">${_cf$((cod.entregados||{}).monto||0)}</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:.55rem;color:var(--text-2);">pedidos</div>
@@ -7709,7 +7715,7 @@ function _cfRenderMes(){
             <div style="display:grid;grid-template-columns:1fr auto;align-items:center;background:var(--info-soft);border-radius:7px;padding:6px 10px;border-left:3px solid #0891b2;">
               <div>
                 <div style="font-size:.55rem;font-weight:800;color:var(--info);text-transform:uppercase;letter-spacing:.3px;">🔵 En proceso</div>
-                <div style="font-size:.88rem;font-weight:900;color:#0c4a6e;">${_cf$((cod.enProceso||{}).monto||0)}</div>
+                <div style="font-size:.88rem;font-weight:900;color:var(--text-1);font-family:var(--f-mono);">${_cf$((cod.enProceso||{}).monto||0)}</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:.55rem;color:var(--text-2);">pedidos</div>
@@ -7721,7 +7727,7 @@ function _cfRenderMes(){
             <div style="display:grid;grid-template-columns:1fr auto;align-items:center;background:var(--danger-soft);border-radius:7px;padding:6px 10px;border-left:3px solid #dc2626;">
               <div>
                 <div style="font-size:.55rem;font-weight:800;color:var(--danger);text-transform:uppercase;letter-spacing:.3px;">🔴 Devueltos</div>
-                <div style="font-size:.88rem;font-weight:900;color:#7f1d1d;">${_cf$((cod.devueltos||{}).monto||0)}</div>
+                <div style="font-size:.88rem;font-weight:900;color:var(--text-1);font-family:var(--f-mono);">${_cf$((cod.devueltos||{}).monto||0)}</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:.55rem;color:var(--text-2);">pedidos</div>
@@ -7754,9 +7760,9 @@ function _cfRenderMes(){
           <div style="background:var(--bg-hover);border-radius:7px;padding:7px 10px;border-left:3px solid #475569;">
             <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;">
               <div style="font-size:.55rem;font-weight:800;color:var(--text-1);text-transform:uppercase;letter-spacing:.3px;">📦 Otros costos ventas $</div>
-              <input style="border:1.5px solid #47556970;border-radius:6px;padding:5px 9px;font-size:.82rem;font-weight:900;color:var(--text-1);background:var(--bg-card);outline:none;text-align:right;width:130px;font-family:inherit;" type="text" value="${(()=>{const rv=Math.round(costos.otrosVentas||0);return rv>0?('$ '+rv.toLocaleString('es-CO')):''})()}" placeholder="$ 0" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetCosto('otrosVentas',this.value)" onblur="const _r=_cfPN(this.value);_cfSetCosto('otrosVentas',_r);this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''">
+              <input style="border:1px solid var(--border-strong);border-radius:6px;padding:5px 9px;font-size:.82rem;font-weight:900;color:var(--text-1);background:var(--bg-card);outline:none;text-align:right;width:130px;font-family:inherit;" type="text" value="${(()=>{const rv=Math.round(costos.otrosVentas||0);return rv>0?('$ '+rv.toLocaleString('es-CO')):''})()}" placeholder="$ 0" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetCosto('otrosVentas',this.value)" onblur="const _r=_cfPN(this.value);_cfSetCosto('otrosVentas',_r);this.value=_r>0?('$ '+Math.round(_r).toLocaleString('es-CO')):''">
             </div>
-            <input type="text" value="${costos.otrosVentasMotivo||''}" placeholder="¿Qué gasto es este? Ej: dominio, empaque, plataforma…" style="margin-top:5px;width:100%;border:1px solid #cbd5e1;border-radius:5px;padding:4px 8px;font-size:.63rem;color:var(--text-1);background:var(--bg-card);outline:none;font-family:inherit;box-sizing:border-box;" oninput="_cfSetCosto('otrosVentasMotivo',this.value)">
+            <input type="text" value="${costos.otrosVentasMotivo||''}" placeholder="¿Qué gasto es este? Ej: dominio, empaque, plataforma…" style="margin-top:5px;width:100%;border:1px solid var(--border-strong);border-radius:5px;padding:4px 8px;font-size:.63rem;color:var(--text-1);background:var(--bg-card);outline:none;font-family:inherit;box-sizing:border-box;" oninput="_cfSetCosto('otrosVentasMotivo',this.value)">
           </div>
         </div>
       </div></div>
