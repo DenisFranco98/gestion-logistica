@@ -7694,6 +7694,7 @@ function _cfRenderDash(){
       <div class="cf-alert ${r.estadoC}" style="padding:6px 16px;border-radius:20px;margin:0;font-weight:800;font-size:.76rem;">${r.estado}</div>
     </div>
     <div class="cf-kpi-grid">${kpis.map(kCard).join('')}</div>
+    ${_cfComparativoHTML()}
     ${mixSection}
     <div class="cf-sec"><div class="cf-sec-hdr">⚠️ Alertas operativas</div><div class="cf-sec-body">${aHtml}</div></div>
     ${(r.metas.shopifyMonto||r.metas.shopifyNum||r.metas.wppNum)?`<div class="cf-sec"><div class="cf-sec-hdr">🎯 Progreso de metas</div><div class="cf-sec-body">
@@ -7710,6 +7711,67 @@ function _cfRenderDash(){
 }
 
 // ── CONTROL MES ───────────────────────────────────────────────────────
+// ── ANÁLISIS COMPARATIVO VS MES ANTERIOR ─────────────────────────────
+// Crecimiento en facturación, ventas (pedidos), gasto publicitario y CPA.
+// Si el mes está en curso, compara al MISMO corte de día del mes anterior.
+function _cfComparativoHTML(){
+  const dias=_cfMD.dias||{}, prevDias=(_cfPrevMD||{}).dias||{};
+  if(!Object.keys(prevDias).length)return '';
+  const feePct=(_cfCfg.limites||_CF_DEF.limites).comisionBancaria||1;
+  const nd=new Date();
+  const esMesActual=_cfMes===(nd.getFullYear()+'-'+_cfPad(nd.getMonth()+1));
+  const corte=esMesActual?nd.getDate():31;
+  const suma=(ds,hasta)=>{
+    let fact=0,ped=0,ads=0;
+    Object.entries(ds).forEach(([dd,d])=>{
+      if(parseInt(dd,10)>hasta)return;
+      fact+=(d.wppMonto||0)+(d.shopifyMonto||0);
+      ped+=(d.wppNum||0)+(d.shopifyNum||0);
+      ads+=(d.adsFB||0)+(d.adsTiktok||0);
+    });
+    const adsFee=ads*(1+feePct/100);
+    return{fact,ped,adsFee,cpa:ped>0?adsFee/ped:0};
+  };
+  const act=suma(dias,corte), ant=suma(prevDias,corte), antFull=suma(prevDias,31);
+  const [py,pm]=_cfMes.split('-').map(Number);
+  const pd2=new Date(py,pm-2,1);
+  const mesAntLbl=pd2.toLocaleDateString('es-CO',{month:'long'}).toUpperCase();
+  const mesActLbl=new Date(py,pm-1,1).toLocaleDateString('es-CO',{month:'long'}).toUpperCase();
+  const varPct=(a,b)=>b>0?((a-b)/b*100):null;
+  // inv: para CPA subir es MALO (rojo) y bajar es BUENO (verde). neutral: solo informativo
+  const badge=(p,inv,neutral)=>{
+    if(p===null)return '<span style="color:var(--text-3);font-size:.7rem;">—</span>';
+    const up=p>=0;
+    const c=neutral?'var(--accent)':(inv?(up?'var(--danger)':'var(--success)'):(up?'var(--success)':'var(--danger)'));
+    return `<span style="color:${c};font-weight:900;font-family:var(--f-mono);">${up?'▲':'▼'} ${(up?'+':'')+p.toFixed(1)}%</span>`;
+  };
+  const fila=(ico,lbl,vAnt,vAct,p,inv,neutral)=>`<tr>
+    <td style="padding:8px 12px;font-size:.74rem;font-weight:700;color:var(--text-1);border-bottom:1px solid var(--border);">${ico} ${lbl}</td>
+    <td style="padding:8px 12px;text-align:right;font-family:var(--f-mono);color:var(--text-3);border-bottom:1px solid var(--border);">${vAnt}</td>
+    <td style="padding:8px 12px;text-align:right;font-family:var(--f-mono);font-weight:800;color:var(--text-1);border-bottom:1px solid var(--border);">${vAct}</td>
+    <td style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--border);">${badge(p,inv,neutral)}</td>
+  </tr>`;
+  return `<div class="cf-sec"><div class="cf-sec-hdr">📊 Comparativo vs mes anterior${esMesActual?` — corte al día ${corte}`:''}</div>
+    <div class="cf-sec-body" style="padding:0;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr>
+          <th style="background:#131920;color:white;padding:7px 12px;font-size:.58rem;font-weight:700;text-align:left;">MÉTRICA</th>
+          <th style="background:#131920;color:rgba(255,255,255,.6);padding:7px 12px;font-size:.58rem;font-weight:700;text-align:right;">${mesAntLbl}${esMesActual?' (día 1-'+corte+')':''}</th>
+          <th style="background:#131920;color:white;padding:7px 12px;font-size:.58rem;font-weight:700;text-align:right;">${mesActLbl}</th>
+          <th style="background:#131920;color:white;padding:7px 12px;font-size:.58rem;font-weight:700;text-align:right;">VARIACIÓN</th>
+        </tr></thead>
+        <tbody>
+          ${fila('💰','Facturación',_cf$(ant.fact),_cf$(act.fact),varPct(act.fact,ant.fact),false)}
+          ${fila('🛒','Ventas (pedidos)',ant.ped,act.ped,varPct(act.ped,ant.ped),false)}
+          ${fila('📣','Gasto publicitario (Ads+Fee)',_cf$(ant.adsFee),_cf$(act.adsFee),varPct(act.adsFee,ant.adsFee),false,true)}
+          ${fila('🎯','CPA (Ads+Fee ÷ pedidos)',_cf$(ant.cpa),_cf$(act.cpa),varPct(act.cpa,ant.cpa),true)}
+        </tbody>
+      </table>
+      ${esMesActual?`<div style="padding:8px 12px;font-size:.62rem;color:var(--text-3);">Comparación al mismo corte de día para no distorsionar (mes en curso). ${mesAntLbl} completo: ${_cf$(antFull.fact)} · ${antFull.ped} pedidos · ${_cf$(antFull.adsFee)} en Ads.</div>`:''}
+      <div style="padding:0 12px 10px;font-size:.62rem;color:var(--text-3);">▲ verde = mejora · En CPA la lógica se invierte: <span style="color:var(--success);font-weight:700;">▼ bajar es bueno</span>. El gasto publicitario es informativo (azul).</div>
+    </div></div>`;
+}
+
 // Fila TOT del registro diario — usada por el render y por la actualización
 // en vivo (_cfSetDia) para que las sumas nunca queden desactualizadas
 function _cfTotRowHTML(){
