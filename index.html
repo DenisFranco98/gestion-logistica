@@ -25,7 +25,25 @@ window._toggleTheme=function(){
 document.addEventListener('DOMContentLoaded',()=>{
   const t=document.documentElement.getAttribute('data-theme')||'dark';
   document.querySelectorAll('.theme-toggle-btn').forEach(b=>{b.textContent=t==='dark'?'☀️':'🌙';});
+  // Restaurar estado del desplegable de Estados en la sidebar
+  try{
+    if(localStorage.getItem('lgs_sb_estados')==='0'){
+      const p=document.getElementById('pills');
+      const a=document.getElementById('sb-estados-arrow');
+      if(p)p.classList.add('sb-collapsed');
+      if(a)a.style.transform='rotate(-90deg)';
+    }
+  }catch(_){}
 });
+// Desplegable de Estados (pills) en la sidebar
+window._sbEstadosToggle=function(){
+  const p=document.getElementById('pills');
+  const a=document.getElementById('sb-estados-arrow');
+  if(!p)return;
+  const collapsed=p.classList.toggle('sb-collapsed');
+  if(a)a.style.transform=collapsed?'rotate(-90deg)':'';
+  try{localStorage.setItem('lgs_sb_estados',collapsed?'0':'1');}catch(_){}
+};
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Firebase -->
@@ -127,6 +145,8 @@ body.data-loaded #sidebar-actions{display:flex;}
   #gd-tabbar,#cf-tabbar{flex-direction:row;width:100%;border-right:none;border-bottom:1px solid var(--border);overflow-x:auto;padding:8px;}
   #gd-tabbar .sb-label,#cf-tabbar .sb-label{display:none;}
   .gd-tab-btn,.cf-tab-btn{width:auto;white-space:nowrap;}
+  #pills{flex-direction:row;flex-wrap:wrap;}
+  .stat-pill{width:auto;}
 }
 #upload-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:78vh;gap:18px;padding:20px;}
 .upload-box{border:2px dashed #b5afa8;border-radius:var(--radius-lg);padding:46px 54px;text-align:center;cursor:pointer;background:var(--bg-card);transition:all .2s;max-width:460px;width:100%;}
@@ -143,9 +163,15 @@ body.data-loaded #sidebar-actions{display:flex;}
 .col-hint ul{padding-left:15px;line-height:2;}
 #main{display:none;}
 .topbar{background:var(--bg-card);border-bottom:1.5px solid var(--border);padding:9px 20px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
-.stat-pill{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:20px;font-size:.75rem;font-weight:600;border:2px solid;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.stat-pill{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:9px;font-size:.72rem;font-weight:600;border:1.5px solid;cursor:pointer;transition:all .15s;white-space:nowrap;width:100%;overflow:hidden;}
+.stat-pill strong{margin-left:auto;font-family:var(--f-mono);flex-shrink:0;}
+.stat-pill:hover{background:rgba(255,255,255,.06);}
+#pills{display:flex;flex-direction:column;gap:5px;margin-top:2px;}
+#pills.sb-collapsed{display:none;}
+.sb-drop-btn{display:flex;align-items:center;justify-content:space-between;width:100%;background:none;border:none;color:rgba(255,255,255,.45);padding:8px 2px 4px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;cursor:pointer;font-family:inherit;}
+.sb-drop-btn:hover{color:rgba(255,255,255,.75);}
 .progress-bar-wrap{flex:1;min-width:130px;}
-.prog-label{font-size:.7rem;color:var(--text-2);margin-bottom:3px;}
+.prog-label{font-size:.68rem;color:rgba(255,255,255,.55);margin-bottom:4px;}
 .progress-bar{height:6px;background:var(--bg-inset);border-radius:4px;overflow:hidden;}
 .progress-fill{height:100%;background:linear-gradient(90deg,#3971E6,#5688FF);border-radius:4px;transition:width .4s;}
 .topbar-actions{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap;}
@@ -160,7 +186,7 @@ body.data-loaded #sidebar-actions{display:flex;}
 .btn-nuevo:hover{background:var(--bg-inset);}
 .btn-rapid{background:#131920;color:white;border:none;padding:5px 12px;border-radius:7px;font-size:.75rem;cursor:pointer;font-weight:600;display:none;align-items:center;gap:5px;}
 .btn-rapid:hover{opacity:.9;}
-#content{display:flex;flex-direction:row;overflow-x:scroll;scroll-snap-type:x mandatory;scroll-behavior:smooth;height:calc(100vh - 112px);width:100%;-webkit-overflow-scrolling:touch;}#content::-webkit-scrollbar{display:none;}
+#content{display:flex;flex-direction:row;overflow-x:scroll;scroll-snap-type:x mandatory;scroll-behavior:smooth;height:calc(100vh - 52px);width:100%;-webkit-overflow-scrolling:touch;}#content::-webkit-scrollbar{display:none;}
 .status-section{flex:0 0 100%;width:100%;scroll-snap-align:start;overflow-y:auto;padding:18px 20px;box-sizing:border-box;}
 .section-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid;}
 .section-header h2{font-size:.92rem;font-weight:700;}
@@ -2334,6 +2360,15 @@ body.data-loaded #sidebar-actions{display:flex;}
     </div>
     <button class="btn-topbar bt-dark" onclick="exportar()">📥 Exportar Excel</button>
     <button class="btn-topbar bt-light" onclick="resetApp()">↩ Nuevo archivo</button>
+    <div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 2px 6px;"></div>
+    <div class="progress-bar-wrap" style="min-width:0;padding:0 2px;">
+      <div class="prog-label" id="prog-label">0 de 0 gestionados</div>
+      <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+    </div>
+    <button class="sb-drop-btn" onclick="_sbEstadosToggle()">
+      <span>📌 Estados</span><span id="sb-estados-arrow" style="transition:transform .2s;">▾</span>
+    </button>
+    <div id="pills"></div>
   </nav>
 </header>
 <div class="toast" id="toast"></div>
@@ -2402,13 +2437,6 @@ body.data-loaded #sidebar-actions{display:flex;}
   <span id="mes-excel-banner-txt"></span>
 </div>
 <div id="main">
-  <div class="topbar">
-    <div id="pills" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-    <div class="progress-bar-wrap" style="display:none">
-      <div class="prog-label" id="prog-label">0 de 0 gestionados</div>
-      <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
-    </div>
-  </div>
   <div id="search-bar">
     <div class="search-input-wrap">
       <input type="text" id="search-input" placeholder="🔍 Buscar por teléfono o nombre..." oninput="buscar(this.value)"/>
