@@ -7406,7 +7406,6 @@ function _cfCalc(){
   const entM=(cod.entregados||{}).monto||0, entN=(cod.entregados||{}).num||0;
   const procM=(cod.enProceso||{}).monto||0, procN=(cod.enProceso||{}).num||0;
   const devM=(cod.devueltos||{}).monto||0, devN=(cod.devueltos||{}).num||0;
-  const cancN=(cod.cancelados||{}).num||0;
   const desp=entN+procN+devN;
 
   // Diarios: shopifyMonto=facturación, wppNum=ChateaPro, shopifyNum=Shopify
@@ -7419,6 +7418,10 @@ function _cfCalc(){
     adsTT+=d.adsTiktok||0;
   });
   const totalN=wppN+shopN; // total pedidos facturados (WPP + Shopify)
+  // Cancelados: derivado de los pedidos del mes (registro diario) menos
+  // los que salieron: total − entregados − en proceso − devueltos.
+  // Solo aplica si hay datos COD cargados (desp>0); si no, quedaría todo el mes como "cancelado".
+  const cancN=desp>0?Math.max(0,totalN-entN-procN-devN):0;
   const adsT=adsFB+adsTT, fee=adsT*(lim.comisionBancaria||1)/100, adsFee=adsT+fee;
 
   const totalAdmin=(ca.shopify||0)+(ca.tarjetas||0)+(ca.dominio||0)+(ca.impuesto4x1000||0)+(ca.openai||0)+(ca.nomina||0)+(ca.otros||0);
@@ -7644,7 +7647,9 @@ function _cfRenderMes(){
 
     totShopM+=shopM;totWppM+=wppM;totWppN+=wppN;totShopN+=shopNSolo;totAdsFB+=adsFB;totAdsTT+=adsTT;
 
-    const dow=new Date(_cfMes+'-'+dd).getDay();
+    // Fecha LOCAL (new Date('YYYY-MM-DD') parsea UTC y corre el día en Colombia)
+    const [_cy,_cm]=_cfMes.split('-').map(Number);
+    const dow=new Date(_cy,_cm-1,i).getDay();
     const esSab=dow===6,esDom=dow===0;
 
     dRows+=`<tr class="${isToday?'xls-today':''}">
@@ -7675,13 +7680,14 @@ function _cfRenderMes(){
   const entN=(cod.entregados||{}).num||0;
   const procN=(cod.enProceso||{}).num||0;
   const devN=(cod.devueltos||{}).num||0;
-  const cancN=(cod.cancelados||{}).num||0;
   const despachados=entN+procN+devN; // total pedidos que salieron (sin pendientes/cancelados)
   const pEnt=despachados>0?(entN/despachados*100).toFixed(2):0;
   const pProc=despachados>0?(procN/despachados*100).toFixed(2):0;
   const pDev=despachados>0?(devN/despachados*100).toFixed(2):0;
   // Total ventas del registro diario (formulario)
   const totalDiarioN=Object.values(dias).reduce((s,d)=>(s+(d.wppNum||0)+(d.shopifyNum||0)),0);
+  // Cancelados: pedidos del mes − entregados − en proceso − devueltos
+  const cancN=despachados>0?Math.max(0,totalDiarioN-entN-procN-devN):0;
   const pCanc=totalDiarioN>0?(cancN/totalDiarioN*100).toFixed(2):0;
 
 
