@@ -7354,29 +7354,38 @@ function _cfTab(tab){
   else if(tab==='analiticas')_cfRenderAnaliticas();
 }
 
+// Carga el mes activo Y SU MES ANTERIOR (las columnas "MES ANT." siempre
+// deben reflejar el mes inmediatamente anterior al que se está viendo)
+function _cfCargarMes(){
+  const lbl=document.getElementById('cf-mes-lbl');
+  if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
+  _cfMD={};_cfPrevMD={};_cfXlsOrdenes=null;_cfXlsProductos=null;_cfExtracted=null;
+  const [y,m]=_cfMes.split('-').map(Number);
+  const pd=new Date(y,m-2,1);
+  const prevM=pd.getFullYear()+'-'+_cfPad(pd.getMonth()+1);
+  if(typeof _db!=='undefined'){
+    document.getElementById('cf-tab-'+_cfCurTab).innerHTML='<div style="padding:40px;text-align:center;color:var(--text-3);font-size:.8rem;">Cargando...</div>';
+    Promise.all([
+      _db.ref(_cfBasePath()).once('value'),
+      _db.ref(_cfBasePath(prevM)).once('value')
+    ]).then(([s,p])=>{
+      _cfMD=s.val()||{};
+      _cfPrevMD=p.val()||{};
+      _cfTab(_cfCurTab);
+    });
+  } else _cfTab(_cfCurTab);
+}
 function _cfPrevMes(){
   const [y,m]=_cfMes.split('-').map(Number);
   const d=new Date(y,m-2,1);
   _cfMes=d.getFullYear()+'-'+_cfPad(d.getMonth()+1);
-  const lbl=document.getElementById('cf-mes-lbl');
-  if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
-  _cfMD={};_cfXlsOrdenes=null;_cfXlsProductos=null;_cfExtracted=null;
-  if(typeof _db!=='undefined'){
-    document.getElementById('cf-tab-'+_cfCurTab).innerHTML='<div style="padding:40px;text-align:center;color:var(--text-3);font-size:.8rem;">Cargando...</div>';
-    _db.ref(_cfBasePath()).once('value').then(s=>{_cfMD=s.val()||{};_cfTab(_cfCurTab);});
-  } else _cfTab(_cfCurTab);
+  _cfCargarMes();
 }
 function _cfNextMes(){
   const [y,m]=_cfMes.split('-').map(Number);
   const d=new Date(y,m,1);
   _cfMes=d.getFullYear()+'-'+_cfPad(d.getMonth()+1);
-  const lbl=document.getElementById('cf-mes-lbl');
-  if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
-  _cfMD={};_cfXlsOrdenes=null;_cfXlsProductos=null;_cfExtracted=null;
-  if(typeof _db!=='undefined'){
-    document.getElementById('cf-tab-'+_cfCurTab).innerHTML='<div style="padding:40px;text-align:center;color:var(--text-3);font-size:.8rem;">Cargando...</div>';
-    _db.ref(_cfBasePath()).once('value').then(s=>{_cfMD=s.val()||{};_cfTab(_cfCurTab);});
-  } else _cfTab(_cfCurTab);
+  _cfCargarMes();
 }
 
 // ── Save helpers ────────────────────────────────────────────────────
