@@ -1737,7 +1737,8 @@ body.data-loaded #sidebar-actions{display:flex;}
       <div style="font-size:.72rem;color:var(--text-3);margin-bottom:18px;">Selecciona qué secciones incluir — <span id="cf-pdf-mes-lbl"></span></div>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-resumen" checked> 📊 Resumen Control Mes <span>facturación, pedidos, COD, Ads, CPA</span></label>
-        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-er" checked> 📈 Estado de Resultados (ER) <span>ingresos, costos, utilidad neta</span></label>
+        <label class="cf-pdf-chk" id="cfpdf-comparativo-lbl"><input type="checkbox" id="cfpdf-comparativo" checked> 📈 Análisis vs mes anterior <span>veredicto de crecimiento + lectura de CPA, ventas y Ads</span></label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-er" checked> 📉 Estado de Resultados (ER) <span>ingresos, costos, utilidad neta</span></label>
         <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-ciudades" checked> 🏙️ Analítica de Ciudades <span>top 15 por volumen</span></label>
         <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-trans" checked> 🚛 Analítica de Transportadoras</label>
         <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-productos" checked> 📦 Analítica de Productos <span>top 15 por pedidos</span></label>
@@ -7423,6 +7424,12 @@ function _cfPdfAbrir(){
   const ua=_cfMD.ultimoAnalisis||_cfExtracted||null;
   const hayAnal=!!(ua&&(ua.byCiudad||ua.byTrans||ua.byProdAnal));
   document.getElementById('cf-pdf-warn').style.display=hayAnal?'none':'block';
+  // Comparativo solo disponible si hay datos del mes anterior
+  const hayComp=!!_cfComparativoData();
+  const chkC=document.getElementById('cfpdf-comparativo');
+  const lblC=document.getElementById('cfpdf-comparativo-lbl');
+  if(chkC){chkC.disabled=!hayComp;chkC.checked=hayComp;}
+  if(lblC){lblC.style.opacity=hayComp?'1':'.45';lblC.title=hayComp?'':'Sin datos del mes anterior';}
   document.getElementById('cf-pdf-modal').style.display='flex';
 }
 
@@ -7434,7 +7441,8 @@ function _cfPdfGenerar(){
     er:document.getElementById('cfpdf-er').checked,
     ciudades:document.getElementById('cfpdf-ciudades').checked,
     trans:document.getElementById('cfpdf-trans').checked,
-    productos:document.getElementById('cfpdf-productos').checked
+    productos:document.getElementById('cfpdf-productos').checked,
+    comparativo:document.getElementById('cfpdf-comparativo').checked&&!document.getElementById('cfpdf-comparativo').disabled
   };
   const r=_cfCalc();
   const ua=_cfMD.ultimoAnalisis||_cfExtracted||{};
@@ -7472,6 +7480,65 @@ function _cfPdfGenerar(){
       ${kv('% Cancelación',_cfP(r.cancRate),r.cancRate<=r.lim.cancelacion?C.ok:C.bad)}
       ${kv('AOV entregado',_cf$(r.aov))}</div>
     </div>`;
+  }
+
+  if(sel.comparativo){
+    const cd=_cfComparativoData();
+    if(cd){
+      const fmtV=v=>v===null?'—':(v>=0?'+':'')+v.toFixed(1)+'%';
+      const vc=(v,inv)=>v===null?C.t3:(inv?(v>=0?C.bad:C.ok):(v>=0?C.ok:C.bad));
+      // Veredicto general: facturación + pedidos mandan
+      let vTxt='➡ MIXTO — señales encontradas frente a '+cd.mesAntLbl, vCol=C.warn;
+      if(cd.vFact!==null&&cd.vPed!==null){
+        if(cd.vFact>=0&&cd.vPed>=0){vTxt='📈 CRECIMIENTO — vamos por encima de '+cd.mesAntLbl;vCol=C.ok;}
+        else if(cd.vFact<0&&cd.vPed<0){vTxt='📉 DISMINUCIÓN — vamos por debajo de '+cd.mesAntLbl;vCol=C.bad;}
+      }
+      html+=secT('📈 ANÁLISIS VS MES ANTERIOR'+(cd.esMesActual?' — CORTE AL DÍA '+cd.corte:''));
+      html+=`<div style="background:${vCol}18;border:2px solid ${vCol};border-radius:8px;padding:9px 14px;font-size:13px;font-weight:900;color:${vCol};margin-bottom:10px;">${vTxt}</div>`;
+      // Encabezado del mes estilo informe operativo
+      const desp=r.entN+r.procN+r.devN;
+      const pProc2=desp>0?(r.procN/desp*100).toFixed(2):'0';
+      html+=`<div style="font-size:12px;font-weight:900;color:${C.t1};margin:6px 0 4px;">🗓️ ${cd.mesActLbl}</div>
+      <div style="font-size:10.5px;color:${C.t1};line-height:1.7;margin-bottom:8px;">
+        ● Entregas: <b style="color:${C.ok}">${_cfP(r.entRate)}</b> — ${_cf$(r.entM)}<br>
+        ● Devoluciones: <b style="color:${C.bad}">${_cfP(r.devRate)}</b> — ${_cf$(r.devM)}<br>
+        ● Cancelaciones: <b style="color:${C.warn}">${_cfP(r.cancRate)}</b> — ${r.cancN} pedidos<br>
+        ● En procesamiento: <b style="color:${C.info}">${pProc2}%</b> — ${_cf$(r.procM)}
+      </div>`;
+      // Tabla compacta de variaciones
+      html+=tbl(
+        [{l:'MÉTRICA',a:'left'},{l:cd.mesAntLbl+(cd.esMesActual?' (día 1-'+cd.corte+')':'')},{l:cd.mesActLbl},{l:'VARIACIÓN'}],
+        [
+          `<tr>${td('💰 Facturación','left',C.t1,true)}${td(_cf$(cd.ant.fact),'center',C.t3)}${td(_cf$(cd.act.fact),'center',C.t1,true)}${td(fmtV(cd.vFact),'center',vc(cd.vFact),true)}</tr>`,
+          `<tr style="background:#f6f8fa;">${td('🛒 Ventas (pedidos)','left',C.t1,true)}${td(cd.ant.ped,'center',C.t3)}${td(cd.act.ped,'center',C.t1,true)}${td(fmtV(cd.vPed),'center',vc(cd.vPed),true)}</tr>`,
+          `<tr>${td('📣 Gasto publicitario (Ads+Fee)','left',C.t1,true)}${td(_cf$(cd.ant.adsFee),'center',C.t3)}${td(_cf$(cd.act.adsFee),'center',C.t1,true)}${td(fmtV(cd.vAds),'center',C.info,true)}</tr>`,
+          `<tr style="background:#f6f8fa;">${td('🎯 CPA (Ads+Fee ÷ pedidos)','left',C.t1,true)}${td(_cf$(cd.ant.cpa),'center',C.t3)}${td(_cf$(cd.act.cpa),'center',C.t1,true)}${td(fmtV(cd.vCpa),'center',vc(cd.vCpa,true),true)}</tr>`
+        ]
+      );
+      // Items narrativos con lectura automática
+      const item=t=>`<div style="font-size:10.5px;color:${C.t1};line-height:1.6;margin:8px 0;">${t}</div>`;
+      const cpaMejora=cd.vCpa!==null&&cd.vCpa<0;
+      html+='<div style="margin-top:10px;">';
+      if(cd.vCpa!==null)html+=item(`✅ El CPA lo llevamos en <b>${_cf$(cd.act.cpa)}</b>. ${cpaMejora
+        ?`Hemos <b style="color:${C.ok}">mejorado</b> este costo respecto al CPA de ${cd.mesAntLbl} (${_cf$(cd.ant.cpa)}, ${fmtV(cd.vCpa)}). El objetivo es mantenerlo en el costo actual; para esto es clave continuar la gestión de recuperación de carritos.`
+        :`Hemos <b style="color:${C.bad}">empeorado</b> respecto al CPA de ${cd.mesAntLbl} (${_cf$(cd.ant.cpa)}, ${fmtV(cd.vCpa)}). Hay que revisar la eficiencia de las campañas y reforzar la recuperación de carritos para bajarlo.`}`);
+      const difPed=cd.act.ped-cd.ant.ped, difFact=cd.act.fact-cd.ant.fact;
+      html+=item(`✅ El volumen de pedidos de este mes respecto de ${cd.mesAntLbl}${cd.esMesActual?' a esta misma fecha':''} (${cd.ant.ped} pedidos) vamos en <b style="color:${difPed>=0?C.ok:C.bad}">${difPed>=0?'+':''}${difPed} pedidos</b> y en dinero vamos en <b style="color:${difFact>=0?C.ok:C.bad}">${difFact>=0?'+':''}${_cf$(difFact)}</b>. ${difPed>=0&&difFact>=0
+        ?'Hay que continuar de este modo para un crecimiento operativo.'
+        :'Hay que ajustar la operación y la inversión publicitaria para recuperar el ritmo.'}`);
+      if(cd.vAds!==null){
+        let lecturaAds='';
+        if(cd.vAds>0&&cpaMejora)lecturaAds='Se está invirtiendo más con mejor costo por pedido — escalado sano.';
+        else if(cd.vAds>0&&!cpaMejora)lecturaAds='Se invierte más pero el CPA también subió — revisar campañas antes de seguir escalando.';
+        else if(cd.vAds<=0&&cpaMejora)lecturaAds='Se invierte menos y el CPA mejoró — eficiencia ganada.';
+        else lecturaAds='Se invierte menos pero el CPA subió — el problema no es el presupuesto sino la conversión.';
+        html+=item(`✅ El gasto publicitario (Ads + fee) va en <b>${_cf$(cd.act.adsFee)}</b> frente a ${_cf$(cd.ant.adsFee)} de ${cd.mesAntLbl} (${fmtV(cd.vAds)}). ${lecturaAds}`);
+      }
+      if(r.cancRate>(r.lim.cancelacion||25))html+=item(`⚠️ <b style="color:${C.bad}">OJO con las órdenes canceladas</b>: van en <b>${_cfP(r.cancRate)}</b>, por encima del objetivo del ${_cfP(r.lim.cancelacion||25)}. Hay que presionar la gestión de confirmaciones para no repetir el mes pasado.`);
+      else if(r.cancRate>(r.lim.cancelacion||25)*0.7)html+=item(`⚠️ Atención a las cancelaciones: van en <b>${_cfP(r.cancRate)}</b>, acercándose al límite del ${_cfP(r.lim.cancelacion||25)}. Mantener presión en la gestión de confirmaciones.`);
+      html+='</div>';
+      if(cd.esMesActual)html+=`<div style="font-size:8px;color:${C.t3};margin-top:4px;">Comparación al mismo corte de día (1-${cd.corte}) para no distorsionar. ${cd.mesAntLbl} completo: ${_cf$(cd.antFull.fact)} · ${cd.antFull.ped} pedidos · ${_cf$(cd.antFull.adsFee)} en Ads.</div>`;
+    }
   }
 
   if(sel.er){
@@ -7714,9 +7781,10 @@ function _cfRenderDash(){
 // ── ANÁLISIS COMPARATIVO VS MES ANTERIOR ─────────────────────────────
 // Crecimiento en facturación, ventas (pedidos), gasto publicitario y CPA.
 // Si el mes está en curso, compara al MISMO corte de día del mes anterior.
-function _cfComparativoHTML(){
+// Datos compartidos entre el Dashboard y el Informe PDF.
+function _cfComparativoData(){
   const dias=_cfMD.dias||{}, prevDias=(_cfPrevMD||{}).dias||{};
-  if(!Object.keys(prevDias).length)return '';
+  if(!Object.keys(prevDias).length)return null;
   const feePct=(_cfCfg.limites||_CF_DEF.limites).comisionBancaria||1;
   const nd=new Date();
   const esMesActual=_cfMes===(nd.getFullYear()+'-'+_cfPad(nd.getMonth()+1));
@@ -7734,10 +7802,18 @@ function _cfComparativoHTML(){
   };
   const act=suma(dias,corte), ant=suma(prevDias,corte), antFull=suma(prevDias,31);
   const [py,pm]=_cfMes.split('-').map(Number);
-  const pd2=new Date(py,pm-2,1);
-  const mesAntLbl=pd2.toLocaleDateString('es-CO',{month:'long'}).toUpperCase();
+  const mesAntLbl=new Date(py,pm-2,1).toLocaleDateString('es-CO',{month:'long'}).toUpperCase();
   const mesActLbl=new Date(py,pm-1,1).toLocaleDateString('es-CO',{month:'long'}).toUpperCase();
   const varPct=(a,b)=>b>0?((a-b)/b*100):null;
+  return{corte,esMesActual,act,ant,antFull,mesAntLbl,mesActLbl,
+    vFact:varPct(act.fact,ant.fact),vPed:varPct(act.ped,ant.ped),
+    vAds:varPct(act.adsFee,ant.adsFee),vCpa:varPct(act.cpa,ant.cpa)};
+}
+
+function _cfComparativoHTML(){
+  const cd=_cfComparativoData();
+  if(!cd)return '';
+  const {corte,esMesActual,act,ant,antFull,mesAntLbl,mesActLbl}=cd;
   // inv: para CPA subir es MALO (rojo) y bajar es BUENO (verde). neutral: solo informativo
   const badge=(p,inv,neutral)=>{
     if(p===null)return '<span style="color:var(--text-3);font-size:.7rem;">—</span>';
@@ -7761,10 +7837,10 @@ function _cfComparativoHTML(){
           <th style="background:#131920;color:white;padding:7px 12px;font-size:.58rem;font-weight:700;text-align:right;">VARIACIÓN</th>
         </tr></thead>
         <tbody>
-          ${fila('💰','Facturación',_cf$(ant.fact),_cf$(act.fact),varPct(act.fact,ant.fact),false)}
-          ${fila('🛒','Ventas (pedidos)',ant.ped,act.ped,varPct(act.ped,ant.ped),false)}
-          ${fila('📣','Gasto publicitario (Ads+Fee)',_cf$(ant.adsFee),_cf$(act.adsFee),varPct(act.adsFee,ant.adsFee),false,true)}
-          ${fila('🎯','CPA (Ads+Fee ÷ pedidos)',_cf$(ant.cpa),_cf$(act.cpa),varPct(act.cpa,ant.cpa),true)}
+          ${fila('💰','Facturación',_cf$(ant.fact),_cf$(act.fact),cd.vFact,false)}
+          ${fila('🛒','Ventas (pedidos)',ant.ped,act.ped,cd.vPed,false)}
+          ${fila('📣','Gasto publicitario (Ads+Fee)',_cf$(ant.adsFee),_cf$(act.adsFee),cd.vAds,false,true)}
+          ${fila('🎯','CPA (Ads+Fee ÷ pedidos)',_cf$(ant.cpa),_cf$(act.cpa),cd.vCpa,true)}
         </tbody>
       </table>
       ${esMesActual?`<div style="padding:8px 12px;font-size:.62rem;color:var(--text-3);">Comparación al mismo corte de día para no distorsionar (mes en curso). ${mesAntLbl} completo: ${_cf$(antFull.fact)} · ${antFull.ped} pedidos · ${_cf$(antFull.adsFee)} en Ads.</div>`:''}
