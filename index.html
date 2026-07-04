@@ -552,6 +552,11 @@ body.data-loaded #sidebar-actions{display:flex;}
 .xls-inp.xls-inp-l{text-align:left;min-width:90px;font-family:var(--f-body);}
 /* separador de grupos */
 .xls th.xls-sep,.xls td.xls-sep{border-left:2px solid var(--border-strong)!important;}
+/* Checklist informe PDF */
+.cf-pdf-chk{display:flex;align-items:center;gap:10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:.78rem;font-weight:600;color:var(--text-1);cursor:pointer;transition:all .15s;flex-wrap:wrap;}
+.cf-pdf-chk:hover{border-color:var(--accent);}
+.cf-pdf-chk input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;}
+.cf-pdf-chk span{font-size:.62rem;color:var(--text-3);font-weight:400;width:100%;padding-left:25px;margin-top:-4px;}
 /* Metas/COD compacto */
 .cf-compact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-bottom:10px;}
 .cf-compact-item{display:flex;flex-direction:column;gap:2px;}
@@ -1113,6 +1118,7 @@ body.data-loaded #sidebar-actions{display:flex;}
 #registro-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:10002;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -1710,6 +1716,8 @@ body.data-loaded #sidebar-actions{display:flex;}
     <button class="cf-tab-btn" id="cf-tab-btn-config" onclick="_cfTab('config')">⚙️ Config</button>
     <button class="cf-tab-btn" id="cf-tab-btn-ordenes" onclick="_cfTab('ordenes')">📦 Órdenes</button>
     <button class="cf-tab-btn" id="cf-tab-btn-analiticas" onclick="_cfTab('analiticas')">🔍 Analíticas</button>
+    <div style="border-top:1px solid rgba(255,255,255,.1);margin:8px 4px;"></div>
+    <button class="cf-tab-btn" onclick="_cfPdfAbrir()" style="background:rgba(230,57,70,.14);border:1px solid rgba(230,57,70,.3);color:#f87171;">📄 Informe PDF</button>
   </div>
   <!-- Tab contents -->
   <div class="panel-main" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
@@ -1721,6 +1729,26 @@ body.data-loaded #sidebar-actions{display:flex;}
     <div class="cf-tab" id="cf-tab-analiticas"></div>
   </div>
   </div><!-- /panel-body -->
+
+  <!-- Modal checklist Informe PDF -->
+  <div id="cf-pdf-modal" style="display:none;position:fixed;inset:0;background:rgba(11,18,32,.75);z-index:400;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:26px 28px;max-width:420px;width:100%;box-shadow:var(--shadow-lg);">
+      <div style="font-size:1rem;font-weight:800;color:var(--text-1);margin-bottom:4px;">📄 Informe PDF</div>
+      <div style="font-size:.72rem;color:var(--text-3);margin-bottom:18px;">Selecciona qué secciones incluir — <span id="cf-pdf-mes-lbl"></span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-resumen" checked> 📊 Resumen Control Mes <span>facturación, pedidos, COD, Ads, CPA</span></label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-er" checked> 📈 Estado de Resultados (ER) <span>ingresos, costos, utilidad neta</span></label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-ciudades" checked> 🏙️ Analítica de Ciudades <span>top 15 por volumen</span></label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-trans" checked> 🚛 Analítica de Transportadoras</label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-productos" checked> 📦 Analítica de Productos <span>top 15 por pedidos</span></label>
+      </div>
+      <div id="cf-pdf-warn" style="display:none;font-size:.68rem;color:var(--warning);background:var(--warning-soft);border-radius:8px;padding:8px 10px;margin-top:12px;">⚠️ Las analíticas requieren el archivo de Órdenes cargado — se omitirán si no hay datos.</div>
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button onclick="document.getElementById('cf-pdf-modal').style.display='none'" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-2);font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">Cancelar</button>
+        <button id="cf-pdf-btn-gen" onclick="_cfPdfGenerar()" style="flex:1.4;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#E63946,#c62b38);color:white;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">⬇ Descargar PDF</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ===== GESTIONES DIARIAS ===== -->
@@ -7386,6 +7414,128 @@ function _cfNextMes(){
   const d=new Date(y,m,1);
   _cfMes=d.getFullYear()+'-'+_cfPad(d.getMonth()+1);
   _cfCargarMes();
+}
+
+// ── INFORME PDF CON CHECKLIST ────────────────────────────────────────
+function _cfPdfAbrir(){
+  const lbl=document.getElementById('cf-pdf-mes-lbl');
+  if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
+  const ua=_cfMD.ultimoAnalisis||_cfExtracted||null;
+  const hayAnal=!!(ua&&(ua.byCiudad||ua.byTrans||ua.byProdAnal));
+  document.getElementById('cf-pdf-warn').style.display=hayAnal?'none':'block';
+  document.getElementById('cf-pdf-modal').style.display='flex';
+}
+
+function _cfPdfGenerar(){
+  const btn=document.getElementById('cf-pdf-btn-gen');
+  btn.disabled=true;btn.textContent='Generando...';
+  const sel={
+    resumen:document.getElementById('cfpdf-resumen').checked,
+    er:document.getElementById('cfpdf-er').checked,
+    ciudades:document.getElementById('cfpdf-ciudades').checked,
+    trans:document.getElementById('cfpdf-trans').checked,
+    productos:document.getElementById('cfpdf-productos').checked
+  };
+  const r=_cfCalc();
+  const ua=_cfMD.ultimoAnalisis||_cfExtracted||{};
+  const tienda=(window.getLoginTienda?window.getLoginTienda():'')||'—';
+
+  // ── Documento SIEMPRE claro (independiente del tema) ──
+  const C={t1:'#0D1117',t2:'#4A5568',t3:'#8B949E',ok:'#1DA855',bad:'#D42E3C',warn:'#C2951E',info:'#2456C4',brd:'#e2e8f0'};
+  const secT=t=>`<div style="font-size:13px;font-weight:800;color:${C.t1};border-bottom:2px solid ${C.t1};padding-bottom:5px;margin:22px 0 10px;">${t}</div>`;
+  const kv=(l,v,c)=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid ${C.brd};font-size:11px;"><span style="color:${C.t2};">${l}</span><span style="font-weight:800;color:${c||C.t1};font-family:'Courier New',monospace;">${v}</span></div>`;
+  const ef=(ent,proc,dev)=>{const d=ent+proc+dev;return d>0?(ent/d*100).toFixed(1)+'%':'—';};
+  const efC=v=>{const n=parseFloat(v);return isNaN(n)?C.t3:n>=70?C.ok:n>=50?C.warn:C.bad;};
+  const tbl=(cols,rows)=>`<table style="width:100%;border-collapse:collapse;margin-top:4px;">
+    <thead><tr>${cols.map(c=>`<th style="background:#0D1117;color:white;padding:6px 8px;font-size:9px;text-align:${c.a||'center'};white-space:nowrap;">${c.l}</th>`).join('')}</tr></thead>
+    <tbody>${rows.join('')}</tbody></table>`;
+  const td=(v,a,c,b)=>`<td style="padding:4px 8px;font-size:10px;text-align:${a||'center'};border-bottom:1px solid ${C.brd};color:${c||C.t1};${b?'font-weight:800;':''}">${v}</td>`;
+
+  let html=`<div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #0D1117;padding-bottom:10px;">
+    <div><div style="font-size:19px;font-weight:900;color:${C.t1};">💹 CONTROL FINANCIERO</div>
+    <div style="font-size:11px;color:${C.t2};margin-top:2px;">🏪 ${tienda} · ${_cfMesLabel(_cfMes)}</div></div>
+    <div style="font-size:9px;color:${C.t3};">Generado: ${new Date().toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})}</div>
+  </div>`;
+
+  if(sel.resumen){
+    html+=secT('📊 RESUMEN CONTROL MES');
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 30px;">
+      <div>${kv('Facturación total',_cf$(r.shopM))}
+      ${kv('Pedidos WPP',r.wppN)}${kv('Pedidos Shopify',r.shopN)}${kv('Total pedidos del mes',r.totalN,C.info)}
+      ${kv('Entregados',r.entN+' · '+_cf$(r.entM),C.ok)}${kv('En proceso',r.procN+' · '+_cf$(r.procM),C.info)}
+      ${kv('Devueltos',r.devN+' · '+_cf$(r.devM),C.bad)}${kv('Cancelados (mes − ent − proc − dev)',r.cancN,C.warn)}</div>
+      <div>${kv('Ads Facebook',_cf$(r.adsFB))}${kv('Ads TikTok',_cf$(r.adsTT))}
+      ${kv('Fee bancaria ('+(r.lim.comisionBancaria||1)+'%)',_cf$(r.fee))}${kv('Total Ads + Fee',_cf$(r.adsFee),C.info)}
+      ${kv('CPA (Ads / total pedidos)',_cf$(r.cpaBM))}${kv('CPA entregado',_cf$(r.cpaEnt))}
+      ${kv('% Entrega',_cfP(r.entRate),r.entRate>=(r.lim.entregaEsperada||75)?C.ok:C.warn)}
+      ${kv('% Devolución',_cfP(r.devRate),r.devRate<=r.lim.devolucion?C.ok:C.bad)}
+      ${kv('% Cancelación',_cfP(r.cancRate),r.cancRate<=r.lim.cancelacion?C.ok:C.bad)}
+      ${kv('AOV entregado',_cf$(r.aov))}</div>
+    </div>`;
+  }
+
+  if(sel.er){
+    html+=secT('📈 ESTADO DE RESULTADOS');
+    html+=kv('Ingresos entregados ('+r.entN+' pedidos)',_cf$(r.entM),C.ok);
+    html+=kv('(−) Costo productos entregados','-'+_cf$(r.cogs),C.bad);
+    html+=kv('UTILIDAD BRUTA',_cf$(r.utilBruta),r.utilBruta>=0?C.ok:C.bad);
+    html+=kv('(−) Costos administrativos','-'+_cf$(r.totalAdmin),C.bad);
+    html+=kv('(−) Costos de venta (fletes + ChateaPro + otros)','-'+_cf$(r.totalVentas),C.bad);
+    html+=kv('UTILIDAD ANTES DE ADS',_cf$(r.utilAntesAds),r.utilAntesAds>=0?C.ok:C.bad);
+    html+=kv('(−) Publicidad Ads + Fee','-'+_cf$(r.adsFee),C.bad);
+    html+=`<div style="display:flex;justify-content:space-between;background:${r.utilNeta>=0?'#e8f7ee':'#fdeaea'};border:2px solid ${r.utilNeta>=0?C.ok:C.bad};border-radius:8px;padding:10px 14px;margin-top:10px;">
+      <span style="font-size:13px;font-weight:900;color:${C.t1};">💰 UTILIDAD NETA</span>
+      <span style="font-size:15px;font-weight:900;font-family:'Courier New',monospace;color:${r.utilNeta>=0?C.ok:C.bad};">${_cf$(r.utilNeta)}</span></div>`;
+    html+=kv('Margen neto',_cfP(r.margen),r.margen>=(r.lim.margenNeto||15)?C.ok:C.warn);
+    html+=kv('CPA break-even',_cf$(r.cpaBreak),C.info);
+  }
+
+  const analSec=(titulo,data,nameKey)=>{
+    const items=(nameKey==='prod'?Object.values(data):Object.entries(data).map(([n,d])=>({n,...d})))
+      .map(x=>({...x,_nom:nameKey==='prod'?x.prod:x.n,_desp:(x.ent||0)+(x.proc||0)+(x.dev||0)}))
+      .sort((a,b)=>(b.num||0)-(a.num||0)).slice(0,15);
+    if(!items.length)return '';
+    return secT(titulo)+tbl(
+      [{l:'#'},{l:nameKey==='prod'?'Producto':'Nombre',a:'left'},{l:'Total'},{l:'Entregados'},{l:'En proceso'},{l:'Devueltos'},{l:'Efectividad'}],
+      items.map((x,i)=>{const e=ef(x.ent||0,x.proc||0,x.dev||0);
+        return `<tr style="${i%2?'background:#f6f8fa;':''}">${td(i+1,'center',C.t3)}${td(x._nom,'left',C.t1,true)}${td(x.num||0,'center',C.t1,true)}${td(x.ent||0,'center',C.ok)}${td(x.proc||0,'center',C.info)}${td(x.dev||0,'center',C.bad)}${td(e,'center',efC(e),true)}</tr>`;})
+    );
+  };
+  if(sel.ciudades&&ua.byCiudad)html+=analSec('🏙️ ANALÍTICA DE CIUDADES — TOP 15',ua.byCiudad,'n');
+  if(sel.trans&&ua.byTrans)html+=analSec('🚛 ANALÍTICA DE TRANSPORTADORAS',ua.byTrans,'n');
+  if(sel.productos&&ua.byProdAnal)html+=analSec('📦 ANALÍTICA DE PRODUCTOS — TOP 15',ua.byProdAnal,'prod');
+
+  // Render offscreen → canvas → PDF multipágina
+  const cont=document.createElement('div');
+  cont.style.cssText='position:fixed;left:-10000px;top:0;width:900px;background:#ffffff;color:#0D1117;padding:34px 38px;font-family:Segoe UI,Arial,sans-serif;z-index:-1;';
+  cont.innerHTML=html;
+  document.body.appendChild(cont);
+  html2canvas(cont,{scale:1.6,backgroundColor:'#ffffff'}).then(canvas=>{
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','mm','a4');
+    const imgW=190, pageH=277, mx=10, my=10;
+    const imgH=canvas.height*imgW/canvas.width;
+    // JPEG comprimido: un informe en PNG scale 2 pesaba ~16MB
+    const img=canvas.toDataURL('image/jpeg',0.85);
+    let restante=imgH, pos=my;
+    pdf.addImage(img,'JPEG',mx,pos,imgW,imgH);
+    restante-=pageH;
+    while(restante>0){
+      pos=my-(imgH-restante);
+      pdf.addPage();
+      pdf.addImage(img,'JPEG',mx,pos,imgW,imgH);
+      restante-=pageH;
+    }
+    pdf.save('Informe_CF_'+tienda.replace(/\s+/g,'_')+'_'+_cfMes+'.pdf');
+    cont.remove();
+    btn.disabled=false;btn.textContent='⬇ Descargar PDF';
+    document.getElementById('cf-pdf-modal').style.display='none';
+    toast('📄 Informe PDF descargado');
+  }).catch(e=>{
+    cont.remove();
+    btn.disabled=false;btn.textContent='⬇ Descargar PDF';
+    toast('⚠️ Error generando PDF: '+e.message);
+  });
 }
 
 // ── Save helpers ────────────────────────────────────────────────────
