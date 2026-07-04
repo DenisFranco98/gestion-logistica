@@ -624,12 +624,37 @@ body.data-loaded #sidebar-actions{display:flex;}
 .mss-btn.light{background:var(--bg-card);border:1.5px solid var(--border);color:var(--text-1);box-shadow:var(--shadow-sm);}.mss-btn.light:hover{border-color:var(--accent);}
 /* ── GESTIONES DIARIAS ───────────────────────── */
 #gd-panel{display:none;position:fixed;inset:0;background:var(--bg);z-index:201;flex-direction:column;overflow:hidden;}
+/* ── Tabla Remisión Mensual (rediseño REDKING) ── */
+.gdx-wrap{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--bg-card);}
+#gd-table{border-collapse:collapse;font-size:.72rem;min-width:760px;width:100%;font-family:var(--f-mono);}
 #gd-table th,#gd-table td{border-bottom:1px solid var(--border);}
-#gd-table input[type=number]{width:100%;border:none;background:transparent;text-align:center;font-size:.73rem;font-weight:700;padding:3px 2px;outline:none;-moz-appearance:textfield;}
+#gd-table td{padding:4px 5px;text-align:center;border-right:1px solid var(--border);}
+#gd-table td:last-child{border-right:none;}
+.gdx-g{background:var(--bg-elevated);padding:8px 6px;text-align:center;white-space:nowrap;font-size:.58rem;font-weight:800;letter-spacing:.7px;font-family:var(--f-body);}
+.gdx-s{background:var(--bg-card);color:var(--text-3);padding:6px 4px;text-align:center;white-space:nowrap;font-size:.55rem;font-weight:700;letter-spacing:.4px;font-family:var(--f-body);}
+.gdx-day{background:var(--bg-elevated);color:var(--text-2);font-weight:700;font-size:.7rem;position:sticky;left:0;z-index:1;min-width:42px;}
+.gdx-day-h{position:sticky;left:0;z-index:3;color:var(--text-2)!important;}
+.gdx-row td{background:transparent;}
+.gdx-row:hover td{background:var(--bg-hover);}
+.gdx-row:hover .gdx-day{background:var(--bg-hover);}
+.gdx-vacio td,.gdx-vacio .gdx-day{opacity:.45;}
+.gdx-vacio:hover td{opacity:1;}
+.gdx-hoy td{background:rgba(57,113,230,.07);}
+.gdx-hoy .gdx-day{color:var(--accent);background:rgba(57,113,230,.14);}
+.gdx-hoy-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-right:4px;vertical-align:middle;animation:pulse-dot 1.4s ease infinite;}
+.gdx-auto{font-weight:800;font-size:.72rem;cursor:not-allowed;background:rgba(255,255,255,.025)!important;}
+.gdx-row:hover .gdx-auto{background:var(--bg-hover)!important;}
+.gdx-total-dia{font-size:.76rem;}
+.gdx-obs{text-align:left!important;}
+.gdx-totales td{background:var(--bg-elevated);font-weight:800;font-size:.74rem;padding:8px 5px;border-top:2px solid var(--border-strong);}
+.gdx-totales .gdx-day{background:var(--bg-elevated);color:var(--text-3);}
+[data-theme="light"] .gdx-auto{background:rgba(0,0,0,.03)!important;}
+#gd-table input[type=number]{width:100%;border:none;background:transparent;text-align:center;font-size:.73rem;font-weight:700;padding:4px 2px;outline:none;-moz-appearance:textfield;font-family:var(--f-mono);}
 #gd-table input[type=number]::-webkit-inner-spin-button,#gd-table input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
-#gd-table input[type=number]:focus{background:rgba(57,113,230,.08);border-radius:4px;}
-#gd-table input[type=text]{width:100%;min-width:170px;border:none;background:transparent;font-size:.7rem;padding:2px 5px;outline:none;color:var(--text-2);}
-#gd-table input[type=text]:focus{background:rgba(57,113,230,.06);border-radius:4px;}
+#gd-table input[type=number]::placeholder{color:var(--text-3);opacity:.35;}
+#gd-table input[type=number]:focus{background:rgba(57,113,230,.12);border-radius:4px;box-shadow:0 0 0 1.5px var(--accent);}
+#gd-table input[type=text]{width:100%;min-width:170px;border:none;background:transparent;font-size:.7rem;padding:3px 6px;outline:none;color:var(--text-2);font-family:var(--f-body);}
+#gd-table input[type=text]:focus{background:rgba(57,113,230,.08);border-radius:4px;}
 /* ── GD ADMIN CONSOLIDADO ─────────────── */
 .gdadm-stab{border:none;background:none;padding:8px 16px;font-size:.75rem;font-weight:600;color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;font-family:inherit;}
 .gdadm-stab.active{color:var(--text-1);border-bottom-color:var(--text-1);}
@@ -8719,42 +8744,50 @@ function _gdRenderResumen(){
   const dias=_gdDiasEnMes(_gdMes);
   const avg=dias>0?(t.gral/dias).toFixed(1):'0';
   const pct=t.gral>0?Math.round(t.conf/t.gral*100):0;
-  const card=(titulo,vals,border,bg)=>`
-    <div style="background:${bg};border:1.5px solid ${border};border-radius:9px;padding:8px 12px;flex-shrink:0;">
-      <div style="font-size:.52rem;font-weight:700;color:${border};text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">${titulo}</div>
-      <div style="display:flex;gap:8px;align-items:baseline;font-weight:800;font-size:.9rem;">${vals}</div>
+  // Tarjetas estilo REDKING: superficie oscura con acento de color en borde superior
+  const card=(titulo,vals,color)=>`
+    <div style="background:var(--bg-elevated);border:1px solid var(--border);border-top:2px solid ${color};border-radius:9px;padding:8px 12px;flex-shrink:0;">
+      <div style="font-size:.52rem;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">${titulo}</div>
+      <div style="display:flex;gap:8px;align-items:baseline;font-weight:800;font-size:.9rem;font-family:var(--f-mono);">${vals}</div>
     </div>`;
   document.getElementById('gd-resumen').innerHTML=`
     <div style="font-size:.58rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📊 Resumen del mes (auto-calculado)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      ${card('Confirmaciones',`<span style="color:var(--success)">${t.conf}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">+</span><span style="color:var(--danger)">${t.cancel}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">=</span><span style="color:var(--success);font-size:1rem">${t.totalConf}</span>`,'#86efac','#f0fdf4')}
-      ${card('Novedades',`<span style="color:var(--info)" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">sol</span><span style="color:var(--info)" title="Gestionadas">${t.gestion}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">gest</span><span style="color:var(--danger)" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:var(--text-3);margin-left:2px">dev</span>`,'#93c5fd','#eff6ff')}
-      ${card('Carritos',`<span style="color:#7c3aed">${t.recupCarri}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">|</span><span style="color:var(--text-1)">${t.contNoRecup}</span>`,'#c4b5fd','#f5f3ff')}
-      ${card('Ventas WPP',`<span style="color:#ea580c;font-size:1rem">${t.ventasWpp}</span>`,'#fdba74','#fff7ed')}
-      ${card('General',`<span style="color:var(--warning);font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:var(--warning);font-weight:600">${avg}/día</span><span style="font-size:.75rem;color:var(--success)">${pct}%</span>`,'#fbbf24','#fef3c7')}
+      ${card('Confirmaciones',`<span style="color:#39E67A">${t.conf}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">+</span><span style="color:#E63946">${t.cancel}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">=</span><span style="color:#39E67A;font-size:1rem">${t.totalConf}</span>`,'#39E67A')}
+      ${card('Novedades',`<span style="color:#3971E6" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">sol</span><span style="color:#67e8f9" title="Gestionadas">${t.gestion}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">gest</span><span style="color:#E63946" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:var(--text-3);margin-left:2px">dev</span>`,'#3971E6')}
+      ${card('Carritos',`<span style="color:#9B59E6">${t.recupCarri}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">|</span><span style="color:var(--text-2)">${t.contNoRecup}</span>`,'#9B59E6')}
+      ${card('Ventas WPP',`<span style="color:#E6823A;font-size:1rem">${t.ventasWpp}</span>`,'#E6823A')}
+      ${card('General',`<span style="color:#E6B539;font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:#E6B539;font-weight:600">${avg}/día</span><span style="font-size:.75rem;color:#39E67A">${pct}%</span>`,'#E6B539')}
     </div>`;
 }
 
 function _gdRenderTabla(){
   const total=_gdDiasEnMes(_gdMes);
-  const th=(label,bg,color,rowspan,colspan,extra)=>
-    `<th ${rowspan?'rowspan="'+rowspan+'"':''} ${colspan?'colspan="'+colspan+'"':''} style="background:${bg};color:${color||'white'};padding:5px 4px;text-align:center;white-space:nowrap;font-size:.63rem;${extra||''}">${label}</th>`;
+  // Colores de grupo (acentos REDKING): verde conf · azul novedades · púrpura carritos · naranja wpp · amarillo total
+  const C={conf:'#39E67A',nov:'#3971E6',carr:'#9B59E6',wpp:'#E6823A',tot:'#E6B539',obs:'#8B9DB5',cancel:'#E63946'};
+  const gh=(label,color,colspan,extra)=>
+    `<th colspan="${colspan||1}" class="gdx-g" style="border-bottom:2px solid ${color};color:${color};${extra||''}">${label}</th>`;
+  const sh=(label,extra)=>`<th class="gdx-s" style="${extra||''}">${label}</th>`;
 
-  let html=`<table id="gd-table" style="border-collapse:collapse;font-size:.72rem;min-width:760px;width:100%;">
+  const hoyD=new Date();
+  const mesActual=hoyD.getFullYear()+'-'+String(hoyD.getMonth()+1).padStart(2,'0');
+  const diaHoy=_gdMes===mesActual?hoyD.getDate():-1;
+
+  let html=`<div class="gdx-wrap"><table id="gd-table">
   <thead>
     <tr>
-      ${th('DÍA','#1e293b','white',2,1,'position:sticky;left:0;z-index:3;')}
-      ${th('CONFIRMACIONES','#15803d','white',1,3)}
-      ${th('NOVEDADES','#1d4ed8','white',1,3)}
-      ${th('CARRITOS','#7c3aed','white',1,2)}
-      ${th('VENTAS WPP','#ea580c','white',2,1)}
-      ${th('TOTAL','#d97706','white',2,1)}
-      ${th('OBSERVACIONES ASESOR','#334155','white',2,1,'text-align:left;min-width:160px;')}
+      <th rowspan="2" class="gdx-g gdx-day-h" style="border-bottom:2px solid var(--border-strong);">DÍA</th>
+      ${gh('CONFIRMACIONES',C.conf,3)}
+      ${gh('NOVEDADES',C.nov,3)}
+      ${gh('CARRITOS',C.carr,2)}
+      <th rowspan="2" class="gdx-g" style="border-bottom:2px solid ${C.wpp};color:${C.wpp};">VENTAS<br>WPP</th>
+      <th rowspan="2" class="gdx-g" style="border-bottom:2px solid ${C.tot};color:${C.tot};">TOTAL</th>
+      <th rowspan="2" class="gdx-g" style="border-bottom:2px solid var(--border-strong);color:var(--text-2);text-align:left;min-width:160px;">OBSERVACIONES ASESOR</th>
     </tr>
     <tr>
-      ${th('CONF.','#16a34a')}${th('CANCEL.','#ef4444')}${th('TOTAL','#166534')}
-      ${th('SOLUCIONADO 🔒','#2563eb')}${th('GESTIONADA 🔒','#0891b2')}${th('DEVUELTO 🔒','#dc2626')}
-      ${th('RECUPERADO','#6d28d9')}${th('CONT. NO REC.','#4b5563')}
+      ${sh('CONF.')}${sh('CANCEL.')}${sh('TOTAL')}
+      ${sh('SOLUC. 🔒')}${sh('GESTIÓN 🔒')}${sh('DEVUELTO 🔒')}
+      ${sh('RECUP.')}${sh('NO REC.')}
     </tr>
   </thead>
   <tbody>`;
@@ -8764,39 +8797,39 @@ function _gdRenderTabla(){
     const tc=(r.conf||0)+(r.cancel||0);
     const tg=tc+(r.soluc||0)+(r.gestion||0)+(r.recupCarri||0)+(r.ventasWpp||0);
     const vacio=!r.conf&&!r.cancel&&!r.soluc&&!r.devuelt&&!r.contNoRecup&&!r.recupCarri&&!r.ventasWpp&&!r.obs;
-    const bg=vacio?'#fafafa':'white';
-    const n=(key,val,color)=>`<input type="number" min="0" value="${val||''}" placeholder="" oninput="_gdCambio(${d},'${key}',this.value)" style="color:${color};">`;
-    html+=`<tr data-gd="${d}" style="background:${bg};">
-      <td style="background:${vacio?'#f1f5f9':'#e2e8f0'};color:var(--text-2);padding:4px 6px;text-align:center;font-weight:700;font-size:.7rem;position:sticky;left:0;z-index:1;">${d}</td>
-      <td style="padding:2px 3px;background:${vacio?'#fafafa':'#f0fdf4'};">${n('conf',r.conf,'#15803d')}</td>
-      <td style="padding:2px 3px;background:${vacio?'#fafafa':'#fff1f2'};">${n('cancel',r.cancel,'#dc2626')}</td>
-      <td style="padding:3px 4px;background:var(--success-soft);text-align:center;font-weight:800;color:var(--success);font-size:.72rem;" id="gd-tc-${d}">${tc||''}</td>
-      <td style="padding:3px 4px;background:var(--info-soft);text-align:center;font-weight:700;color:var(--info);font-size:.72rem;cursor:not-allowed;" title="Auto-calculado desde Novedades" id="gd-soluc-${d}">${r.soluc||''}</td>
-      <td style="padding:3px 4px;background:var(--info-soft);text-align:center;font-weight:700;color:var(--info);font-size:.72rem;cursor:not-allowed;" title="Auto-calculado desde Novedades" id="gd-gestion-${d}">${r.gestion||''}</td>
-      <td style="padding:3px 4px;background:var(--danger-soft);text-align:center;font-weight:700;color:var(--danger);font-size:.72rem;cursor:not-allowed;" title="Auto-calculado desde Novedades" id="gd-devuelt-${d}">${r.devuelt||''}</td>
-      <td style="padding:2px 3px;background:${vacio?'#fafafa':'#f5f3ff'};">${n('recupCarri',r.recupCarri,'#6d28d9')}</td>
-      <td style="padding:2px 3px;background:${vacio?'#fafafa':'#f9fafb'};">${n('contNoRecup',r.contNoRecup,'#374151')}</td>
-      <td style="padding:2px 3px;background:${vacio?'#fafafa':'#fff7ed'};">${n('ventasWpp',r.ventasWpp,'#ea580c')}</td>
-      <td style="padding:3px 4px;background:var(--warning-soft);text-align:center;font-weight:800;color:var(--warning);font-size:.74rem;" id="gd-tg-${d}">${tg||''}</td>
-      <td style="padding:2px 4px;"><input type="text" value="${(r.obs||'').replace(/"/g,'&quot;')}" placeholder="Observaciones..." oninput="_gdCambio(${d},'obs',this.value)"></td>
+    const esHoy=d===diaHoy;
+    const n=(key,val,color)=>`<input type="number" min="0" value="${val||''}" placeholder="·" oninput="_gdCambio(${d},'${key}',this.value)" style="color:${color};">`;
+    html+=`<tr data-gd="${d}" class="gdx-row${vacio?' gdx-vacio':''}${esHoy?' gdx-hoy':''}">
+      <td class="gdx-day">${esHoy?'<span class="gdx-hoy-dot"></span>':''}${d}</td>
+      <td>${n('conf',r.conf,C.conf)}</td>
+      <td>${n('cancel',r.cancel,C.cancel)}</td>
+      <td class="gdx-auto" style="color:${C.conf};" id="gd-tc-${d}">${tc||''}</td>
+      <td class="gdx-auto" style="color:${C.nov};" title="Auto-calculado desde Novedades" id="gd-soluc-${d}">${r.soluc||''}</td>
+      <td class="gdx-auto" style="color:#67e8f9;" title="Auto-calculado desde Novedades" id="gd-gestion-${d}">${r.gestion||''}</td>
+      <td class="gdx-auto" style="color:${C.cancel};" title="Auto-calculado desde Novedades" id="gd-devuelt-${d}">${r.devuelt||''}</td>
+      <td>${n('recupCarri',r.recupCarri,C.carr)}</td>
+      <td>${n('contNoRecup',r.contNoRecup,'#8B9DB5')}</td>
+      <td>${n('ventasWpp',r.ventasWpp,C.wpp)}</td>
+      <td class="gdx-auto gdx-total-dia" style="color:${C.tot};" id="gd-tg-${d}">${tg||''}</td>
+      <td class="gdx-obs"><input type="text" value="${(r.obs||'').replace(/"/g,'&quot;')}" placeholder="—" oninput="_gdCambio(${d},'obs',this.value)"></td>
     </tr>`;
   }
 
   const t=_gdCalc();
-  html+=`<tr style="background:#0D1117;color:white;font-weight:800;font-size:.7rem;">
-    <td style="padding:6px 8px;text-align:center;background:#0D1117;position:sticky;left:0;color:var(--text-3);font-size:.63rem;">TOTAL</td>
-    <td style="padding:5px 3px;text-align:center;color:#4ade80;" id="gdt-conf">${t.conf}</td>
-    <td style="padding:5px 3px;text-align:center;color:#f87171;" id="gdt-cancel">${t.cancel}</td>
-    <td style="padding:5px 3px;text-align:center;color:#86efac;" id="gdt-tc">${t.totalConf}</td>
-    <td style="padding:5px 3px;text-align:center;color:#93c5fd;" id="gdt-soluc">${t.soluc}</td>
-    <td style="padding:5px 3px;text-align:center;color:#67e8f9;" id="gdt-gestion">${t.gestion}</td>
-    <td style="padding:5px 3px;text-align:center;color:#fca5a5;" id="gdt-devuelt">${t.devuelt}</td>
-    <td style="padding:5px 3px;text-align:center;color:#c4b5fd;" id="gdt-recupCarri">${t.recupCarri}</td>
-    <td style="padding:5px 3px;text-align:center;color:#d1d5db;" id="gdt-contNoRecup">${t.contNoRecup}</td>
-    <td style="padding:5px 3px;text-align:center;color:#fdba74;" id="gdt-ventasWpp">${t.ventasWpp}</td>
-    <td style="padding:5px 3px;text-align:center;color:#fcd34d;font-size:.76rem;" id="gdt-gral">${t.gral}</td>
+  html+=`<tr class="gdx-totales">
+    <td class="gdx-day" style="font-size:.6rem;letter-spacing:.5px;">TOTAL</td>
+    <td style="color:${C.conf};" id="gdt-conf">${t.conf}</td>
+    <td style="color:${C.cancel};" id="gdt-cancel">${t.cancel}</td>
+    <td style="color:${C.conf};" id="gdt-tc">${t.totalConf}</td>
+    <td style="color:${C.nov};" id="gdt-soluc">${t.soluc}</td>
+    <td style="color:#67e8f9;" id="gdt-gestion">${t.gestion}</td>
+    <td style="color:${C.cancel};" id="gdt-devuelt">${t.devuelt}</td>
+    <td style="color:${C.carr};" id="gdt-recupCarri">${t.recupCarri}</td>
+    <td style="color:#8B9DB5;" id="gdt-contNoRecup">${t.contNoRecup}</td>
+    <td style="color:${C.wpp};" id="gdt-ventasWpp">${t.ventasWpp}</td>
+    <td style="color:${C.tot};font-size:.8rem;" id="gdt-gral">${t.gral}</td>
     <td></td>
-  </tr></tbody></table>`;
+  </tr></tbody></table></div>`;
   document.getElementById('gd-table-wrap').innerHTML=html;
 }
 
