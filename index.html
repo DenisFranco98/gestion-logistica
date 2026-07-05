@@ -205,6 +205,10 @@ body.data-loaded #sidebar-actions{display:flex;}
 .card-gestion{display:none;}
 #card-float-wrap .card-gestion{display:block;}
 #card-float-wrap{background:var(--bg-card);}
+/* Mientras se gestiona una card, el resto se atenúa para enfocar la atención */
+body.card-gestionando .cards-grid .card{opacity:.6;transition:opacity .25s;}
+body.card-gestionando .cards-grid .card.gest{opacity:.3;}
+body.card-gestionando #card-float-wrap .card{opacity:1;}
 #card-float-wrap .card.gest{opacity:1;}
 .card-expand-hint{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:7px;border:1px solid var(--border-strong);border-radius:8px;color:var(--text-2);font-size:.72rem;font-weight:700;cursor:pointer;user-select:none;transition:all .15s;background:var(--bg-hover);}
 .card-expand-hint:hover{border-color:var(--accent);}
@@ -3173,6 +3177,7 @@ function _cardFloatClose(){
   if(ph)ph.remove();
   wrap.remove();
   _cardsExp.delete(parseInt(id,10));
+  document.body.classList.remove('card-gestionando');
 }
 // Abre la card COMO CAPA FLOTANTE encima de las vecinas, en su misma posición
 window._cardToggle=function(id){
@@ -3197,6 +3202,7 @@ window._cardToggle=function(id){
   wrap.style.cssText='position:absolute;left:'+(r.left-sr.left+sec.scrollLeft)+'px;top:'+(r.top-sr.top+sec.scrollTop)+'px;width:'+r.width+'px;z-index:95;border-radius:var(--radius-md);box-shadow:var(--shadow-lg),0 0 0 1px var(--border-strong);';
   _cardsExp.add(id);
   wrap.appendChild(card);
+  document.body.classList.add('card-gestionando');
   sec.appendChild(wrap);
 };
 // Reabre la card en gestión después de un re-render completo de la grilla.
