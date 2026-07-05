@@ -206,7 +206,8 @@ body.data-loaded #sidebar-actions{display:flex;}
 #card-float-wrap .card-gestion{display:block;}
 #card-float-wrap{background:var(--bg-card);}
 #card-float-wrap .card.gest{opacity:1;}
-.card-expand-hint{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:5px;border-top:1px dashed var(--border);color:var(--text-3);font-size:.68rem;font-weight:700;cursor:pointer;user-select:none;transition:color .15s;}
+.card-expand-hint{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:7px;border:1px solid var(--border-strong);border-radius:8px;color:var(--text-2);font-size:.72rem;font-weight:700;cursor:pointer;user-select:none;transition:all .15s;background:var(--bg-hover);}
+.card-expand-hint:hover{border-color:var(--accent);}
 .card-expand-hint:hover{color:var(--accent);}
 .card .ceh-close{display:none;}
 #card-float-wrap .ceh-open{display:none;}
@@ -3198,11 +3199,18 @@ window._cardToggle=function(id){
   wrap.appendChild(card);
   sec.appendChild(wrap);
 };
-// Clic fuera de la card flotante → cerrarla
-document.addEventListener('click',e=>{
-  const w=document.getElementById('card-float-wrap');
-  if(w&&!w.contains(e.target))_cardFloatClose();
-});
+// Reabre la card en gestión después de un re-render completo de la grilla.
+// Así la card flotante queda ESTÁTICA aunque las acciones disparen renderAll.
+function _cardFloatReabrir(){
+  const id=window._floatReopenId;
+  window._floatReopenId=null;
+  if(id==null)return;
+  const c=document.getElementById('card-'+id);
+  // Si la card ya quedó gestionada (o desapareció), la gestión terminó → no reabrir
+  if(!c||c.classList.contains('gest')){_cardsExp.clear();return;}
+  _cardsExp.delete(id); // _cardToggle la re-agrega
+  _cardToggle(id);
+}
 let waCounters={reparto:0,oficina:0,transito:0,novedad:0,rechazado:0};
 let vistaActual=localStorage.getItem('lgs_vista')||'grid';
 
@@ -4105,7 +4113,7 @@ function renderAll(){
   _renderAllPending=true;
   requestAnimationFrame(()=>{
     _renderAllPending=false;
-    renderPills();renderCards();renderProgress();renderResumen();
+    renderPills();renderCards();_cardFloatReabrir();renderProgress();renderResumen();
     actualizarBtnRapid();actualizarBtnSeguimiento();actualizarBtnTransp();
     actualizarBadgeSinGuia();buildSecNav();renderTranspLinks();
   });
@@ -4205,6 +4213,8 @@ function renderPills(){
 }
 
 function renderCards(){
+  const _w0=document.getElementById('card-float-wrap');
+  window._floatReopenId=_w0?parseInt(_w0.dataset.cardId,10):null;
   if(typeof _cardFloatClose==='function')_cardFloatClose();
   const ct=document.getElementById('content');ct.innerHTML='';
   // ── SECCIÓN PENDIENTES SIN GUÍA ── (resumen por antigüedad y producto)
@@ -4837,7 +4847,6 @@ function crearCard(p,est,esGest){
   html+='</div>';
   html+='<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
   card.innerHTML=html;
-  card.onclick=e=>{if(e.target.closest('button,a,input,textarea,select,label,.copiable,.card-phone,.card-expand-hint'))return;_cardToggle(p.id);};
   return card;
 }
 
@@ -5000,7 +5009,6 @@ function crearCardNovedad(p){
   html+='</div>';
   html+='<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
   card.innerHTML=html;
-  card.onclick=e=>{if(e.target.closest('button,a,input,textarea,select,label,.copiable,.card-phone,.card-expand-hint'))return;_cardToggle(p.id);};
   return card;
 }
 
