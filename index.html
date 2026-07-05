@@ -200,7 +200,16 @@ body.data-loaded #sidebar-actions{display:flex;}
 .gest-bar .ver{font-size:.71rem;color:var(--text-2);margin-left:auto;font-weight:600;}
 .gest-list{display:none;margin-top:8px;}
 .gest-list.open{display:block;}
-.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;align-items:start;}
+/* Cards colapsables: info visible, gestión oculta hasta expandir */
+.card-gestion{display:none;}
+.card.expandida .card-gestion{display:block;}
+.card-expand-hint{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:5px;border-top:1px dashed var(--border);color:var(--text-3);font-size:.68rem;font-weight:700;cursor:pointer;user-select:none;transition:color .15s;}
+.card-expand-hint:hover{color:var(--accent);}
+.card .ceh-close{display:none;}
+.card.expandida .ceh-open{display:none;}
+.card.expandida .ceh-close{display:inline;}
+.card.gest .card-expand-hint{pointer-events:auto;}
 /* ── VISTA LISTA ─────────────────────────────────────────── */
 .cards-lista{display:flex;flex-direction:column;gap:4px;}
 .cf-wrap{border-radius:9px;overflow:hidden;border:1px solid var(--border);}
@@ -3145,6 +3154,13 @@ const WA_MSGS={
 
 let pedidos=[], gestiones={}, filtroActivo=null, filtrosSeccion={}, filtroTiendas=[];
 let _pedidoMap=new Map(); // Índice O(1) por id para evitar pedidos.find() lineal
+// Cards expandidas (persiste entre re-renders de la misma sesión)
+const _cardsExp=new Set();
+window._cardToggle=function(id){
+  if(_cardsExp.has(id))_cardsExp.delete(id);else _cardsExp.add(id);
+  const c=document.getElementById('card-'+id);
+  if(c)c.classList.toggle('expandida',_cardsExp.has(id));
+};
 let waCounters={reparto:0,oficina:0,transito:0,novedad:0,rechazado:0};
 let vistaActual=localStorage.getItem('lgs_vista')||'grid';
 
@@ -4489,7 +4505,7 @@ function crearCard(p,est,esGest){
   const g=gestiones[p.id]||{};
   const ncPend=!esGest&&g.llamada==='no_contestó'&&!g.gestion_final;
   const card=document.createElement('div');
-  card.className='card'+(esGest?' gest':ncPend?' nc-pend':'');
+  card.className='card'+(esGest?' gest':ncPend?' nc-pend':'')+(_cardsExp.has(p.id)?' expandida':'');
   const tiendaColor=p.tienda?getTiendaColor(p.tienda):null;
   card.style.borderLeftColor=esGest?'var(--text-3)':est.color;
   card.id='card-'+p.id;
@@ -4611,6 +4627,8 @@ function crearCard(p,est,esGest){
     }
   }
 
+  // ── ZONA DE GESTIÓN (oculta hasta expandir la card) ──
+  html+='<div class="card-gestion">';
   // Aviso CAS para todos los pedidos en tránsito con +2 días sin movimiento
   if(p.estadoKey==='transito'&&!esGest){
     const dMov=(p.diasSinMov!=null)?p.diasSinMov:(p.dias||0);
@@ -4775,7 +4793,10 @@ function crearCard(p,est,esGest){
     html+=_btnHistHtml(p);
     html+='</div>';
   }
+  html+='</div>';
+  html+='<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
   card.innerHTML=html;
+  card.onclick=e=>{if(e.target.closest('button,a,input,textarea,select,label,.copiable,.card-phone,.card-expand-hint'))return;_cardToggle(p.id);};
   return card;
 }
 
@@ -4845,7 +4866,7 @@ function getMsgNovedad(p){
 
 function crearCardNovedad(p){
   const card=document.createElement('div');
-  card.className='card';
+  card.className='card'+(_cardsExp.has(p.id)?' expandida':'');
   card.id='card-'+p.id;
   const g=gestiones[p.id]||{};
   const cat=clasificarNovedad(p.tipoNovedad||p.novedad);
@@ -4890,8 +4911,12 @@ function crearCardNovedad(p){
   // Badge alerta + botón CAS si lleva +3 días
   const _diasNov=diasDesde(p.fechaNovedad);
   if(_diasNov!==null && _diasNov>=3 && !g.gestion_final){
-    const casId='cas-nov-'+p.id;
     html+='<div class="nov-parada-badge">🚨 '+_diasNov+' días en novedad — ESCALAR YA</div>';
+  }
+  // ── ZONA DE GESTIÓN (oculta hasta expandir la card) ──
+  html+='<div class="card-gestion">';
+  if(_diasNov!==null && _diasNov>=3 && !g.gestion_final){
+    const casId='cas-nov-'+p.id;
     html+='<button class="btn-cas" id="'+casId+'" onclick="casCopiar(CAS_NOVEDAD(),this.id)">📋 Copiar texto CAS — Informar Novedad</button>';
   }
 
@@ -4946,7 +4971,10 @@ function crearCardNovedad(p){
     html+=_btnHistHtml(p);
     html+='</div>';
   }
+  html+='</div>';
+  html+='<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
   card.innerHTML=html;
+  card.onclick=e=>{if(e.target.closest('button,a,input,textarea,select,label,.copiable,.card-phone,.card-expand-hint'))return;_cardToggle(p.id);};
   return card;
 }
 
