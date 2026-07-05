@@ -203,12 +203,14 @@ body.data-loaded #sidebar-actions{display:flex;}
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;align-items:start;}
 /* Cards colapsables: info visible, gestión oculta hasta expandir */
 .card-gestion{display:none;}
-.card.expandida .card-gestion{display:block;}
+#card-float-wrap .card-gestion{display:block;}
+#card-float-wrap{background:var(--bg-card);}
+#card-float-wrap .card.gest{opacity:1;}
 .card-expand-hint{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:5px;border-top:1px dashed var(--border);color:var(--text-3);font-size:.68rem;font-weight:700;cursor:pointer;user-select:none;transition:color .15s;}
 .card-expand-hint:hover{color:var(--accent);}
 .card .ceh-close{display:none;}
-.card.expandida .ceh-open{display:none;}
-.card.expandida .ceh-close{display:inline;}
+#card-float-wrap .ceh-open{display:none;}
+#card-float-wrap .ceh-close{display:inline;}
 .card.gest .card-expand-hint{pointer-events:auto;}
 /* ── VISTA LISTA ─────────────────────────────────────────── */
 .cards-lista{display:flex;flex-direction:column;gap:4px;}
@@ -3165,7 +3167,6 @@ function _cardFloatClose(){
   const card=wrap.querySelector('.card');
   const ph=document.getElementById('card-ph-'+id);
   if(card){
-    card.classList.remove('expandida');
     if(ph&&ph.parentNode){ph.parentNode.insertBefore(card,ph);}
   }
   if(ph)ph.remove();
@@ -3194,7 +3195,6 @@ window._cardToggle=function(id){
   wrap.dataset.cardId=id;
   wrap.style.cssText='position:absolute;left:'+(r.left-sr.left+sec.scrollLeft)+'px;top:'+(r.top-sr.top+sec.scrollTop)+'px;width:'+r.width+'px;z-index:95;border-radius:var(--radius-md);box-shadow:var(--shadow-lg),0 0 0 1px var(--border-strong);';
   _cardsExp.add(id);
-  card.classList.add('expandida');
   wrap.appendChild(card);
   sec.appendChild(wrap);
 };
@@ -3337,12 +3337,13 @@ function crearFilaNovedad(p){
 function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
 function toast(msg,dur=2200){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
 
-function _copiarFallback(txt,cb){
+function _copiarFallback(txt){
+  // Copia síncrona con textarea oculto — devuelve true/false según resultado.
+  // Textarea (no input) para conservar saltos de línea en textos CAS.
   try{
-    const e=document.createElement('input');
-    e.type='text';e.value=txt;
+    const e=document.createElement('textarea');
+    e.value=txt;
     e.setAttribute('readonly','');
-    // position:fixed mantiene el elemento dentro del viewport (necesario en Android)
     e.style.cssText='position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:none;outline:none;box-shadow:none;background:transparent;font-size:16px;opacity:0;';
     document.body.appendChild(e);
     e.focus();
@@ -3357,18 +3358,24 @@ function _copiarFallback(txt,cb){
       e.select();
       e.setSelectionRange(0,999999);
     }
-    document.execCommand('copy');
+    const ok=document.execCommand('copy');
     document.body.removeChild(e);
-  }catch(_){}
-  if(cb)cb();
+    return ok;
+  }catch(_){return false;}
 }
 function _copiar(txt,cb){
+  // 1) Intento SÍNCRONO primero: corre dentro del gesto del usuario y funciona
+  //    siempre (el path async rechazaba al volver de otra pestaña y el fallback
+  //    quedaba fuera del gesto → execCommand fallaba en silencio)
+  if(_copiarFallback(txt)){ if(cb)cb(true); return; }
+  // 2) API moderna como respaldo
   try{
-    // navigator.clipboard solo funciona en HTTPS; en HTTP ir directo al fallback
     if(window.isSecureContext&&navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).then(()=>{if(cb)cb();}).catch(()=>_copiarFallback(txt,cb));
-    }else{_copiarFallback(txt,cb);}
-  }catch(_){_copiarFallback(txt,cb);}
+      navigator.clipboard.writeText(txt).then(()=>{if(cb)cb(true);}).catch(()=>{if(cb)cb(false);});
+      return;
+    }
+  }catch(_){}
+  if(cb)cb(false);
 }
 
 function copiarTexto(txt){ _copiar(txt,()=>toast('\uD83D\uDCCB Copiado: '+txt)); }
@@ -4132,7 +4139,11 @@ function _completarYLimpiar(id){
     card.style.transition='opacity .25s,transform .25s';
     card.style.opacity='0';
     card.style.transform='scale(.96)';
-    setTimeout(()=>{ if(card.parentNode)card.remove(); },260);
+    setTimeout(()=>{
+      if(card.parentNode)card.remove();
+      const w=document.getElementById('card-float-wrap');
+      if(w&&!w.querySelector('.card'))_cardFloatClose();
+    },260);
   }
   renderStats();
   if(_renderAllTimer)clearTimeout(_renderAllTimer);
@@ -4548,7 +4559,7 @@ function crearCard(p,est,esGest){
   const g=gestiones[p.id]||{};
   const ncPend=!esGest&&g.llamada==='no_contestó'&&!g.gestion_final;
   const card=document.createElement('div');
-  card.className='card'+(esGest?' gest':ncPend?' nc-pend':'')+(_cardsExp.has(p.id)?' expandida':'');
+  card.className='card'+(esGest?' gest':ncPend?' nc-pend':'');
   const tiendaColor=p.tienda?getTiendaColor(p.tienda):null;
   card.style.borderLeftColor=esGest?'var(--text-3)':est.color;
   card.id='card-'+p.id;
@@ -4896,7 +4907,7 @@ function getMsgNovedad(p){
 
 function crearCardNovedad(p){
   const card=document.createElement('div');
-  card.className='card'+(_cardsExp.has(p.id)?' expandida':'');
+  card.className='card';
   card.id='card-'+p.id;
   const g=gestiones[p.id]||{};
   const cat=clasificarNovedad(p.tipoNovedad||p.novedad);
@@ -6715,16 +6726,23 @@ function CAS_SIN_MOVIMIENTO(){return CFG.casSinMovimiento||CAS_DEFAULT_SIN_MOVIM
 function CAS_NOVEDAD(){return CFG.casNovedad||CAS_DEFAULT_NOVEDAD;}
 
 function casCopiar(texto, btnId){
-  _copiar(texto);
-  const btn=document.getElementById(btnId);
-  if(btn){
+  _copiar(texto, ok=>{
+    const btn=document.getElementById(btnId);
+    if(!btn)return;
     const orig=btn.innerHTML;
-    btn.innerHTML='✅ Texto copiado';
-    btn.style.background='#f0fdf4';
-    btn.style.borderColor='#86efac';
-    btn.style.color='#15803d';
-    setTimeout(()=>{btn.innerHTML=orig;btn.style.background='';btn.style.borderColor='';btn.style.color='';},2000);
-  }
+    if(ok){
+      btn.innerHTML='✅ Texto copiado';
+      btn.style.background='var(--success-soft)';
+      btn.style.borderColor='var(--success)';
+      btn.style.color='var(--success)';
+    }else{
+      btn.innerHTML='⚠️ No se pudo copiar — intenta de nuevo';
+      btn.style.borderColor='var(--danger)';
+      btn.style.color='var(--danger)';
+      toast('⚠️ El navegador bloqueó la copia. Haz clic de nuevo.',3000);
+    }
+    setTimeout(()=>{btn.innerHTML=orig;btn.style.background='';btn.style.borderColor='';btn.style.color='';},2200);
+  });
 }
 
 // ── SEGUIMIENTO A TRANSPORTADORAS ────────────────────────────────────
