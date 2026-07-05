@@ -201,13 +201,20 @@ body.data-loaded #sidebar-actions{display:flex;}
 .gest-list{display:none;margin-top:8px;}
 .gest-list.open{display:block;}
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;align-items:start;}
+/* Vista por columnas de días vencidos (kanban) */
+.cards-cols{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:10px;}
+.day-col{flex:0 0 330px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;}
+[data-theme="light"] .day-col{background:rgba(0,0,0,.02);}
+.day-col-hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-mono);font-weight:800;font-size:.8rem;color:var(--text-1);padding:2px 4px 6px;border-bottom:1px solid var(--border);}
+.day-col-count{background:var(--bg-inset);border-radius:10px;padding:1px 9px;font-size:.7rem;color:var(--text-2);}
+.day-col-body{display:flex;flex-direction:column;gap:10px;}
 /* Cards colapsables: info visible, gestión oculta hasta expandir */
 .card-gestion{display:none;}
 #card-float-wrap .card-gestion{display:block;}
 #card-float-wrap{background:var(--bg-card);}
 /* Mientras se gestiona una card, el resto se atenúa para enfocar la atención */
-body.card-gestionando .cards-grid .card{opacity:.6;transition:opacity .25s;}
-body.card-gestionando .cards-grid .card.gest{opacity:.3;}
+body.card-gestionando .cards-grid .card,body.card-gestionando .cards-cols .card{opacity:.6;transition:opacity .25s;}
+body.card-gestionando .cards-grid .card.gest,body.card-gestionando .cards-cols .card.gest{opacity:.3;}
 body.card-gestionando #card-float-wrap .card{opacity:1;}
 #card-float-wrap .card.gest{opacity:1;}
 .card-expand-hint{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:7px;border:1px solid var(--border-strong);border-radius:8px;color:var(--text-2);font-size:.72rem;font-weight:700;cursor:pointer;user-select:none;transition:all .15s;background:var(--bg-hover);}
@@ -3228,6 +3235,47 @@ function setVista(v){
 }
 
 function _mkGrid(){const d=document.createElement('div');d.className=vistaActual==='lista'?'cards-lista':'cards-grid';return d;}
+
+// Días "vencidos" de un pedido para la agrupación por columnas
+function _diasCard(p){
+  if(p.estadoKey==='novedad'){const d=diasDesde(p.fechaNovedad);if(d!=null)return d;}
+  if(p.diasSinMov!=null)return p.diasSinMov;
+  return p.dias||0;
+}
+
+// Reorganiza cada grilla activa en columnas por días (mayor → menor).
+// Prueba de estructura: aplica solo a la vista de cuadros, no a la lista
+// ni a los grupos de gestionadas.
+function _agruparColsPorDias(){
+  if(vistaActual==='lista')return;
+  document.querySelectorAll('#content .cards-grid').forEach(grid=>{
+    if(grid.closest('.gest-list'))return;
+    const cards=[...grid.children].filter(c=>c.classList.contains('card'));
+    if(cards.length<2)return;
+    const grupos=new Map();
+    cards.forEach(c=>{
+      const d=parseInt(c.dataset.dias||'0',10)||0;
+      if(!grupos.has(d))grupos.set(d,[]);
+      grupos.get(d).push(c);
+    });
+    if(grupos.size<2)return; // un solo valor de días → grilla normal
+    const cont=document.createElement('div');
+    cont.className='cards-cols';
+    [...grupos.keys()].sort((a,b)=>b-a).forEach(d=>{
+      const col=document.createElement('div');col.className='day-col';
+      const hdr=document.createElement('div');col.appendChild(hdr);
+      hdr.className='day-col-hdr';
+      const ico=d>=7?'🚨':d>=4?'⚠️':'📅';
+      hdr.innerHTML='<span>'+ico+' '+d+(d===1?' día':' días')+'</span><span class="day-col-count">'+grupos.get(d).length+'</span>';
+      const body=document.createElement('div');
+      body.className='day-col-body';
+      grupos.get(d).forEach(c=>body.appendChild(c));
+      col.appendChild(body);
+      cont.appendChild(col);
+    });
+    grid.replaceWith(cont);
+  });
+}
 function _mkCardEl(p,est,esGest){return vistaActual==='lista'?crearFila(p,est,esGest):crearCard(p,est,esGest);}
 function _mkCardNovEl(p){return vistaActual==='lista'?crearFilaNovedad(p):crearCardNovedad(p);}
 
@@ -4119,7 +4167,7 @@ function renderAll(){
   _renderAllPending=true;
   requestAnimationFrame(()=>{
     _renderAllPending=false;
-    renderPills();renderCards();_cardFloatReabrir();renderProgress();renderResumen();
+    renderPills();renderCards();_agruparColsPorDias();_cardFloatReabrir();renderProgress();renderResumen();
     actualizarBtnRapid();actualizarBtnSeguimiento();actualizarBtnTransp();
     actualizarBadgeSinGuia();buildSecNav();renderTranspLinks();
   });
@@ -4576,6 +4624,7 @@ function crearCard(p,est,esGest){
   const ncPend=!esGest&&g.llamada==='no_contestó'&&!g.gestion_final;
   const card=document.createElement('div');
   card.className='card'+(esGest?' gest':ncPend?' nc-pend':'');
+  card.dataset.dias=_diasCard(p);
   const tiendaColor=p.tienda?getTiendaColor(p.tienda):null;
   card.style.borderLeftColor=esGest?'var(--text-3)':est.color;
   card.id='card-'+p.id;
@@ -4923,6 +4972,7 @@ function getMsgNovedad(p){
 function crearCardNovedad(p){
   const card=document.createElement('div');
   card.className='card';
+  card.dataset.dias=_diasCard(p);
   card.id='card-'+p.id;
   const g=gestiones[p.id]||{};
   const cat=clasificarNovedad(p.tipoNovedad||p.novedad);
