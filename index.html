@@ -187,7 +187,8 @@ body.data-loaded #sidebar-actions{display:flex;}
 .btn-rapid{background:#131920;color:white;border:none;padding:5px 12px;border-radius:7px;font-size:.75rem;cursor:pointer;font-weight:600;display:none;align-items:center;gap:5px;}
 .btn-rapid:hover{opacity:.9;}
 #content{display:flex;flex-direction:row;overflow-x:scroll;scroll-snap-type:x mandatory;scroll-behavior:smooth;height:calc(100vh - 52px);width:100%;-webkit-overflow-scrolling:touch;}#content::-webkit-scrollbar{display:none;}
-.status-section{flex:0 0 100%;width:100%;scroll-snap-align:start;overflow-y:auto;padding:18px 20px;box-sizing:border-box;position:relative;}
+.status-section{flex:0 0 100%;width:100%;scroll-snap-align:start;overflow-y:auto;padding:18px 20px;box-sizing:border-box;position:relative;display:flex;flex-direction:column;}
+.status-section>*{flex-shrink:0;}
 .section-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid;}
 .section-header h2{font-size:.92rem;font-weight:700;}
 .sec-badge{font-size:.69rem;padding:2px 8px;border-radius:10px;font-weight:600;}
@@ -202,16 +203,17 @@ body.data-loaded #sidebar-actions{display:flex;}
 .gest-list.open{display:block;}
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;align-items:start;}
 /* Vista por columnas de días vencidos (kanban) */
-.cards-cols{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:6px;position:relative;overscroll-behavior-x:contain;scrollbar-width:auto;}
+.cards-cols{display:flex;gap:12px;align-items:stretch;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;position:relative;overscroll-behavior-x:contain;scrollbar-width:auto;flex:1 1 auto;min-height:0;cursor:grab;}
+.cards-cols.arrastrando{cursor:grabbing;user-select:none;}
 .cards-cols::-webkit-scrollbar{height:11px;}
 .cards-cols::-webkit-scrollbar-track{background:var(--bg-inset);border-radius:6px;}
 .cards-cols::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:6px;border:2px solid var(--bg-inset);}
 .cards-cols::-webkit-scrollbar-thumb:hover{background:var(--text-3);}
-.day-col{flex:0 0 330px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;}
+.day-col{flex:0 0 330px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;max-height:100%;min-height:0;cursor:default;}
 [data-theme="light"] .day-col{background:rgba(0,0,0,.02);}
-.day-col-hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-mono);font-weight:800;font-size:.8rem;color:var(--text-1);padding:2px 4px 6px;border-bottom:1px solid var(--border);}
+.day-col-hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-mono);font-weight:800;font-size:.8rem;color:var(--text-1);padding:2px 4px 6px;border-bottom:1px solid var(--border);flex-shrink:0;cursor:grab;}
 .day-col-count{background:var(--bg-inset);border-radius:10px;padding:1px 9px;font-size:.7rem;color:var(--text-2);}
-.day-col-body{display:flex;flex-direction:column;gap:10px;}
+.day-col-body{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;flex:1;padding-right:3px;}
 /* Cards colapsables: info visible, gestión oculta hasta expandir */
 .card-gestion{display:none;}
 #card-float-wrap .card-gestion{display:block;}
@@ -3217,14 +3219,33 @@ window._cardToggle=function(id){
   wrap.appendChild(card);
   document.body.classList.add('card-gestionando');
   cont.appendChild(wrap);
-  // Si la card expandida sobrepasa el alto de las columnas, ampliar el contenedor
+  // El kanban tiene alto fijo: limitar la card expandida al espacio visible
+  // con scroll interno propio para que nunca quede recortada
   if(cont!==sec){
-    requestAnimationFrame(()=>{
-      const need=(parseFloat(wrap.style.top)||0)+wrap.offsetHeight+10;
-      if(cont.offsetHeight<need)cont.style.minHeight=need+'px';
-    });
+    const topPx=parseFloat(wrap.style.top)||0;
+    const disp=cont.clientHeight-topPx-8;
+    if(disp>120){wrap.style.maxHeight=disp+'px';wrap.style.overflowY='auto';}
   }
 };
+// Arrastre horizontal del kanban con el mouse (trabajo solo con mouse)
+let _colsDrag=null;
+document.addEventListener('mousedown',e=>{
+  const c=e.target.closest('.cards-cols');
+  if(!c)return;
+  // No iniciar arrastre sobre cards ni controles — solo fondos y cabeceras
+  if(e.target.closest('.card,#card-float-wrap,button,a,input,textarea,select,label'))return;
+  _colsDrag={c,x:e.pageX,l:c.scrollLeft};
+  c.classList.add('arrastrando');
+  e.preventDefault();
+});
+document.addEventListener('mousemove',e=>{
+  if(!_colsDrag)return;
+  _colsDrag.c.scrollLeft=_colsDrag.l-(e.pageX-_colsDrag.x);
+});
+document.addEventListener('mouseup',()=>{
+  if(_colsDrag){_colsDrag.c.classList.remove('arrastrando');_colsDrag=null;}
+});
+
 // Reabre la card en gestión después de un re-render completo de la grilla.
 // Así la card flotante queda ESTÁTICA aunque las acciones disparen renderAll.
 function _cardFloatReabrir(){
