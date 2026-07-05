@@ -4785,44 +4785,29 @@ function crearCard(p,est,esGest){
       '</div>'+
       '<button onclick="copiarDatosCliente('+p.id+')" style="width:100%;padding:8px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #7c3aed;background:transparent;color:#7c3aed;cursor:pointer;margin-top:6px;">📋 Copiar datos del cliente</button>';
     } else {
-      html+=btnLlamarHtml(p.id,p.telefono);
-      html+=llamadaRowHtml(p.id);
-      if(g.llamada==='contestó'){
-        if(est.key==='telemercadeo'){
-          html+='<div class="checks-wrap"><div class="check-row">'+
-            '<input type="checkbox" id="ne_'+p.id+'" '+(g.nueva_entrega?'checked':'')+' onchange="setCheck('+p.id+',\'nueva_entrega\',this.checked)"/>'+
-            '<label for="ne_'+p.id+'">📅 Nueva entrega coordinada</label>'+
-            '</div></div>';
-        }
-        html+=notaWidgetHtml(p.id);
-        if(est.key==='oficina'&&!g.gestion_final){
-          html+='<div style="font-size:.72rem;color:#f59e0b;margin-top:4px;padding:4px 6px;background:#1c1400;border-radius:4px;">📝 Obligatorio: registra lo que dijo el cliente antes de finalizar</div>';
-        }
-        if(!g.mensajes_listos&&!g.gestion_final){
-          html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#1A2230;color:white;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
-        }
-        html+='<button class="btn-finalizar" onclick="'+(est.key==='oficina'?'marcarFinalizadoOficina':'marcarFinalizado')+'('+p.id+')" style="margin-top:4px">'+
-          (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
-      }
-      if(g.llamada==='no_contestó'){
-        const wi=getWAInfo(p,est.key);
-        html+=waBoton(p,est.key,wi,g.wa_enviado);
-        html+='<div class="checks-wrap">'+
-          '<div class="check-row">'+
-            '<input type="checkbox" id="cp_'+p.id+'" '+(g.chatepro?'checked':'')+' onchange="setCheck('+p.id+',\'chatepro\',this.checked)"/>'+
-            '<label for="cp_'+p.id+'">💬 Contactado por ChateaPro</label>'+
+      // Flujo unificado (sin botones de llamada): WhatsApp + nota + finalizar
+      const wi=getWAInfo(p,est.key);
+      html+=waBoton(p,est.key,wi,g.wa_enviado);
+      if(est.key==='telemercadeo'){
+        html+='<div class="checks-wrap"><div class="check-row">'+
+          '<input type="checkbox" id="ne_'+p.id+'" '+(g.nueva_entrega?'checked':'')+' onchange="setCheck('+p.id+',\'nueva_entrega\',this.checked)"/>'+
+          '<label for="ne_'+p.id+'">📅 Nueva entrega coordinada</label>'+
           '</div></div>';
-        html+=notaWidgetHtml(p.id);
-        if(!g.mensajes_listos&&!g.gestion_final){
-          html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#1A2230;color:white;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
-        }
-        html+='<button class="btn-finalizar" onclick="'+(est.key==='oficina'?'marcarFinalizadoOficina':'marcarFinalizado')+'('+p.id+')" style="margin-top:4px">'+
-          (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
       }
-      // Sin estado de llamada: mostrar nota siempre
-      if(!g.llamada){
-        html+=notaWidgetHtml(p.id);
+      html+='<div class="checks-wrap">'+
+        '<div class="check-row">'+
+          '<input type="checkbox" id="cp_'+p.id+'" '+(g.chatepro?'checked':'')+' onchange="setCheck('+p.id+',\'chatepro\',this.checked)"/>'+
+          '<label for="cp_'+p.id+'">💬 Contactado por ChateaPro</label>'+
+        '</div></div>';
+      html+=notaWidgetHtml(p.id);
+      if(est.key==='oficina'&&!g.gestion_final){
+        html+='<div style="font-size:.72rem;color:#f59e0b;margin-top:4px;padding:4px 6px;background:#1c1400;border-radius:4px;">📝 Obligatorio: registra lo que dijo el cliente antes de finalizar</div>';
       }
+      if(!g.mensajes_listos&&!g.gestion_final){
+        html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#1A2230;color:white;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
+      }
+      html+='<button class="btn-finalizar" onclick="'+(est.key==='oficina'?'marcarFinalizadoOficina':'marcarFinalizado')+'('+p.id+')" style="margin-top:4px">'+
+        (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
       if(est.key==='reparto'){
         html+='<div style="display:flex;flex-direction:column;gap:7px;margin-top:8px;">'+
           '<button onclick="marcarGuiaReportada('+p.id+',this)" style="width:100%;padding:9px;border-radius:8px;font-size:.76rem;font-weight:700;border:2px solid #2563eb;background:'+(g.guia_reportada?'#1d4ed8':'transparent')+';color:'+(g.guia_reportada?'white':'#2563eb')+';cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .25s;">'+(g.guia_reportada?'✅ Guía Reportada/Gestionada':'📋 Guía Reportada/Gestionada')+'</button>'+
@@ -4972,32 +4957,17 @@ function crearCardNovedad(p){
     html+='<button id="'+btnSolId+'" onclick="copiarSolucionNov(pedidos.find(x=>x.id==='+p.id+'),\''+btnSolId+'\')" style="width:100%;padding:8px 12px;border-radius:8px;font-size:.76rem;font-weight:700;border:1.5px solid #6366f1;background:var(--bg-card);color:var(--accent);cursor:pointer;margin-bottom:6px;transition:all .2s;">📝 Copiar solución de novedad</button>';
     html+='<div class="acciones">';
 
-    if(g.llamada==='contestó'){
-      html+=llamadaRowHtml(p.id);
-      html+=notaWidgetHtml(p.id);
-      if(!g.mensajes_listos&&!g.gestion_final){
-        html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#1A2230;color:white;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
-      }
-      html+='<button class="btn-finalizar" onclick="marcarFinalizadoNov('+p.id+')" style="margin-top:4px">'+
-        (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
-
-    } else if(g.llamada==='no_contestó'){
-      html+=llamadaRowHtml(p.id);
+    {
+      // Flujo unificado (sin botones de llamada): nota + WhatsApp + finalizar
       html+=notaWidgetHtml(p.id);
       if(p.telefono){
         html+='<a class="btn-wa" href="'+waUrl+'" target="_blank" onclick="marcarWANov('+p.id+')">'+
           (g.wa_nov_enviado?'✅ WhatsApp enviado':'<svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.855L.057 23.882l6.208-1.448A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.865 0-3.618-.485-5.145-1.335l-.369-.217-3.684.859.925-3.574-.24-.381A9.932 9.932 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> Enviar WhatsApp')+
         '</a>';
       }
-      html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#1A2230;color:white;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
-      html+='<button class="btn-finalizar" onclick="marcarFinalizadoNov('+p.id+')" style="margin-top:4px">'+
-        (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
-
-    } else {
-      // SIN SELECCIÓN: mostrar nota primero, luego llamar + contestó/no contestó
-      html+=notaWidgetHtml(p.id);
-      html+=btnLlamarHtml(p.id,p.telefono);
-      html+=llamadaRowNovHtml(p.id);
+      if(!g.mensajes_listos&&!g.gestion_final){
+        html+='<button style="width:100%;padding:8px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;cursor:pointer;background:#1A2230;color:white;margin-top:4px;" onclick="marcarMensajesListos('+p.id+')">⏬ Pasar al fondo</button>';
+      }
       html+='<button class="btn-finalizar" onclick="marcarFinalizadoNov('+p.id+')" style="margin-top:4px">'+
         (g.gestion_final?'✅ Gestión finalizada':'☑️ Marcar gestión finalizada')+'</button>';
     }
@@ -6602,34 +6572,24 @@ function queSigueBanner(p, estKey){
     return'<div class="que-sigue qs-listo">✅ Mensaje enviado — sin acción requerida</div>';
   }
   if(estKey==='novedad'){
-    if(!g.llamada)return'<div class="que-sigue qs-call">📞 Llamar · informar la novedad al cliente</div>';
-    if(g.llamada==='contestó'){
-      const notas=g.notas||(g.nota?[g.nota]:[]);
-      if(!notas.length)return'<div class="que-sigue qs-nota">📝 Registrar nota y marcar gestión finalizada</div>';
-      if(!g.gestion_final)return'<div class="que-sigue qs-fin">☑️ Marcar gestión finalizada</div>';
-    }
-    if(g.llamada==='no_contestó'){
-      if(!g.wa_nov_enviado)return'<div class="que-sigue qs-wa">📲 Enviar WhatsApp de novedad</div>';
-      return'<div class="que-sigue qs-nota">📝 Registrar intento y pasar al fondo</div>';
-    }
+    const notasN=g.notas||(g.nota?[g.nota]:[]);
+    if(!g.wa_nov_enviado&&!notasN.length)return'<div class="que-sigue qs-wa">📲 Enviar WhatsApp o registrar nota de la novedad</div>';
+    if(!g.gestion_final)return'<div class="que-sigue qs-fin">☑️ Marcar gestión finalizada</div>';
+    return'<div class="que-sigue qs-listo">✅ Gestión finalizada</div>';
   }
   // Reparto / Telemercadeo / Oficina
-  if(!g.llamada)return'<div class="que-sigue qs-call">📞 Llamar al cliente</div>';
-  if(g.llamada==='contestó'){
-    if(estKey==='oficina'){
-      const notas=g.notas||(g.nota?[g.nota]:[]);
-      if(!notas.length)return'<div class="que-sigue qs-nota">📝 ¿Qué dijo el cliente? Escribe una nota — es obligatoria</div>';
-    }
+  if(estKey==='oficina'){
+    const notasO=g.notas||(g.nota?[g.nota]:[]);
+    if(!notasO.length)return'<div class="que-sigue qs-nota">📝 ¿Qué dijo el cliente? Escribe una nota — es obligatoria</div>';
     if(!g.gestion_final)return'<div class="que-sigue qs-fin">☑️ Marcar gestión finalizada</div>';
+    return'<div class="que-sigue qs-listo">✅ Gestión finalizada</div>';
   }
-  if(g.llamada==='no_contestó'){
-    if(!g.wa_enviado)return'<div class="que-sigue qs-wa">📲 Enviar WhatsApp al cliente</div>';
-    if(!g.chatepro)return'<div class="que-sigue qs-nota">\uD83D\uDCCB Marcar contactado por bot</div>';
-    const _nqs=g.notas||(g.nota?[g.nota]:[]);
-    if(!_nqs.length)return'<div class="que-sigue qs-nota">\uD83D\uDCDD Escribir nota del intento</div>';
-    return'<div class="que-sigue qs-listo">⏬ Listo para pasar al fondo</div>';
+  if(!g.wa_enviado){
+    const _nqs0=g.notas||(g.nota?[g.nota]:[]);
+    if(!_nqs0.length)return'<div class="que-sigue qs-wa">📲 Enviar WhatsApp o registrar nota</div>';
   }
-  return'';
+  if(!g.gestion_final)return'<div class="que-sigue qs-fin">☑️ Marcar gestión finalizada</div>';
+  return'<div class="que-sigue qs-listo">✅ Gestión finalizada</div>';
 }
 
 // ── ATAJOS DE TECLADO ─────────────────────────────────────────────────
