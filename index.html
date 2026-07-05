@@ -202,7 +202,11 @@ body.data-loaded #sidebar-actions{display:flex;}
 .gest-list.open{display:block;}
 .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;align-items:start;}
 /* Vista por columnas de días vencidos (kanban) */
-.cards-cols{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:10px;}
+.cards-cols{display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:6px;position:relative;overscroll-behavior-x:contain;scrollbar-width:auto;}
+.cards-cols::-webkit-scrollbar{height:11px;}
+.cards-cols::-webkit-scrollbar-track{background:var(--bg-inset);border-radius:6px;}
+.cards-cols::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:6px;border:2px solid var(--bg-inset);}
+.cards-cols::-webkit-scrollbar-thumb:hover{background:var(--text-3);}
 .day-col{flex:0 0 330px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;}
 [data-theme="light"] .day-col{background:rgba(0,0,0,.02);}
 .day-col-hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-mono);font-weight:800;font-size:.8rem;color:var(--text-1);padding:2px 4px 6px;border-bottom:1px solid var(--border);}
@@ -3185,6 +3189,7 @@ function _cardFloatClose(){
   wrap.remove();
   _cardsExp.delete(parseInt(id,10));
   document.body.classList.remove('card-gestionando');
+  document.querySelectorAll('.cards-cols').forEach(c=>{c.style.minHeight='';});
 }
 // Abre la card COMO CAPA FLOTANTE encima de las vecinas, en su misma posición
 window._cardToggle=function(id){
@@ -3196,7 +3201,8 @@ window._cardToggle=function(id){
   if(!card)return;
   const sec=card.closest('.status-section');
   if(!sec)return;
-  const r=card.getBoundingClientRect(), sr=sec.getBoundingClientRect();
+  const cont=card.closest('.cards-cols')||sec;
+  const r=card.getBoundingClientRect(), sr=cont.getBoundingClientRect();
   // Placeholder que conserva el hueco exacto en la grilla
   const ph=document.createElement('div');
   ph.id='card-ph-'+id;
@@ -3206,11 +3212,18 @@ window._cardToggle=function(id){
   const wrap=document.createElement('div');
   wrap.id='card-float-wrap';
   wrap.dataset.cardId=id;
-  wrap.style.cssText='position:absolute;left:'+(r.left-sr.left+sec.scrollLeft)+'px;top:'+(r.top-sr.top+sec.scrollTop)+'px;width:'+r.width+'px;z-index:95;border-radius:var(--radius-md);box-shadow:var(--shadow-lg),0 0 0 1px var(--border-strong);';
+  wrap.style.cssText='position:absolute;left:'+(r.left-sr.left+cont.scrollLeft)+'px;top:'+(r.top-sr.top+cont.scrollTop)+'px;width:'+r.width+'px;z-index:95;border-radius:var(--radius-md);box-shadow:var(--shadow-lg),0 0 0 1px var(--border-strong);';
   _cardsExp.add(id);
   wrap.appendChild(card);
   document.body.classList.add('card-gestionando');
-  sec.appendChild(wrap);
+  cont.appendChild(wrap);
+  // Si la card expandida sobrepasa el alto de las columnas, ampliar el contenedor
+  if(cont!==sec){
+    requestAnimationFrame(()=>{
+      const need=(parseFloat(wrap.style.top)||0)+wrap.offsetHeight+10;
+      if(cont.offsetHeight<need)cont.style.minHeight=need+'px';
+    });
+  }
 };
 // Reabre la card en gestión después de un re-render completo de la grilla.
 // Así la card flotante queda ESTÁTICA aunque las acciones disparen renderAll.
