@@ -381,7 +381,12 @@ body.card-gestionando #card-float-wrap .card{opacity:1;}
 #right-panel{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:10px;z-index:99;pointer-events:none;}
 #right-panel>*{pointer-events:all;}
 #resumen{background:#131920;color:white;padding:12px 16px;border-radius:var(--radius-md);font-size:.77rem;line-height:1.9;box-shadow:0 6px 20px rgba(0,0,0,.28);min-width:175px;}
-#resumen h4{font-size:.68rem;opacity:.5;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;}
+#resumen-toggle{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.68rem;font-weight:700;opacity:.5;text-transform:uppercase;letter-spacing:.5px;}
+#resumen.expanded #resumen-toggle{margin-bottom:6px;}
+#resumen #res-body{display:none;}
+#resumen.expanded #res-body{display:block;}
+#resumen-toggle .tp-arrow{transition:transform .2s;}
+#resumen.expanded #resumen-toggle .tp-arrow{transform:rotate(90deg);}
 #transp-popup{background:#131920;color:white;padding:12px 16px;border-radius:var(--radius-md);font-size:.77rem;box-shadow:0 6px 20px rgba(0,0,0,.28);min-width:195px;}
 #transp-popup-toggle{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.68rem;font-weight:700;opacity:.5;text-transform:uppercase;letter-spacing:.5px;margin-bottom:0;}
 #transp-popup.expanded #transp-popup-toggle{margin-bottom:6px;}
@@ -2511,7 +2516,9 @@ body.card-gestionando #card-float-wrap .card{opacity:1;}
     <div id="transp-popup-links"></div>
   </div>
   <div id="resumen">
-    <h4>Resumen del día</h4>
+    <div id="resumen-toggle" onclick="this.closest('#resumen').classList.toggle('expanded')">
+      📊 Resumen del día <span class="tp-arrow">▶</span>
+    </div>
     <div id="res-body"></div>
   </div>
 </div>
@@ -4406,7 +4413,7 @@ function renderCards(){
       const tbody=document.createElement('tbody');
       Object.entries(byProd).sort((a,b)=>b[1].urg-a[1].urg||b[1].warn-a[1].warn).forEach(([prod,v],i)=>{
         const tr=document.createElement('tr');
-        tr.style.cssText='background:'+(i%2===0?'white':'#f8fafc')+';';
+        tr.style.cssText='background:'+(i%2===0?'var(--bg-card)':'var(--bg-hover)')+';';
         tr.innerHTML='<td style="padding:7px 12px;color:var(--text-1);font-weight:500">'+prod+'</td>'+
           '<td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--text-1)">'+v.total+'</td>'+
           '<td style="padding:7px 10px;text-align:center;color:var(--text-2);font-weight:600">'+(v.ok||'—')+'</td>'+
@@ -4588,7 +4595,7 @@ function renderCards(){
       const tbody2=document.createElement('tbody');
       Object.entries(byProd2).sort((a,b)=>b[1].urg-a[1].urg||b[1].warn-a[1].warn).forEach(([prod,v],i)=>{
         const tr=document.createElement('tr');
-        tr.style.cssText='background:'+(i%2===0?'white':'#f8fafc')+';';
+        tr.style.cssText='background:'+(i%2===0?'var(--bg-card)':'var(--bg-hover)')+';';
         tr.innerHTML='<td style="padding:7px 12px;color:var(--text-1);font-weight:500">'+prod+'</td>'+
           '<td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--text-1)">'+v.total+'</td>'+
           '<td style="padding:7px 10px;text-align:center;color:var(--text-2);font-weight:600">'+(v.ok||'—')+'</td>'+
@@ -4906,7 +4913,7 @@ function crearCard(p,est,esGest){
       const tbody2=document.createElement('tbody');
       Object.entries(byProd2).sort((a,b)=>b[1].urg-a[1].urg||b[1].warn-a[1].warn).forEach(([prod,v],i)=>{
         const tr=document.createElement('tr');
-        tr.style.cssText='background:'+(i%2===0?'white':'#f8fafc')+';';
+        tr.style.cssText='background:'+(i%2===0?'var(--bg-card)':'var(--bg-hover)')+';';
         tr.innerHTML='<td style="padding:7px 12px;color:var(--text-1);font-weight:500">'+prod+'</td>'+
           '<td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--text-1)">'+v.total+'</td>'+
           '<td style="padding:7px 10px;text-align:center;color:var(--text-2);font-weight:600">'+(v.ok||'—')+'</td>'+
@@ -6636,8 +6643,19 @@ function limpiarApp(){
 // ── MENÚ REPORTES ─────────────────────────────────────────────────────
 function toggleReportesMenu(){
   const menu=document.getElementById('reportes-menu');
-  if(!menu)return;
-  menu.style.display=menu.style.display==='none'?'block':'none';
+  const wrap=document.getElementById('btn-reportes-wrap');
+  if(!menu||!wrap)return;
+  const abierto=menu.style.display==='block';
+  if(abierto){menu.style.display='none';return;}
+  // position:fixed escapa del overflow-y:auto de la sidebar (que recortaba
+  // el desplegable absoluto y parecía que el botón no hacía nada)
+  const r=wrap.getBoundingClientRect();
+  menu.style.position='fixed';
+  menu.style.left=(r.right+10)+'px';
+  menu.style.top=Math.max(8,Math.min(r.top,window.innerHeight-180))+'px';
+  menu.style.right='auto';
+  menu.style.zIndex='300';
+  menu.style.display='block';
 }
 document.addEventListener('click',function(e){
   const wrap=document.getElementById('btn-reportes-wrap');
