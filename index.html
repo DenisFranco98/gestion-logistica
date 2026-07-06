@@ -211,6 +211,8 @@ body.data-loaded #sidebar-actions{display:flex;}
 .cards-cols::-webkit-scrollbar-thumb:hover{background:var(--text-3);}
 .day-col{flex:0 0 330px;width:330px;max-width:330px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;max-height:100%;min-height:0;cursor:default;}
 [data-theme="light"] .day-col{background:rgba(0,0,0,.02);}
+.day-col-gest{border-style:dashed;background:rgba(57,230,122,.03);}
+[data-theme="light"] .day-col-gest{background:rgba(29,168,85,.04);}
 .day-col-hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-mono);font-weight:800;font-size:.8rem;color:var(--text-1);padding:2px 4px 6px;border-bottom:1px solid var(--border);flex-shrink:0;cursor:grab;}
 .day-col-count{background:var(--bg-inset);border-radius:10px;padding:1px 9px;font-size:.7rem;color:var(--text-2);}
 .day-col-body{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;flex:1;padding-right:3px;}
@@ -3319,6 +3321,28 @@ function _agruparColsPorDias(){
       col.appendChild(body);
       cont.appendChild(col);
     });
+    // Columna final: GESTIONADAS (antes vivían en la lista de abajo)
+    const secEl=grid.closest('.status-section');
+    if(secEl){
+      const gl=secEl.querySelector('.gest-list');
+      const gb=secEl.querySelector('.gest-bar');
+      const gcards=gl?[...gl.querySelectorAll('.card')]:[];
+      if(gcards.length){
+        const colG=document.createElement('div');
+        colG.className='day-col day-col-gest';
+        const hdrG=document.createElement('div');
+        hdrG.className='day-col-hdr';
+        hdrG.innerHTML='<span style="color:var(--success);">✅ Gestionadas</span><span class="day-col-count">'+gcards.length+'</span>';
+        colG.appendChild(hdrG);
+        const bodyG=document.createElement('div');
+        bodyG.className='day-col-body';
+        gcards.forEach(c=>bodyG.appendChild(c));
+        colG.appendChild(bodyG);
+        cont.appendChild(colG);
+        if(gb)gb.remove();
+        if(gl)gl.remove();
+      }
+    }
     grid.replaceWith(cont);
   });
 }
