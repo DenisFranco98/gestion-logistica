@@ -4263,8 +4263,8 @@ function renderStats(){
 }
 
 // Desvanece la tarjeta completada sin reconstruir todo el DOM.
-// Solo actualiza los contadores rápido y difiere el renderAll completo 3s,
-// así el usuario puede copiar el teléfono del siguiente pedido inmediatamente.
+// Actualiza contadores al instante y re-renderiza apenas termina el fade:
+// el pedido aparece en la columna Gestionadas de inmediato.
 let _renderAllTimer=null;
 function _completarYLimpiar(id){
   const card=document.getElementById('card-'+id);
@@ -4280,7 +4280,7 @@ function _completarYLimpiar(id){
   }
   renderStats();
   if(_renderAllTimer)clearTimeout(_renderAllTimer);
-  _renderAllTimer=setTimeout(renderAll,3000);
+  _renderAllTimer=setTimeout(renderAll,350);
 }
 
 const TRANSP_DB=[
