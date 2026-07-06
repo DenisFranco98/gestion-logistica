@@ -214,6 +214,18 @@ body.data-loaded #sidebar-actions{display:flex;}
 .day-col-hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-mono);font-weight:800;font-size:.8rem;color:var(--text-1);padding:2px 4px 6px;border-bottom:1px solid var(--border);flex-shrink:0;cursor:grab;}
 .day-col-count{background:var(--bg-inset);border-radius:10px;padding:1px 9px;font-size:.7rem;color:var(--text-2);}
 .day-col-body{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;flex:1;padding-right:3px;}
+/* ── Cards de tamaño uniforme (vista cuadros) ── */
+.cards-cols .card,.cards-grid .card{height:295px;position:relative;overflow:hidden;padding-bottom:46px;flex-shrink:0;}
+.cards-cols .card .card-expand-hint,.cards-grid .card .card-expand-hint{position:absolute;left:12px;right:12px;bottom:10px;margin-top:0;background:var(--bg-elevated);}
+/* Líneas largas: una sola línea con elipsis para mantener la altura */
+.cards-cols .card .card-name,.cards-grid .card .card-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.cards-cols .card .card-producto,.cards-grid .card .card-producto,.cards-cols .card .card-addr,.cards-grid .card .card-addr{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+.cards-cols .card .card-meta,.cards-grid .card .card-meta{flex-wrap:nowrap;overflow:hidden;}
+.cards-cols .card .meta-chip,.cards-grid .card .meta-chip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0;}
+/* La card expandida (flotante) recupera su tamaño natural completo */
+#card-float-wrap .card{height:auto!important;padding-bottom:13px!important;overflow:visible!important;}
+#card-float-wrap .card .card-expand-hint{position:static!important;margin-top:9px!important;background:var(--bg-hover)!important;}
+#card-float-wrap .card .card-name,#card-float-wrap .card .card-producto,#card-float-wrap .card .card-addr{white-space:normal!important;}
 /* Cards colapsables: info visible, gestión oculta hasta expandir */
 .card-gestion{display:none;}
 #card-float-wrap .card-gestion{display:block;}
