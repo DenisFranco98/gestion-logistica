@@ -308,6 +308,8 @@ body.card-gestionando #card-float-wrap .card{opacity:1;}
 #card-float-wrap .card{margin:0;transform:none!important;}
 .card.nc-pend{border-left-style:dashed;}
 .card.gest{opacity:.42;border-left-color:var(--text-3)!important;}.card.gest *:not(.btn-dev){pointer-events:none;}.card.gest .btn-dev{pointer-events:auto;}
+/* Las gestionadas SÍ permiten: editar/expandir (footer) y los botones de su zona de gestión */
+.card.gest .card-expand-hint,.card.gest .card-expand-hint *,.card.gest .card-gestion button,.card.gest .card-gestion a{pointer-events:auto;}
 .card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
 .card-guia{font-size:.66rem;color:var(--text-3);font-weight:600;letter-spacing:.3px;}
 .ico{filter:grayscale(1);opacity:.65;}.card-guia.copiable{cursor:pointer;}.card-guia.copiable:hover{color:var(--text-2);}
@@ -4977,7 +4979,12 @@ function crearCard(p,est,esGest){
     html+='</div>';
   }
   html+='</div>';
-  html+='<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
+  html+= esGest
+    ? '<div class="card-expand-hint" style="gap:8px;cursor:default;">'+
+      '<button onclick="event.stopPropagation();editarGestion('+p.id+')" style="flex:1;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 8px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;">✏️ Editar gestión</button>'+
+      '<button onclick="event.stopPropagation();_cardToggle('+p.id+')" style="flex:0 0 auto;background:transparent;border:1px solid var(--border-strong);color:var(--text-2);border-radius:6px;padding:5px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;"><span class="ceh-open">▾ Más</span><span class="ceh-close">▴ Cerrar</span></button>'+
+      '</div>'
+    : '<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
   card.innerHTML=html;
   return card;
 }
@@ -5146,7 +5153,12 @@ function crearCardNovedad(p){
     html+='</div>';
   }
   html+='</div>';
-  html+='<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
+  html+= esGest
+    ? '<div class="card-expand-hint" style="gap:8px;cursor:default;">'+
+      '<button onclick="event.stopPropagation();editarGestion('+p.id+')" style="flex:1;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 8px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;">✏️ Editar gestión</button>'+
+      '<button onclick="event.stopPropagation();_cardToggle('+p.id+')" style="flex:0 0 auto;background:transparent;border:1px solid var(--border-strong);color:var(--text-2);border-radius:6px;padding:5px 10px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;"><span class="ceh-open">▾ Más</span><span class="ceh-close">▴ Cerrar</span></button>'+
+      '</div>'
+    : '<div class="card-expand-hint" onclick="event.stopPropagation();_cardToggle('+p.id+')"><span class="ceh-open">▾ Gestionar</span><span class="ceh-close">▴ Ocultar gestión</span></div>';
   card.innerHTML=html;
   return card;
 }
