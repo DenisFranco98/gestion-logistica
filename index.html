@@ -244,6 +244,7 @@ body.card-gestionando #card-float-wrap .card{opacity:1;}
 #card-float-wrap .ceh-open{display:none;}
 #card-float-wrap .ceh-close{display:inline;}
 .card.gest .card-expand-hint{pointer-events:auto;}
+.card.gest .card-gestion button{pointer-events:auto;}
 /* ── VISTA LISTA ─────────────────────────────────────────── */
 .cards-lista{display:flex;flex-direction:column;gap:4px;}
 .cf-wrap{border-radius:9px;overflow:hidden;border:1px solid var(--border);}
@@ -4846,6 +4847,10 @@ function crearCard(p,est,esGest){
       html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid '+(g.devolucion?'var(--danger)':'var(--border-strong)')+';background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--text-2)')+';cursor:pointer;">'+
         (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
     }
+    html+='<div style="display:flex;gap:8px;margin-top:8px;">'+
+      '<button onclick="editarGestion('+p.id+')" style="flex:1;padding:8px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;">✏️ Editar gestión</button>'+
+      '<button onclick="eliminarGestion('+p.id+')" style="flex:1;padding:8px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:transparent;color:var(--danger);cursor:pointer;">🗑️ Eliminar y devolver</button>'+
+    '</div>';
     html+=_btnHistHtml(p);
   }
 
@@ -5096,6 +5101,12 @@ function crearCardNovedad(p){
     html+='<button class="btn-cas" id="'+casId+'" onclick="casCopiar(CAS_NOVEDAD(),this.id)">📋 Copiar texto CAS — Informar Novedad</button>';
   }
 
+  if(esGest){
+    html+='<div style="display:flex;gap:8px;margin-top:8px;">'+
+      '<button onclick="editarGestion('+p.id+')" style="flex:1;padding:8px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;">✏️ Editar gestión</button>'+
+      '<button onclick="eliminarGestion('+p.id+')" style="flex:1;padding:8px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:transparent;color:var(--danger);cursor:pointer;">🗑️ Eliminar y devolver</button>'+
+    '</div>';
+  }
   if(!esGest){
     html+=queSigueBanner(p,'novedad');
     // Botón copiar solución para Dropi
@@ -5787,6 +5798,57 @@ function marcarDevolucion(id){
   gestiones[id].devolucion_razon=notas[notas.length-1].texto;
   guardar();_fbSyncGestion(id);_roSyncFromGestion(id);
   animarCompletado(id,()=>_completarYLimpiar(id),'🔄');
+}
+
+// Escribe la gestión completa en Firebase con set() — a diferencia de
+// _fbSyncGestion (update), elimina remotamente los flags que ya no existen
+function _fbSetGestion(id){
+  if(typeof _db==='undefined'||!window._currentUsername)return;
+  const p=_pedidoMap.get(id);
+  if(!p||!p.dropiId)return;
+  const ref=_db.ref('gestiones_sync/'+_gsKey()+'/'+_fbKey(p.dropiId));
+  const g0=gestiones[id];
+  if(!g0||!Object.keys(g0).length){ref.remove();return;}
+  const g=Object.assign({},g0);
+  delete g.mensajes_listos;
+  g._ts=Date.now();
+  if(p.guia)g._guia=p.guia;
+  if(p.nombre)g._nombre=p.nombre;
+  if(p.telefono)g._tel=p.telefono.replace(/^57/,'');
+  if(p.ciudad)g._ciudad=p.ciudad;
+  const _a=window.getLoginAsesor?window.getLoginAsesor():'';
+  if(_a)g._asesor=_a;
+  ref.set(g);
+}
+
+// Reabre una gestión finalizada para corregirla: quita SOLO los flags de
+// completitud; conserva notas, checks e historial
+function editarGestion(id){
+  const g=gestiones[id]||{};
+  delete g.gestion_final;
+  delete g.devolucion; delete g.devolucion_razon;
+  delete g.transito_gestionado; delete g.transito_sin_gestion;
+  delete g.rechazado_gestionado; delete g.rechazado_sin_gestion;
+  delete g.guia_reportada; delete g.guia_generada_hoy;
+  delete g.wa_enviado; delete g.mensajes_listos;
+  gestiones[id]=g;
+  guardar();
+  _fbSetGestion(id);
+  _cardFloatClose();
+  renderAll();
+  toast('✏️ Gestión reabierta — el pedido volvió a su columna para corregir');
+}
+
+// Elimina por completo la gestión y devuelve el pedido a pendientes
+function eliminarGestion(id){
+  _mConfirm('¿Eliminar la gestión?','Se borrará todo lo registrado en esta sesión para este pedido y volverá a la columna de pendientes. Esta acción no se puede deshacer.',()=>{
+    delete gestiones[id];
+    guardar();
+    _fbSetGestion(id);
+    _cardFloatClose();
+    renderAll();
+    toast('🗑️ Gestión eliminada — el pedido volvió a pendientes');
+  },'danger');
 }
 
 function _getMesCargado(){
