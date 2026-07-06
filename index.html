@@ -201,7 +201,7 @@ body.data-loaded #sidebar-actions{display:flex;}
 .gest-bar .ver{font-size:.71rem;color:var(--text-2);margin-left:auto;font-weight:600;}
 .gest-list{display:none;margin-top:8px;}
 .gest-list.open{display:block;}
-.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;align-items:start;}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,330px);gap:11px;align-items:start;justify-content:flex-start;}
 /* Vista por columnas de días vencidos (kanban) */
 .cards-cols{display:flex;gap:12px;align-items:stretch;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;position:relative;overscroll-behavior-x:contain;scrollbar-width:auto;flex:1 1 auto;min-height:0;cursor:grab;}
 .cards-cols.arrastrando{cursor:grabbing;user-select:none;}
@@ -209,7 +209,7 @@ body.data-loaded #sidebar-actions{display:flex;}
 .cards-cols::-webkit-scrollbar-track{background:var(--bg-inset);border-radius:6px;}
 .cards-cols::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:6px;border:2px solid var(--bg-inset);}
 .cards-cols::-webkit-scrollbar-thumb:hover{background:var(--text-3);}
-.day-col{flex:0 0 330px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;max-height:100%;min-height:0;cursor:default;}
+.day-col{flex:0 0 330px;width:330px;max-width:330px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;max-height:100%;min-height:0;cursor:default;}
 [data-theme="light"] .day-col{background:rgba(0,0,0,.02);}
 .day-col-hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--f-mono);font-weight:800;font-size:.8rem;color:var(--text-1);padding:2px 4px 6px;border-bottom:1px solid var(--border);flex-shrink:0;cursor:grab;}
 .day-col-count{background:var(--bg-inset);border-radius:10px;padding:1px 9px;font-size:.7rem;color:var(--text-2);}
