@@ -14,6 +14,8 @@
 <script>
 // Aplicar tema guardado ANTES del primer paint para evitar flash (oscuro por defecto)
 try{document.documentElement.setAttribute('data-theme',localStorage.getItem('lgs_theme')||'dark');}catch(_){}
+window._BUILD='v2026.07.05-B';console.log('%c[BUILD] '+window._BUILD,'color:#39E67A;font-weight:bold');
+document.addEventListener('DOMContentLoaded',()=>{const b=document.getElementById('build-tag');if(b)b.textContent=window._BUILD;});
 window._toggleTheme=function(){
   const cur=document.documentElement.getAttribute('data-theme')||'dark';
   const next=cur==='light'?'dark':'light';
@@ -2366,7 +2368,7 @@ body.card-gestionando #card-float-wrap .card{opacity:1;}
 <!-- Barra superior: identidad + controles de sistema (estructura Centro de Operaciones) -->
 <div id="topnav">
   <h1>🚚 Gestión Logística</h1>
-  <div class="sb-status"><div id="fecha"></div><span id="save-st"></span></div>
+  <div class="sb-status"><div id="fecha"></div><span id="save-st"></span><span id="build-tag" style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:var(--f-mono);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:1px 6px;" title="Versión del build local"></span></div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
     <div id="empresa-switcher" style="display:none;align-items:center;gap:6px;"><span style="font-size:.66rem;color:rgba(255,255,255,.5);">Empresa:</span><select id="empresa-select" onchange="_cambiarEmpresa(this.value)" style="background:#131920;color:white;border:1px solid var(--border-strong);border-radius:7px;padding:5px 10px;font-size:.74rem;cursor:pointer;outline:none;"></select></div>
     <button onclick="_ocultarTodosModos();document.getElementById('mode-select-screen').style.display='flex';window._gdMostrarModeSelect(window.getLoginAsesor?window.getLoginAsesor():'');" title="Volver al menú principal" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.85);padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">← Menú principal</button>
