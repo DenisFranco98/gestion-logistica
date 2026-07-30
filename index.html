@@ -3995,14 +3995,12 @@ function parsear(data){
   const cCant=findCol(H,['cantidad']);
   const cTipo=findColOrIdx(H,['tipo de tienda','tipo tienda'],45); // col AT
   const cProdId=findCol(H,['producto id','id producto','product id','sku','referencia producto','ref producto']);
-  console.log('[Dropi] cG=',cG,'| cTipo=',cTipo,'| headers[9]=',H[9]);
   const cFO  =findCol(H,['fecha','fecha orden','fecha de orden','fecha creacion','fecha pedido']);
   const cOrdTda=findCol(H,['id de orden de tienda','numero de pedido de tienda','id orden']);
   const cTipoNov=findCol(H,['novedad','tipo novedad','tipo de novedad'])||findCol(H,['af','novedad_tipo']);
   const cFechaNov=findCol(H,['fecha novedad','fecha de novedad','fecha_novedad']);
   const cValor=findCol(H,['valor total','valor cod','valor del pedido','valor orden','valor pedido','valor','total','precio total','precio']);
   const cFechaMov=findCol(H,['fecha de ultimo movimiento','fecha ultimo movimiento','fecha_ultimo_movimiento','fecha de último movimiento','fecha mov','fecha movimiento','ultimo movimiento','ultimo mov','fecha actualizacion','fecha de actualizacion','fecha actualización','fecha de actualización','fecha estado','fecha de estado','last movement','fecha modificacion','fecha de modificacion']);
-  console.log('[Dropi] cFechaMov=',cFechaMov,'| Todas las columnas:',H);
   if(!cFechaMov){
     setTimeout(()=>toast('⚠️ Columna "Fecha último movimiento" no encontrada en el Excel. Días en Oficina usarán fecha de guía.', 5000),1200);
   }
@@ -4073,16 +4071,6 @@ function parsear(data){
   });
   // Limpiar: si valor quedó en 0 (columna no existe o vacía), dejarlo null
   const result=Array.from(mapa.values());
-  // Debug: mostrar valores de diasSinMov para pedidos en oficina
-  const _ofic=result.filter(p=>p.estadoKey==='oficina');
-  if(_ofic.length){
-    console.log('[Debug Oficina] columna detectada:',cFechaMov);
-    _ofic.forEach(p=>{
-      const rawRow=rows.find(r=>String(r[cID]||'').trim()===p.dropiId);
-      const rawVal=cFechaMov&&rawRow?rawRow[cFechaMov]:undefined;
-      console.log('[Debug Oficina]',p.dropiId,'| dias=',p.dias,'| diasSinMov=',p.diasSinMov,'| rawFechaMov=',rawVal);
-    });
-  }
 
   // Recoger valores únicos crudos de AT para el modal de config
   const todosAT=result.map(p=>p._valorAT);
@@ -5987,37 +5975,31 @@ async function _novSyncSolucionadaGD(id, solucionada){
 // en Gestor Logístico, sin exigir el flujo manual de contacto+nota.
 let _novExtListenerPath=null;
 function _iniciarEscuchaNovedadesExt(){
-  if(typeof _db==='undefined'||!window._currentUsername){
-    console.log('[novExt] no se activó — falta _db o sesión (_currentUsername='+window._currentUsername+')');
-    return;
-  }
+  if(typeof _db==='undefined'||!window._currentUsername)return;
   const tk=_gdTK(), mes=_getMesCargado();
   const path='novedades/'+tk+'/'+mes;
-  if(_novExtListenerPath===path){console.log('[novExt] ya estaba escuchando '+path);return;}
+  if(_novExtListenerPath===path)return;
   if(_novExtListenerPath) _db.ref(_novExtListenerPath).off('value',_procesarNovedadesExt);
   _novExtListenerPath=path;
-  console.log('[novExt] escuchando '+path+' (tienda="'+(window.getLoginTienda?window.getLoginTienda():'?')+'")');
   _db.ref(path).on('value',_procesarNovedadesExt);
 }
 function _procesarNovedadesExt(snap){
   const data=snap.val()||{};
   const porGuia=new Map();
   pedidos.forEach(p=>{ if(p.estadoKey==='novedad'&&p.guia) porGuia.set(String(p.guia).trim(),p); });
-  console.log('[novExt] snapshot: '+Object.keys(data).length+' registros en Firebase, '+porGuia.size+' cards "En novedad" cargadas para comparar');
   if(!porGuia.size)return;
 
   Object.values(data).forEach(n=>{
     const guia=String(n.guia||'').trim();
     if(!guia)return;
     const p=porGuia.get(guia);
-    if(!p){console.log('[novExt] guía '+guia+' no está entre las cards "En novedad" cargadas ahora mismo');return;}
+    if(!p)return; // esa guía no está entre las novedades cargadas ahora mismo
     const g=gestiones[p.id]||{};
-    if(g.gestion_final||g.devolucion){console.log('[novExt] guía '+guia+' ya estaba resuelta localmente, se ignora');return;}
+    if(g.gestion_final||g.devolucion)return; // ya resuelto — evita reprocesar
 
     const sols=_novGetSols(n);
     const ultima=[...sols].sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
-    if(!ultima){console.log('[novExt] guía '+guia+' encontrada pero sin soluciones registradas todavía');return;}
-    console.log('[novExt] guía '+guia+' → aplicando resultado="'+ultima.estado+'"');
+    if(!ultima)return;
 
     if(ultima.estado==='solucionada'){
       if(!gestiones[p.id])gestiones[p.id]={};
