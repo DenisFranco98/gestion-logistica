@@ -7447,8 +7447,14 @@ function buscar(q){
   res.appendChild(grid);
 }
 
+// Aviso nativo de "¿seguro que quieres salir?" si hay pedidos cargados sin cerrar sesión.
+// OJO: antes esto también disparaba generarPDF() (abre un modal pesado con toda la
+// info del día) como efecto secundario de CUALQUIER "unload" — incluyendo cuando Chrome
+// descarga la pestaña por ahorro de memoria (no solo al cerrar el tab a propósito).
+// Si la recarga automática ocurre a mitad de esa generación, la página queda en un
+// estado roto (pantalla en blanco). Se quitó esa llamada; el aviso nativo no tiene ese riesgo.
 window.addEventListener('beforeunload'
-,e=>{if(!pedidos.length)return;e.preventDefault();e.returnValue='';setTimeout(generarPDF,100);});
+,e=>{if(!pedidos.length)return;e.preventDefault();e.returnValue='';});
 // ── ALERTA INACTIVIDAD ─────────────────────────────────────────────────
 function resetInactividad(){
   ultimaGestion=Date.now();
