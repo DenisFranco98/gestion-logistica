@@ -4335,8 +4335,11 @@ function _novGetSols(n){
 // gestiones-diarias.js (su UI/caché en memoria de GD se actualiza solo si
 // esa página está cargada, ver guards de typeof adentro).
 function _roAutoSync(){
-  // Sincronizar todos los pedidos en Oficina que aún no tienen registro RO
-  if(typeof _db==='undefined'||!window._currentUsername||!pedidos.length)return;
+  // Sincronizar todos los pedidos en Oficina que aún no tienen registro RO.
+  // 'pedidos' solo existe con Gestión Logística cargado y este archivo lo cargan
+  // las 4 páginas, así que el typeof no es opcional (ver bug del "Cargando..."
+  // eterno en la pestaña R.O. de Gestiones Diarias).
+  if(typeof _db==='undefined'||!window._currentUsername||typeof pedidos==='undefined'||!pedidos.length)return;
   const oficinas=pedidos.filter(p=>p.estadoKey==='oficina'&&p.guia);
   oficinas.forEach(p=>_roSyncFromGestion(p.id));
 }

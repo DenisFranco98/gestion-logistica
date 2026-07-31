@@ -904,7 +904,10 @@ function _roInit(){
       snap.forEach(ch=>{ _roData[ch.key]=ch.val(); });
       _roRender();
     });
-  }, pedidos&&pedidos.filter(p=>p.estadoKey==='oficina').length?800:0);
+  // 'pedidos' solo existe si está cargado Gestión Logística; sin el typeof esto
+  // lanzaba ReferenceError y el setTimeout nunca llegaba a programarse, así que
+  // la tabla se quedaba en "Cargando..." para siempre en gestiones-diarias.html.
+  }, (typeof pedidos!=='undefined'&&pedidos.filter(p=>p.estadoKey==='oficina').length)?800:0);
 }
 
 function _roRender(){
