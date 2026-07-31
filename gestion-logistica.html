@@ -6,15 +6,17 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
-<title>Gestión Logística Diaria</title>
+<title>Gestión Logística — REDKING</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚚</text></svg>"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="shared/shared.css">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <script>
@@ -764,6 +766,332 @@ window._sbEstadosToggle=function(){
   </div>
 </div>
 
+<!-- ===== CONTROL FINANCIERO ===== -->
+<div id="cf-panel">
+  <!-- Header -->
+  <div class="cf-hdr">
+    <div>
+      <div style="font-size:.85rem;font-weight:900;letter-spacing:.5px;">💹 CONTROL FINANCIERO</div>
+      <div id="cf-hdr-sub" style="font-size:.58rem;opacity:.5;margin-top:1px;">Matrix ER · Dashboard · Órdenes</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button onclick="_cfPrevMes()" style="background:rgba(255,255,255,.1);border:none;color:white;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.8rem;">&#8249;</button>
+      <span id="cf-mes-lbl" style="font-size:.72rem;font-weight:700;min-width:80px;text-align:center;"></span>
+      <button onclick="_cfNextMes()" style="background:rgba(255,255,255,.1);border:none;color:white;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.8rem;">&#8250;</button>
+      <button onclick="_cfVolver()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.72rem;font-weight:700;">← Menú principal</button>
+    </div>
+  </div>
+  <!-- Cuerpo: sidebar de funciones + contenido (estructura Centro de Operaciones) -->
+  <div class="panel-body">
+  <div id="cf-tabbar">
+    <div class="sb-label">Funciones</div>
+    <button class="cf-tab-btn active" id="cf-tab-btn-dash" onclick="_cfTab('dash')">📊 Dashboard</button>
+    <button class="cf-tab-btn" id="cf-tab-btn-mes" onclick="_cfTab('mes')">📅 Control Mes</button>
+    <button class="cf-tab-btn" id="cf-tab-btn-er" onclick="_cfTab('er')">📈 Estado ER</button>
+    <button class="cf-tab-btn" id="cf-tab-btn-config" onclick="_cfTab('config')">⚙️ Config</button>
+    <button class="cf-tab-btn" id="cf-tab-btn-ordenes" onclick="_cfTab('ordenes')">📦 Órdenes</button>
+    <button class="cf-tab-btn" id="cf-tab-btn-analiticas" onclick="_cfTab('analiticas')">🔍 Analíticas</button>
+    <div style="border-top:1px solid rgba(255,255,255,.1);margin:8px 4px;"></div>
+    <button class="cf-tab-btn" onclick="_cfPdfAbrir()" style="background:rgba(230,57,70,.14);border:1px solid rgba(230,57,70,.3);color:#f87171;">📄 Informe PDF</button>
+  </div>
+  <!-- Tab contents -->
+  <div class="panel-main" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+    <div class="cf-tab" id="cf-tab-dash" style="display:block;"></div>
+    <div class="cf-tab" id="cf-tab-mes"></div>
+    <div class="cf-tab" id="cf-tab-er"></div>
+    <div class="cf-tab" id="cf-tab-config"></div>
+    <div class="cf-tab" id="cf-tab-ordenes"></div>
+    <div class="cf-tab" id="cf-tab-analiticas"></div>
+  </div>
+  </div><!-- /panel-body -->
+
+  <!-- Modal checklist Informe PDF -->
+  <div id="cf-pdf-modal" style="display:none;position:fixed;inset:0;background:rgba(11,18,32,.75);z-index:400;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:26px 28px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);">
+      <div style="font-size:1rem;font-weight:800;color:var(--text-1);margin-bottom:4px;">📄 Informe PDF</div>
+      <div style="font-size:.72rem;color:var(--text-3);margin-bottom:18px;">Selecciona qué secciones incluir — <span id="cf-pdf-mes-lbl"></span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-resumen" checked> 📊 Resumen Control Mes <span>facturación, pedidos, COD, Ads, CPA</span></label>
+        <label class="cf-pdf-chk" id="cfpdf-comparativo-lbl"><input type="checkbox" id="cfpdf-comparativo" checked onchange="_cfPdfToggleComp()"> 📈 Análisis comparativo <span>veredicto de crecimiento + lectura de CPA, ventas y Ads</span></label>
+        <div id="cfpdf-comp-box" style="margin:-4px 0 2px 26px;padding:10px 12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;">
+          <div style="font-size:.62rem;color:var(--text-3);margin-bottom:6px;">Meses a incluir (mínimo 2 — se comparan de forma consecutiva: 1º vs 2º, 2º vs 3º...):</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px;">
+            <button type="button" class="cf-comp-q" onclick="_cfPdfCompQuick(2)">Mes anterior</button>
+            <button type="button" class="cf-comp-q" onclick="_cfPdfCompQuick(3)">Trimestre</button>
+            <button type="button" class="cf-comp-q" onclick="_cfPdfCompQuick(6)">Semestre</button>
+            <button type="button" class="cf-comp-q" onclick="_cfPdfCompQuick(12)">Año</button>
+          </div>
+          <div style="font-size:.6rem;color:var(--text-3);margin-bottom:4px;">O elige meses específicos:</div>
+          <div id="cfpdf-comp-meses" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 6px;max-height:130px;overflow-y:auto;padding:2px;"></div>
+          <div id="cfpdf-comp-preview" style="margin-top:7px;font-size:.64rem;font-weight:700;color:var(--accent);"></div>
+        </div>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-er" checked> 📉 Estado de Resultados (ER) <span>ingresos, costos, utilidad neta</span></label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-ciudades" checked> 🏙️ Analítica de Ciudades <span>top 15 por volumen</span></label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-trans" checked> 🚛 Analítica de Transportadoras</label>
+        <label class="cf-pdf-chk"><input type="checkbox" id="cfpdf-productos" checked> 📦 Analítica de Productos <span>top 15 por pedidos</span></label>
+      </div>
+      <div id="cf-pdf-warn" style="display:none;font-size:.68rem;color:var(--warning);background:var(--warning-soft);border-radius:8px;padding:8px 10px;margin-top:12px;">⚠️ Las analíticas requieren el archivo de Órdenes cargado — se omitirán si no hay datos.</div>
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button onclick="document.getElementById('cf-pdf-modal').style.display='none'" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--border);background:transparent;color:var(--text-2);font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">Cancelar</button>
+        <button id="cf-pdf-btn-gen" onclick="_cfPdfGenerar()" style="flex:1.4;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#E63946,#c62b38);color:white;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">⬇ Descargar PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== GESTIONES DIARIAS ===== -->
+<div id="gd-panel">
+  <!-- Header -->
+  <div style="background:#131920;color:white;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;flex-shrink:0;">
+    <div style="min-width:0;">
+      <div id="gd-title" style="font-size:.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">REMISIÓN MENSUAL</div>
+      <div style="font-size:.6rem;opacity:.45;margin-top:1px;">Confirmaciones + Novedades + Carritos + Ventas WPP</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+      <button onclick="_gdPrevMes()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:white;width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:.85rem;">←</button>
+      <span id="gd-mes-label" style="font-size:.78rem;font-weight:700;min-width:90px;text-align:center;">—</span>
+      <button onclick="_gdNextMes()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:white;width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:.85rem;">→</button>
+      <span id="gd-save-st" style="font-size:.62rem;opacity:.5;margin-left:4px;"></span>
+      <button onclick="_gdVolver()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.75);padding:5px 11px;border-radius:7px;font-size:.7rem;cursor:pointer;font-weight:600;margin-left:4px;">← Menú principal</button>
+    </div>
+  </div>
+  <!-- Info strip -->
+  <div style="background:#0D1117;padding:5px 18px;display:flex;gap:18px;font-size:.67rem;color:rgba(255,255,255,.5);flex-shrink:0;">
+    <span>👤 <strong id="gd-nombre" style="color:rgba(255,255,255,.85);">—</strong></span>
+    <span>🏷️ <span id="gd-rol" style="color:rgba(255,255,255,.55);">ASESOR GENERAL</span></span>
+  </div>
+  <!-- Cuerpo: sidebar de funciones + contenido (estructura Centro de Operaciones) -->
+  <div class="panel-body">
+  <div id="gd-tabbar">
+    <div class="sb-label">Funciones</div>
+    <button class="gd-tab-btn active" id="gd-tab-btn-gestion" onclick="_gdTab('gestion')">📋 Gestión</button>
+    <button class="gd-tab-btn" id="gd-tab-btn-consolidado" onclick="_gdTab('consolidado')">📊 Consolidado</button>
+    <button class="gd-tab-btn" id="gd-tab-btn-novedades" onclick="_gdTab('novedades')">📝 Novedades</button>
+    <button class="gd-tab-btn" id="gd-tab-btn-anticipos" onclick="_gdTab('anticipos')">💰 Anticipos</button>
+    <button class="gd-tab-btn" id="gd-tab-btn-ro" onclick="_gdTab('ro')">🏢 R.O.</button>
+  </div>
+  <div class="panel-main">
+  <!-- TAB: Gestión -->
+  <div id="gd-tab-gestion" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+    <div id="gd-tienda-resumen" style="background:var(--bg-card);border-bottom:1.5px solid var(--border);padding:11px 16px;overflow-x:auto;flex-shrink:0;"></div>
+    <div id="gd-resumen" style="background:var(--bg-card);border-bottom:1.5px solid var(--border);padding:11px 16px;overflow-x:auto;flex-shrink:0;"></div>
+    <div style="flex:1;overflow:auto;padding:12px 16px 32px;">
+      <div id="gd-table-wrap" style="overflow-x:auto;"></div>
+      <div style="margin-top:18px;">
+        <div style="font-size:.63rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">📝 Notas del coordinador</div>
+        <textarea id="gd-notas-coord" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.78rem;resize:vertical;min-height:64px;font-family:inherit;color:var(--text-1);outline:none;" placeholder="Notas del coordinador..." oninput="_gdSaveNotas()"></textarea>
+      </div>
+    </div>
+  </div>
+  <!-- TAB: Consolidado -->
+  <div id="gd-tab-consolidado">
+    <div style="text-align:center;margin-bottom:12px;">
+      <div style="font-size:1rem;font-weight:900;color:var(--danger);letter-spacing:-.3px;">CONTROL DIARIO — <span id="conso-tienda-lbl">—</span></div>
+      <div style="font-size:.62rem;color:var(--text-3);margin-top:2px;">Insumo operativo · 5 tipos · 3 cortes diarios · 31 días</div>
+    </div>
+    <div id="conso-day-sel" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px;justify-content:center;"></div>
+    <div id="conso-form"></div>
+  </div>
+
+  <!-- TAB: R.O. -->
+  <div id="gd-tab-ro">
+    <div class="tab-sb">
+      <div class="tab-sb-row">
+        <div class="tab-sb-wrap">
+          <span class="tab-sb-ico">🔍</span>
+          <input class="tab-sb-inp" id="ro-q" placeholder="Buscar cliente, teléfono, guía o nota..." oninput="_roSearch(this.value)">
+        </div>
+        <span class="tab-sb-count" id="ro-count"></span>
+      </div>
+      <div class="tab-chips" id="ro-est-chips">
+        <span class="tab-chip-lbl">Estado:</span>
+        <button class="tab-chip on" onclick="_roEstChip('',this)">Todos</button>
+        <button class="tab-chip" onclick="_roEstChip('PENDIENTE',this)">⏳ Pendiente</button>
+        <button class="tab-chip" onclick="_roEstChip('EN PROCESO',this)" style="border-color:var(--warning);color:var(--warning);">🔵 En proceso</button>
+        <button class="tab-chip" onclick="_roEstChip('ENTREGADO',this)" style="border-color:var(--success);color:var(--success);">✅ Entregado</button>
+        <button class="tab-chip" onclick="_roEstChip('DEVUELTO',this)" style="border-color:var(--danger);color:var(--danger);">🔴 Devuelto</button>
+        <button class="tab-chip" onclick="_roEstChip('CANCELADO - CLIENTE REHUSA RECIBIR',this)" style="border-color:#7c3aed;color:#7c3aed;">🚫 Cancelado</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;" id="ro-table-wrap"></div>
+    <button class="ant-add-btn" onclick="_roAgregar()" style="margin-top:0;border-radius:0 0 8px 8px;border-top:none;">+ Agregar registro</button>
+  </div>
+
+  <!-- TAB: Anticipos -->
+  <div id="gd-tab-anticipos">
+    <div style="text-align:center;background:#131920;color:white;border-radius:10px;padding:10px 16px;margin-bottom:14px;">
+      <div style="font-size:.82rem;font-weight:900;letter-spacing:.4px;">SEGUIMIENTO DE GUÍAS CON PAGO ANTICIPADO</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;overflow-x:auto;min-width:0;">
+      <div class="ant-section">
+        <div class="ant-hdr" style="background:#dc2626;">GUÍAS CON ANTICIPO</div>
+        <div class="tab-sb" style="border-radius:0;">
+          <div class="tab-sb-row">
+            <div class="tab-sb-wrap"><span class="tab-sb-ico">🔍</span>
+              <input class="tab-sb-inp" id="ant-con-q" placeholder="Buscar cliente, teléfono, motivo o producto..." oninput="_antSearch('con',this.value)">
+            </div>
+            <span class="tab-sb-count" id="ant-con-count"></span>
+          </div>
+          <div class="tab-chips" id="ant-con-tr-chips">
+            <span class="tab-chip-lbl">Transportadora:</span>
+            <button class="tab-chip on" onclick="_antTransChip('con','',this)">Todas</button>
+            <button class="tab-chip" onclick="_antTransChip('con','COORDINADORA',this)">COORDINADORA</button>
+            <button class="tab-chip" onclick="_antTransChip('con','INTERRAPIDÍSIMO',this)">INTERRAPIDÍSIMO</button>
+            <button class="tab-chip" onclick="_antTransChip('con','ENVÍA',this)">ENVÍA</button>
+            <button class="tab-chip" onclick="_antTransChip('con','TCC',this)">TCC</button>
+            <button class="tab-chip" onclick="_antTransChip('con','SERVIENTREGA',this)">SERVIENTREGA</button>
+          </div>
+          <div class="tab-chips" id="ant-con-ent-chips">
+            <span class="tab-chip-lbl">Entrega:</span>
+            <button class="tab-chip on" onclick="_antEntChip('con','',this)">Todas</button>
+            <button class="tab-chip" onclick="_antEntChip('con','si',this)" style="border-color:var(--success);color:var(--success);">✅ Entregadas</button>
+            <button class="tab-chip" onclick="_antEntChip('con','no',this)" style="border-color:var(--warning);color:var(--warning);">⏳ Pendientes</button>
+            <button class="tab-chip" onclick="_antEntChip('con','comp',this)" style="border-color:var(--accent);color:var(--accent);">📎 Con comprobante</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;"><div id="ant-con-wrap"></div></div>
+        <button class="ant-add-btn" onclick="_antAgregar('con')">+ Agregar guía</button>
+      </div>
+      <div class="ant-section">
+        <div class="ant-hdr" style="background:#131920;">GUÍAS SIN ANTICIPO · BUEN HISTORIAL</div>
+        <div class="tab-sb" style="border-radius:0;">
+          <div class="tab-sb-row">
+            <div class="tab-sb-wrap"><span class="tab-sb-ico">🔍</span>
+              <input class="tab-sb-inp" id="ant-sin-q" placeholder="Buscar cliente, teléfono, motivo o producto..." oninput="_antSearch('sin',this.value)">
+            </div>
+            <span class="tab-sb-count" id="ant-sin-count"></span>
+          </div>
+          <div class="tab-chips" id="ant-sin-tr-chips">
+            <span class="tab-chip-lbl">Transportadora:</span>
+            <button class="tab-chip on" onclick="_antTransChip('sin','',this)">Todas</button>
+            <button class="tab-chip" onclick="_antTransChip('sin','COORDINADORA',this)">COORDINADORA</button>
+            <button class="tab-chip" onclick="_antTransChip('sin','INTERRAPIDÍSIMO',this)">INTERRAPIDÍSIMO</button>
+            <button class="tab-chip" onclick="_antTransChip('sin','ENVÍA',this)">ENVÍA</button>
+            <button class="tab-chip" onclick="_antTransChip('sin','TCC',this)">TCC</button>
+            <button class="tab-chip" onclick="_antTransChip('sin','SERVIENTREGA',this)">SERVIENTREGA</button>
+          </div>
+          <div class="tab-chips" id="ant-sin-ent-chips">
+            <span class="tab-chip-lbl">Entrega:</span>
+            <button class="tab-chip on" onclick="_antEntChip('sin','',this)">Todas</button>
+            <button class="tab-chip" onclick="_antEntChip('sin','si',this)" style="border-color:var(--success);color:var(--success);">✅ Entregadas</button>
+            <button class="tab-chip" onclick="_antEntChip('sin','no',this)" style="border-color:var(--warning);color:var(--warning);">⏳ Pendientes</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;"><div id="ant-sin-wrap"></div></div>
+        <button class="ant-add-btn" onclick="_antAgregar('sin')">+ Agregar guía</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Novedades -->
+  <div id="gd-tab-novedades">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:.88rem;font-weight:800;color:var(--text-1);letter-spacing:-.3px;">REGISTRO DE GESTIÓN DE NOVEDADES</div>
+        <div style="font-size:.62rem;color:var(--text-3);margin-top:2px;">Registra cada novedad gestionada · Hasta 3 intentos de solución por guía</div>
+      </div>
+      <button onclick="_novNuevo()" style="background:#b91c1c;color:white;border:none;border-radius:9px;padding:8px 18px;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">+ Nueva novedad</button>
+    </div>
+    <div class="tab-sb" style="border-radius:10px;margin-bottom:10px;">
+      <div class="tab-sb-row">
+        <div class="tab-sb-wrap">
+          <span class="tab-sb-ico">🔍</span>
+          <input class="tab-sb-inp" id="nov-q" placeholder="Buscar por guía o asesor..." oninput="_novSearch(this.value)">
+        </div>
+        <span class="tab-sb-count" id="nov-count"></span>
+      </div>
+      <div class="tab-chips" id="nov-sol-chips">
+        <span class="tab-chip-lbl">Solución:</span>
+        <button class="tab-chip on" onclick="_novSolChip('',this)">Todas</button>
+        <button class="tab-chip" onclick="_novSolChip('solucionada',this)" style="border-color:var(--success);color:var(--success);">✅ Solucionadas</button>
+        <button class="tab-chip" onclick="_novSolChip('devuelta',this)" style="border-color:var(--warning);color:var(--warning);">📦 Devueltas</button>
+        <button class="tab-chip" onclick="_novSolChip('sin',this)" style="border-color:var(--text-3);color:var(--text-3);">⏳ Sin gestión</button>
+      </div>
+    </div>
+    <div id="nov-table-wrap"></div>
+  </div>
+  </div><!-- /panel-main -->
+  </div><!-- /panel-body -->
+</div>
+
+<!-- ===== MODAL NOVEDADES ===== -->
+<div id="nov-modal">
+  <div class="nov-modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <div id="nov-m-title" style="font-size:.95rem;font-weight:800;color:var(--text-1);">Nueva Novedad</div>
+      <button onclick="_novCerrarModal()" style="background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-3);line-height:1;">✕</button>
+    </div>
+    <!-- Meta (fecha, guia, asesor) — se oculta al agregar solución a novedad existente -->
+    <div id="nov-m-meta">
+      <div style="margin-bottom:11px;">
+        <label class="nov-form-label">Fecha de la novedad</label>
+        <input id="nov-m-fecha" class="nov-form-input" type="date">
+      </div>
+      <div style="margin-bottom:11px;">
+        <label class="nov-form-label">Número de guía</label>
+        <input id="nov-m-guia" class="nov-form-input" type="text" placeholder="64108612927">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label class="nov-form-label">Asesor encargado</label>
+        <input id="nov-m-asesor" class="nov-form-input" type="text" placeholder="Nombre del asesor">
+      </div>
+      <hr style="border:none;border-top:1.5px solid #f1f5f9;margin-bottom:16px;">
+    </div>
+    <!-- Sección solución -->
+    <div id="nov-m-sol-section">
+      <label id="nov-m-sol-label" class="nov-form-label" style="margin-bottom:10px;font-size:.7rem;">Solución 1</label>
+      <!-- Fecha de la gestión -->
+      <div style="margin-bottom:12px;">
+        <label class="nov-form-label">Fecha de la gestión</label>
+        <input id="nov-sol-fecha" class="nov-form-input" type="date" style="font-size:.82rem;">
+      </div>
+      <!-- Resultado de la gestión -->
+      <div style="margin-bottom:14px;">
+        <label class="nov-form-label" style="margin-bottom:7px;">Resultado de la gestión</label>
+        <div class="nov-tipo-row">
+          <button class="nov-tipo-btn active" id="nov-estado-sol" onclick="_novSetEstado('solucionada')">✅ Novedad solucionada</button>
+          <button class="nov-tipo-btn" id="nov-estado-dev" onclick="_novSetEstado('devuelta')">📦 Producto devuelto</button>
+        </div>
+      </div>
+      <!-- Tipo evidencia: solo visible si es solucionada -->
+      <div id="nov-tipo-wrap">
+        <div class="nov-tipo-row">
+          <button class="nov-tipo-btn active" id="nov-tipo-img" onclick="_novSetTipo('img')">📷 Imagen de evidencia</button>
+          <button class="nov-tipo-btn" id="nov-tipo-txt" onclick="_novSetTipo('txt')">✍️ Texto descriptivo</button>
+        </div>
+      </div>
+      <div id="nov-m-img-wrap">
+        <input type="file" id="nov-m-img" accept="image/*" class="nov-form-input" style="padding:7px;font-size:.75rem;">
+        <div style="font-size:.62rem;color:var(--text-3);margin-top:5px;">Se comprimirá automáticamente · Tamaño máximo recomendado: 5 MB</div>
+      </div>
+      <div id="nov-m-txt-wrap" style="display:none;">
+        <textarea id="nov-m-txt" class="nov-form-input" rows="4" placeholder="Describe la gestión realizada..." style="resize:vertical;min-height:80px;"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button onclick="_novCerrarModal()" style="flex:1;border:1.5px solid var(--border);background:var(--bg-card);border-radius:10px;padding:10px;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--text-2);font-family:inherit;">Cancelar</button>
+      <button id="nov-m-save-btn" onclick="_novGuardar()" style="flex:2;background:#131920;color:white;border:none;border-radius:10px;padding:10px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox imágenes con zoom -->
+<div id="nov-lightbox">
+  <div id="nov-lb-bar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button onclick="_lbZoomOut()">−</button>
+      <span id="nov-lb-zoom-val">100%</span>
+      <button onclick="_lbZoomIn()">+</button>
+      <button onclick="_lbReset()" title="Restablecer">↺</button>
+    </div>
+    <div style="color:rgba(255,255,255,.4);font-size:.65rem;text-align:center;display:none;" id="nov-lb-hint">Rueda para zoom · Arrastrar para mover</div>
+    <button onclick="_lbClose()">✕ Cerrar</button>
+  </div>
+  <div id="nov-lb-canvas">
+    <img id="nov-lb-img" src="" alt="Evidencia">
+  </div>
+</div>
+
 <!-- ===== SUPER ADMIN PANEL ===== -->
 <div id="super-admin-panel">
   <div class="adm-header">
@@ -1047,23 +1375,429 @@ window._sbEstadosToggle=function(){
     </div>
   </div>
 </div>
+<!-- Barra superior: identidad + controles de sistema (estructura Centro de Operaciones) -->
+<div id="topnav">
+  <h1>🚚 Gestión Logística</h1>
+  <div class="sb-status"><div id="fecha"></div><span id="save-st"></span><span id="build-tag" style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:var(--f-mono);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:1px 6px;" title="Versión del build local"></span></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <div id="empresa-switcher" style="display:none;align-items:center;gap:6px;"><span style="font-size:.66rem;color:rgba(255,255,255,.5);">Empresa:</span><select id="empresa-select" onchange="_cambiarEmpresa(this.value)" style="background:#131920;color:white;border:1px solid var(--border-strong);border-radius:7px;padding:5px 10px;font-size:.74rem;cursor:pointer;outline:none;"></select></div>
+    <button onclick="irAPagina('index.html');" title="Volver al menú principal" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.85);padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">← Menú principal</button>
+    <button id="btn-pausa" onclick="togglePausa()" style="background:rgba(230,181,57,.18);border:1px solid rgba(230,181,57,.35);color:#E6B539;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:700;">⏸ Pausa</button>
+    <button class="theme-toggle-btn" onclick="_toggleTheme()" title="Cambiar tema" style="background:rgba(255,255,255,.08);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;">🌙</button>
+    <button onclick="abrirConfig()" style="background:rgba(255,255,255,.08);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">⚙️</button>
+    <button id="btn-volver-roles-topnav" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.85);padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">🎭 Cambiar perfil</button>
+    <button onclick="_cerrarSesion()" title="Cerrar sesión" style="background:rgba(230,57,70,.18);border:1px solid rgba(230,57,70,.35);color:#E63946;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">⏻ Salir</button>
+  </div>
+</div>
+<header>
+  <nav class="sb-actions" id="sidebar-actions">
+    <div class="sb-label">Acciones</div>
+    <!-- botones legacy ocultos para no romper lógica de show/hide -->
+    <button id="btn-seg-topbar" style="display:none"></button>
+    <button id="btn-transp-topbar" style="display:none"></button>
+    <div class="vista-toggle">
+      <button class="btn-vista" data-vista="grid" onclick="setVista('grid')" title="Vista cuadrícula">⊞ Cuadros</button>
+      <button class="btn-vista" data-vista="lista" onclick="setVista('lista')" title="Vista lista">☰ Lista</button>
+    </div>
+    <button class="btn-topbar" onclick="toggleBuscador()">🔍 Buscar</button>
+    <button class="btn-topbar" onclick="generarPDF()">📋 Informe</button>
+    <div id="btn-reportes-wrap" style="display:none;position:relative;">
+      <button class="btn-topbar" onclick="toggleReportesMenu()">
+        📊 Reportes <span id="reportes-badge-total" style="background:rgba(255,255,255,.18);color:white;border-radius:10px;padding:0 6px;font-size:.65rem;font-weight:800;">0</span> <span style="font-size:.6rem;opacity:.7;margin-left:auto;">▸</span>
+      </button>
+      <div id="reportes-menu" style="display:none;position:absolute;left:calc(100% + 10px);top:0;background:var(--bg-card);border:1.5px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);min-width:210px;z-index:200;overflow:hidden;">
+        <button onclick="toggleReportesMenu();abrirSinGuia()" style="width:100%;background:none;border:none;padding:10px 14px;text-align:left;font-size:.78rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border);color:var(--text-1);">
+          <span>⏳ Sin guía</span><span id="singuia-badge" style="background:#dc2626;color:white;border-radius:10px;padding:1px 7px;font-size:.68rem;font-weight:800;">0</span>
+        </button>
+        <button onclick="toggleReportesMenu();abrirSeguimiento()" style="width:100%;background:none;border:none;padding:10px 14px;text-align:left;font-size:.78rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border);color:var(--text-1);">
+          <span>🏭 Proveedores</span><span id="seg-badge" style="background:#dc2626;color:white;border-radius:10px;padding:1px 7px;font-size:.68rem;font-weight:800;">0</span>
+        </button>
+        <button onclick="toggleReportesMenu();abrirTransp()" style="width:100%;background:none;border:none;padding:10px 14px;text-align:left;font-size:.78rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text-1);">
+          <span>🚛 Transportadoras</span><span id="transp-badge" style="background:#0891b2;color:white;border-radius:10px;padding:1px 7px;font-size:.68rem;font-weight:800;">0</span>
+        </button>
+      </div>
+    </div>
+    <button class="btn-topbar bt-dark" onclick="exportar()">📥 Exportar Excel</button>
+    <button class="btn-topbar bt-light" onclick="resetApp()">↩ Nuevo archivo</button>
+    <div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 2px 6px;"></div>
+    <div class="progress-bar-wrap" style="min-width:0;padding:0 2px;">
+      <div class="prog-label" id="prog-label">0 de 0 gestionados</div>
+      <div class="progress-bar"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+    </div>
+    <button class="sb-drop-btn" onclick="_sbEstadosToggle()">
+      <span>📌 Estados</span><span id="sb-estados-arrow" style="transition:transform .2s;">▾</span>
+    </button>
+    <div id="pills"></div>
+  </nav>
+</header>
 <div class="toast" id="toast"></div>
 
+<div id="upload-zone">
+
+  <div style="width:100%;max-width:480px;display:flex;justify-content:flex-start;margin-bottom:4px;">
+    <button onclick="irAPagina('index.html');" style="background:none;border:1.5px solid var(--border);border-radius:10px;padding:8px 16px;font-size:.76rem;font-weight:600;color:var(--text-2);cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='#3971E6';this.style.color='#3971E6';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#64748b';">
+      ← Menú principal
+    </button>
+  </div>
+
+  <div class="instrucciones-wrap">
+    <h3>📋 ¿Cómo obtener el archivo?</h3>
+    <div class="inst-steps">
+      <div class="inst-step">
+        <div class="inst-num">1</div>
+        <p>Abre Dropi y ve a la sección <strong>Mis pedidos</strong>.</p>
+      </div>
+      <div class="inst-step">
+        <div class="inst-num">2</div>
+        <p>Filtra todos los pedidos del <strong>mes en curso</strong> que deseas gestionar.</p>
+      </div>
+      <div class="inst-step">
+        <div class="inst-num">3</div>
+        <p>Selecciona <strong>Acciones</strong> y genera el reporte <strong>"Órdenes con producto (Un producto por fila)"</strong>.</p>
+      </div>
+      <div class="inst-step">
+        <div class="inst-num">4</div>
+        <p>Ve a la sección <strong>Reportes</strong> y descarga el reporte generado.</p>
+      </div>
+      <div class="inst-step">
+        <div class="inst-num">5</div>
+        <p>Arrastra el archivo Excel a esta página y <strong>¡empieza el proceso!</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="restore-banner" id="restore-banner" style="display:none">
+    <div>
+      <strong style="color:var(--text-1)">💾 Sesión guardada encontrada</strong>
+      <span id="restore-info" style="color:var(--text-2);font-size:.76rem;display:block;margin-top:2px;"></span>
+    </div>
+    <div style="text-align:right">
+      <button class="btn-restore" onclick="restaurar()">Restaurar sesión</button>
+      <button class="btn-restore-skip" onclick="descartar()">Descartar y subir nuevo</button>
+    </div>
+  </div>
+  <div class="upload-box" id="drop-area" onclick="document.getElementById('file-input').click()">
+    <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" fill="none" viewBox="0 0 24 24" stroke="#94a3b8" stroke-width="1.4">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+    </svg>
+    <h2>Subir Excel de Dropi</h2>
+    <p>Usar el reporte <strong>Órdenes Productos</strong> de Dropi</p>
+    <button class="btn-upload" onclick="event.stopPropagation();document.getElementById('file-input').click()">Seleccionar archivo .xlsx</button>
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv"/>
+  </div>
+  <div class="col-hint">
+    <strong>📋 Se detecta automáticamente — Órdenes Productos de Dropi:</strong>
+    <ul><li>Nombre · Teléfono · Dirección · Ciudad · Departamento</li><li>Guía · Estado · Transportadora · Fecha guía · Producto</li></ul>
+  </div>
+</div>
+
+<div id="mes-excel-banner" style="display:none;align-items:center;gap:10px;background:var(--warning-soft);border-bottom:2px solid #f59e0b;padding:8px 18px;font-size:.78rem;color:var(--warning);font-weight:600;">
+  <span style="font-size:1rem;">⚠️</span>
+  <span id="mes-excel-banner-txt"></span>
+</div>
+<div id="main">
+  <div id="search-bar">
+    <div class="search-input-wrap">
+      <input type="text" id="search-input" placeholder="🔍 Buscar por teléfono o nombre..." oninput="buscar(this.value)"/>
+      <button class="search-clear" onclick="limpiarBusqueda()">×</button>
+    </div>
+    <span class="search-results-count" id="search-count"></span>
+  </div>
+  <div id="search-results"></div>
+  <div id="content"></div>
+  <div id="sec-nav" style="display:none;position:fixed;bottom:72px;left:calc(50% + 115px);transform:translateX(-50%);display:flex;align-items:center;gap:10px;background:rgba(30,41,59,.85);padding:6px 14px;border-radius:20px;z-index:90;backdrop-filter:blur(6px);">
+    <button onclick="navSec(-1)" style="background:none;border:none;color:white;font-size:1rem;cursor:pointer;padding:2px 6px;opacity:.7;">‹</button>
+    <div id="sec-dots" style="display:flex;gap:6px;"></div>
+    <button onclick="navSec(1)" style="background:none;border:none;color:white;font-size:1rem;cursor:pointer;padding:2px 6px;opacity:.7;">›</button>
+  </div>
+</div>
+
+<div id="right-panel" style="display:none">
+  <div id="transp-popup">
+    <div id="transp-popup-toggle" onclick="this.closest('#transp-popup').classList.toggle('expanded')">
+      🚚 Transportadoras <span class="tp-arrow">▶</span>
+    </div>
+    <div id="transp-popup-links"></div>
+  </div>
+  <div id="resumen">
+    <div id="resumen-toggle" onclick="this.closest('#resumen').classList.toggle('expanded')">
+      📊 Resumen del día <span class="tp-arrow">▶</span>
+    </div>
+    <div id="res-body"></div>
+  </div>
+</div>
+
+<!-- PIN MODAL -->
+<div id="pin-modal">
+  <div class="pin-box">
+    <h3>🔒 Módulo de Proveedores</h3>
+    <p>Ingresa el PIN para continuar</p>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-keypad">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key del" onclick="pinDel()">⌫</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key del" onclick="pinClear()">✕</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+    <button class="pin-cancel" onclick="cerrarPin()">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL SIN GUÍA -->
+<div id="singuia-modal">
+  <div class="seg-box">
+    <div class="seg-header" style="background:#991b1b;">
+      <h3>⏳ Clientes sin guía</h3>
+      <div class="seg-header-right">
+        <label style="font-size:.75rem;color:#fca5a5;display:flex;align-items:center;gap:5px;">Exportar desde <input type="number" id="singuia-min-horas" value="1" min="1" max="999" style="width:46px;padding:3px 6px;border-radius:6px;border:1px solid #7f1d1d;background:#7f1d1d;color:white;font-size:.78rem;text-align:center;"> días</label>
+        <button class="btn-seg-export" onclick="exportarSinGuia()">📤 Exportar Excel</button>
+        <button class="btn-seg-close" onclick="cerrarSinGuia()">✕ Cerrar</button>
+      </div>
+    </div>
+    <div class="seg-body" id="singuia-body"></div>
+  </div>
+</div>
+
+<!-- MODAL HISTORIAL CLIENTE -->
+<div id="historial-modal">
+  <div class="hist-overlay" onclick="cerrarHistorial()"></div>
+  <div class="hist-box">
+    <div class="hist-tail tail-top" id="hist-tail"></div>
+    <div class="hist-header">
+      <div class="hist-header-info">
+        <h3 id="hist-title">📋 Historial del cliente</h3>
+        <div class="hist-header-sub" id="hist-sub"></div>
+      </div>
+      <button class="btn-hist-close" onclick="cerrarHistorial()">✕ Cerrar</button>
+    </div>
+    <div class="hist-body" id="hist-body"></div>
+  </div>
+</div>
+
+<!-- MODAL SEGUIMIENTO PROVEEDORES -->
+<div id="seg-modal">
+  <div class="seg-box">
+    <div class="seg-header">
+      <h3>🏭 Seguimiento a Proveedores</h3>
+      <div class="seg-header-right">
+        <label style="font-size:.75rem;color:#cbd5e1;display:flex;align-items:center;gap:5px;">Exportar desde <input type="number" id="seg-min-dias" value="1" min="1" max="30" style="width:46px;padding:3px 6px;border-radius:6px;border:1px solid #475569;background:#131920;color:white;font-size:.78rem;text-align:center;"> días</label>
+        <button class="btn-seg-export" onclick="exportarSeguimiento()">📤 Exportar Excel</button>
+        <button class="btn-seg-close" onclick="cerrarSeguimiento()">✕ Cerrar</button>
+      </div>
+    </div>
+    <div class="seg-body" id="seg-body"></div>
+  </div>
+</div>
+
+
+<!-- MODAL TRANSPORTADORAS -->
+<div id="transp-modal">
+  <div class="seg-box">
+    <div class="seg-header" style="background:#0c4a6e;">
+      <h3>🚛 Seguimiento a Transportadoras</h3>
+      <div class="seg-header-right">
+        <label style="font-size:.75rem;color:#bae6fd;display:flex;align-items:center;gap:5px;">Exportar desde <input type="number" id="transp-min-dias" value="1" min="1" max="30" style="width:46px;padding:3px 6px;border-radius:6px;border:1px solid #0369a1;background:#0c4a6e;color:white;font-size:.78rem;text-align:center;"> días</label>
+        <button class="btn-seg-export" onclick="exportarTransp()">📤 Exportar Excel</button>
+        <button class="btn-seg-close" onclick="cerrarTransp()">✕ Cerrar</button>
+      </div>
+    </div>
+    <div class="seg-body" id="transp-body"></div>
+  </div>
+</div>
+
+<!-- INFORME INICIAL -->
+<div id="inf-inicial">
+  <div class="inf-box">
+    <h2>📋 Informe Inicial de Gestión</h2>
+    <div class="inf-sub" id="inf-sub"></div>
+    <div id="inf-body"></div>
+    <div class="inf-btns">
+      <button class="btn-inf-volver" onclick="volverACargar()">↩ Cargar otro archivo</button><button class="btn-inf-copy" id="btn-copiar-inf" onclick="copiarInformeImagen()">📸 Copiar imagen</button><button class="btn-inf-close" onclick="cerrarInformeInicial()">Comenzar gestión</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODO RAPIDO -->
+<div id="rapid-modal">
+  <div class="rapid-box">
+    <div class="rapid-header">
+      <h3>⚡ Modo rápido — Tránsito</h3>
+      <span class="rapid-counter" id="rap-counter"></span>
+    </div>
+    <div id="rap-body">
+      <div class="rapid-body">
+        <div class="rapid-progress"><div class="rapid-prog-fill" id="rap-prog"></div></div>
+        <div class="rapid-cliente" id="rap-nombre"></div>
+        <div class="rapid-tel" id="rap-tel"></div>
+        <div class="rapid-prod" id="rap-prod"></div>
+        <div class="rapid-msg" id="rap-msg"></div>
+        <div class="rapid-actions">
+          <a class="btn-rap-send" id="rap-wa-btn" href="#" target="_blank" onclick="rapEnviado()">Abrir WhatsApp y enviar</a>
+          <button class="btn-rap-skip" onclick="rapSiguiente(false)">Omitir</button>
+          <button class="btn-rap-stop" onclick="cerrarRapid()">Detener</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PDF MODAL -->
+<div id="bienvenida-modal">
+  <div class="bienvenida-box">
+    <div class="bv-header">
+      <div style="font-size:2rem;margin-bottom:6px;">🚚</div>
+      <h2>¡Hola, Equipo de Logística!</h2>
+      <div class="bv-frase" id="bv-frase"></div>
+    </div>
+    <div class="bv-body">
+      <div class="bv-resumen-title">Resumen de hoy</div>
+      <div class="bv-total">
+        <span>📦 Total a gestionar</span>
+        <strong id="bv-total">0</strong>
+      </div>
+      <div class="bv-orden-hint">☝️ Activa, desactiva y arrastra para ordenar</div>
+      <div class="bv-orden-list" id="bv-orden-list"></div>
+      <button class="btn-empezar" onclick="cerrarBienvenida()">¡Listo, a gestionar! 💪</button>
+    </div>
+  </div>
+</div>
+
+<div id="pdf-modal">
+  <div class="pdf-box">
+    <h2>📋 Informe de Gestión Diaria</h2>
+    <div class="pdf-sub" id="pdf-sub"></div>
+    <div id="pdf-body"></div>
+    <div class="pdf-btns">
+      <button class="btn-pdf-close" onclick="cerrarPDF()">Cerrar</button>
+      <button class="btn-pdf-copy" id="btn-copiar-pdf" onclick="copiarInformeFinalImagen()">📸 Copiar imagen</button>
+      <button class="btn-pdf-print" style="background:#0f766e" onclick="_guardarNubeDesdePDF()">☁️ Guardar en la nube</button>
+      <button class="btn-pdf-print" onclick="window.print()">🖨️ Guardar PDF</button>
+    </div>
+  </div>
+</div>
+
+<div id="alerta-inac">
+  ⏰ <strong>¡10 minutos sin gestionar!</strong>
+  <p id="alerta-inac-cnt"></p>
+  <button onclick="resetInactividad()">Continuar gestionando</button>
+</div>
+
+<!-- CONFIG MODAL -->
+<div id="config-modal">
+  <div class="config-box">
+    <div class="config-header">
+      <h2 id="cfg-header-title">⚙️ Configuración</h2>
+      <p id="cfg-header-desc">Ajusta la herramienta según tu operación.</p>
+    </div>
+
+    <!-- MENÚ PRINCIPAL -->
+    <div id="cfg-menu" class="config-body" style="padding:20px 22px;">
+      <div class="cfg-menu-grid">
+        <button class="cfg-menu-card" onclick="cfgMostrarSeccion('tiendas')">
+          <span class="cfg-menu-ico">🏪</span>
+          <span class="cfg-menu-label">Tiendas</span>
+          <span class="cfg-menu-desc">Configura las tiendas y su número de WhatsApp</span>
+        </button>
+        <button class="cfg-menu-card" onclick="cfgMostrarSeccion('cas')">
+          <span class="cfg-menu-ico">📋</span>
+          <span class="cfg-menu-label">Mensajes CAS</span>
+          <span class="cfg-menu-desc">Textos para reportar casos en Dropi CAS</span>
+        </button>
+        <button class="cfg-menu-card" onclick="cfgMostrarSeccion('wa')">
+          <span class="cfg-menu-ico">💬</span>
+          <span class="cfg-menu-label">Mensajes WhatsApp</span>
+          <span class="cfg-menu-desc">Personaliza los mensajes enviados a clientes</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- SECCIÓN: TIENDAS -->
+    <div id="cfg-sec-tiendas" style="display:none" class="config-body">
+      <button class="cfg-back-btn" onclick="cfgMostrarMenu()">← Volver</button>
+      <div class="config-field" style="margin-top:10px;">
+        <label>Nombre de tu operación / negocio</label>
+        <input type="text" id="cfg-negocio" placeholder="Ej: Mi Tienda Online"/>
+        <span class="hint">Aparece en el encabezado y en los reportes.</span>
+      </div>
+      <div class="config-field">
+        <label>Tiendas detectadas en tu Excel</label>
+        <span class="hint" style="margin-bottom:6px;display:block">Para cada tienda, escribe cómo quieres que se llame internamente y el número de WhatsApp al que se redirigen tus clientes.</span>
+        <div class="config-tiendas" id="cfg-tiendas"></div>
+        <button class="btn-add-tienda" onclick="cfgAgregarTienda()">+ Agregar tienda</button>
+      </div>
+    </div>
+
+    <!-- SECCIÓN: CAS -->
+    <div id="cfg-sec-cas" style="display:none" class="config-body">
+      <button class="cfg-back-btn" onclick="cfgMostrarMenu()">← Volver</button>
+      <div class="config-field" style="margin-top:10px;">
+        <label>📋 Mensajes para CAS Dropi</label>
+        <span class="hint" style="margin-bottom:8px;display:block">Textos que se copian al reportar un caso en el sistema CAS de Dropi.</span>
+        <label style="font-size:.72rem;font-weight:600;color:var(--text-2);margin-bottom:4px;display:block">Sin movimiento (tránsito / reparto)</label>
+        <textarea id="cfg-cas-sinmov" rows="3" style="width:100%;resize:vertical;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.78rem;font-family:inherit;color:var(--text-1);outline:none;transition:border .15s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+        <label style="font-size:.72rem;font-weight:600;color:var(--text-2);margin:10px 0 4px;display:block">Novedad activa</label>
+        <textarea id="cfg-cas-novedad" rows="3" style="width:100%;resize:vertical;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.78rem;font-family:inherit;color:var(--text-1);outline:none;transition:border .15s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+        <button style="margin-top:6px;background:none;border:none;font-size:.72rem;color:var(--text-3);cursor:pointer;padding:0;text-decoration:underline;" onclick="cfgResetCAS()">Restaurar mensajes originales</button>
+      </div>
+      <div class="config-field">
+        <label>📝 Textos de solución de novedad (Dropi)</label>
+        <span class="hint" style="margin-bottom:8px;display:block">Se copian al gestionar una novedad. Variables: <code style="font-size:.7rem;background:var(--bg-inset);padding:1px 5px;border-radius:4px;">{nombre}</code> <code style="font-size:.7rem;background:var(--bg-inset);padding:1px 5px;border-radius:4px;">{telefono}</code> <code style="font-size:.7rem;background:var(--bg-inset);padding:1px 5px;border-radius:4px;">{dia_siguiente}</code></span>
+        <div id="cfg-novsol-rows"></div>
+        <button style="margin-top:6px;background:none;border:none;font-size:.72rem;color:var(--text-3);cursor:pointer;padding:0;text-decoration:underline;" onclick="cfgResetNovSol()">Restaurar textos originales</button>
+      </div>
+    </div>
+
+    <!-- SECCIÓN: MENSAJES WHATSAPP -->
+    <div id="cfg-sec-wa" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:12px 22px 0;">
+        <button class="cfg-back-btn" onclick="cfgMostrarMenu()">← Volver</button>
+      </div>
+      <div class="wam-tabs" id="wam-tabs" style="margin-top:10px;"></div>
+      <div class="wam-body" style="flex:1;overflow-y:auto;">
+        <div class="wam-vars" id="wam-vars"></div>
+        <div id="wam-nov-wrap" style="display:none">
+          <label class="wam-label">Tipo de novedad</label>
+          <select class="wam-nov-select" id="wam-nov-sel" onchange="wamCambiarNov(this.value)"></select>
+        </div>
+        <label class="wam-label">Mensaje personalizado</label>
+        <p class="wam-hint">Edita el texto. Las variables se reemplazan automáticamente al enviar.</p>
+        <textarea class="wam-textarea" id="wam-textarea" placeholder="Escribe aquí tu mensaje personalizado..."></textarea>
+        <button class="wam-btn-reset" onclick="wamResetActual()" style="margin-top:6px;">Restaurar mensaje original</button>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="config-footer" id="cfg-footer" style="padding:14px 24px;flex-direction:column;gap:8px;">
+      <button class="btn-config-guardar" id="cfg-btn-guardar" onclick="cfgGuardar()" style="display:none">Guardar 💾</button>
+      <button class="btn-config-edit" onclick="cfgCerrarOVolver()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script src="shared/app-shared.js"></script>
+<script src="gestion-logistica.js"></script>
 <script>
-// ===== MODE SELECT (router del landing) =====
-function _modoLogistica(){
-  window._navegandoInterno=true;
-  location.href='gestion-logistica.html';
-}
-function _modoDiaria(){
-  window._navegandoInterno=true;
-  location.href='gestiones-diarias.html';
-}
-function _modoFinanciero(){
-  window._navegandoInterno=true;
-  location.href='control-financiero.html';
-}
+// Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
+// entra directo a Gestión Logística tras un login/restauración de sesión
+// exitosos. Ver plan de split en 3 páginas.
+window._gdMostrarModeSelect = function(asesor){
+  document.getElementById('upload-zone').style.display='flex';
+  checkSesion();
+};
 </script>
 </body>
 </html>
