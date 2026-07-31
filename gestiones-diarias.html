@@ -1384,6 +1384,11 @@ window._sbEstadosToggle=function(){
 window._gdMostrarModeSelect = function(asesor){
   _gdInit();
 };
+// El botón "← Menú principal" llama a _gdVolver(), que por defecto solo
+// oculta el panel y vuelve a llamar a _gdMostrarModeSelect (arriba, entra de
+// nuevo a Gestiones Diarias en vez de salir) — se sobreescribe para navegar
+// de verdad a la página principal.
+window._gdVolver = function(){ irAPagina('/'); };
 </script>
 </body>
 </html>

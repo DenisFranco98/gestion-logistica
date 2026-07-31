@@ -1388,7 +1388,7 @@ window._sbEstadosToggle=function(){
 window._gdMostrarModeSelect = function(asesor){
   if(window._currentRol==='asesor'){
     alert('No tienes acceso a Control Financiero con este perfil.');
-    irAPagina('index.html');
+    irAPagina('/');
     return;
   }
   document.getElementById('cf-panel').style.display='flex';
@@ -1397,7 +1397,7 @@ window._gdMostrarModeSelect = function(asesor){
 // El botón "← Menú principal" de la cabecera de CF llama a _cfVolver() — se
 // reescribe aquí para que navegue de verdad a index.html en vez de solo
 // ocultar el panel (comportamiento de cuando todo vivía en la misma página).
-window._cfVolver = function(){ irAPagina('index.html'); };
+window._cfVolver = function(){ irAPagina('/'); };
 </script>
 </body>
 </html>
