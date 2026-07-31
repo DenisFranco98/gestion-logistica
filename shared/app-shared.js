@@ -42,6 +42,29 @@ function _getMesCargado(){
   return window._mesCargado || new Date().toISOString().slice(0,7);
 }
 
+// ── CARGA DIFERIDA DE LIBRERÍAS EXTERNAS ────────────────────────────────
+// El Centro de Operaciones está en las 4 páginas, pero XLSX (reporte
+// consolidado) y Chart.js (analítica) solo venían en el <head> de algunas —
+// en el resto el botón moría con "XLSX is not defined". En vez de sumarle
+// ~1MB al landing, se inyectan la primera vez que se usan. Si la página ya
+// las trae en el <head>, resuelve de inmediato sin volver a descargarlas.
+const _LIB_XLSX  = {global:'XLSX',  url:'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'};
+const _LIB_CHART = {global:'Chart', url:'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'};
+const _libsPendientes = {};
+function _cargarLib(lib){
+  if(window[lib.global]) return Promise.resolve();
+  if(_libsPendientes[lib.url]) return _libsPendientes[lib.url];
+  _libsPendientes[lib.url] = new Promise((resolve,reject)=>{
+    const fallo=msg=>{ delete _libsPendientes[lib.url]; reject(new Error(msg)); };
+    const s=document.createElement('script');
+    s.src=lib.url;
+    s.onload=()=>{ window[lib.global] ? resolve() : fallo(lib.global+' no quedó disponible'); };
+    s.onerror=()=>fallo('no se pudo descargar la librería (revisa tu conexión)');
+    document.head.appendChild(s);
+  });
+  return _libsPendientes[lib.url];
+}
+
 // ── DROPDOWN "FALSO" REUTILIZABLE ───────────────────────────────────────
 // Genera un <select> oculto (fuente de verdad, dispara 'change' normal) +
 // un dropdown propio en HTML/CSS para poder controlar 100% su estilo,
@@ -2298,7 +2321,8 @@ function _anlCargar(){
     }).filter(x=>x.cont+x.noCont+x.wa+x.fin+x.gsg+x.tsg>0);
   }
 
-  Promise.all(promises).then(results=>{
+  // Chart.js se descarga en paralelo con el historial (solo control-financiero.html lo trae en el <head>)
+  Promise.all([Promise.all(promises), _cargarLib(_LIB_CHART)]).then(([results])=>{
     const byFecha = {};
     fechas.forEach(f=>{ byFecha[f]={finalizados:0,contestaron:0,noContestaron:0,waEnviados:0,devoluciones:0,guiasSinGestion:0,transitoSinGestion:0,rechazadosGestionados:0,rechazadosSinGestion:0,minutos:0}; });
 
@@ -2630,6 +2654,10 @@ function _anlCargar(){
       '<table class="anl-table">'+
       '<thead><tr><th>Fecha</th><th style="color:#60a5fa">✅ Cont.</th><th style="color:#f87171">❌ No cont.</th><th style="color:#a78bfa">📱 WA</th><th style="color:#4ade80">🏁 Final.</th><th style="color:#fb923c">↩️ Dev.</th><th style="color:#93c5fd">📦 S/G</th><th style="color:#67e8f9">🚚 T.ok</th><th style="color:#86efac">✅ R.G</th><th style="color:#fda4af">🚫 R.SG</th><th>⏱ Mins</th><th>G/min</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table>';
+  }).catch(e=>{
+    console.error('[analitica]', e);
+    const w=document.getElementById('anl-table-wrap');
+    if(w) w.innerHTML='<div class="anl-empty">No se pudo cargar la analítica: '+esc(e&&e.message||e)+'</div>';
   });
 }
 
@@ -3139,20 +3167,23 @@ function _admCargarReportes(){
 
 function _admDescargarReporteConsolidado(){
   if(!_admRepDatos.length){toast('No hay guías para exportar');return;}
-  const cols=['NUMERO DE GUIA','TRANSPORTADORA','ESTATUS','FECHA ULT MOV','TIENDA'];
-  const recomendar=_admRepDatos.filter(f=>f._grupo==='recomendar');
-  const reportar=_admRepDatos.filter(f=>f._grupo!=='recomendar');
-  const wb = XLSX.utils.book_new();
-  const agregarHoja=(filas,nombreHoja)=>{
-    const ws = XLSX.utils.json_to_sheet(filas, {header:cols});
-    ws['!cols']=[18,22,26,16,22].map(w=>({wch:w}));
-    XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
-  };
-  agregarHoja(recomendar, 'Guías para recomendar');
-  agregarHoja(reportar, 'Guías para reportar');
-  const hoy = new Date().toLocaleDateString('es-CO').replace(/\//g,'-');
-  XLSX.writeFile(wb, 'Reporte_Guias_Todas_Tiendas_'+hoy+'.xlsx');
-  toast('📤 Reporte consolidado descargado');
+  toast('⏳ Generando Excel...');
+  _cargarLib(_LIB_XLSX).then(()=>{
+    const cols=['NUMERO DE GUIA','TRANSPORTADORA','ESTATUS','FECHA ULT MOV','TIENDA'];
+    const recomendar=_admRepDatos.filter(f=>f._grupo==='recomendar');
+    const reportar=_admRepDatos.filter(f=>f._grupo!=='recomendar');
+    const wb = XLSX.utils.book_new();
+    const agregarHoja=(filas,nombreHoja)=>{
+      const ws = XLSX.utils.json_to_sheet(filas, {header:cols});
+      ws['!cols']=[18,22,26,16,22].map(w=>({wch:w}));
+      XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+    };
+    agregarHoja(recomendar, 'Guías para recomendar');
+    agregarHoja(reportar, 'Guías para reportar');
+    const hoy = new Date().toLocaleDateString('es-CO').replace(/\//g,'-');
+    XLSX.writeFile(wb, 'Reporte_Guias_Todas_Tiendas_'+hoy+'.xlsx');
+    toast('📤 Reporte consolidado descargado');
+  }).catch(e=>toast('⚠️ No se pudo generar el Excel: '+(e&&e.message||e)));
 }
 
 function _admCargarEmpresas(){
