@@ -9,9 +9,14 @@ const _CF_DEF={
 let _cfMes='',_cfCfg={},_cfMD={},_cfPrevMD={},_cfSaveT={},_cfOrdRows=[],_cfCurTab='dash';
 
 // _gdKey/_gdKeyFallback/toast/esc/norm/_fselHtml viven en shared/app-shared.js
-function _cfTK(){return (typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');}
-function _cfBasePath(m){return 'control_financiero/'+_cfTK()+'/'+(m||_cfMes);}
-function _cfCfgPath(){return 'control_financiero/'+_cfTK()+'/config';}
+// _cfTK() es la clave de ESCRITURA (empresaId único). _cfBase/_cfCfgBase aceptan
+// una clave arbitraria para que _leerTienda pueda probar también la vieja (slug
+// del nombre) y migrar el nodo si hace falta — ver comentario en app-shared.js.
+function _cfTK(){return (typeof _gdTK==='function'?_gdTK():(window.getLoginTienda?_gdKey(window.getLoginTienda()):'_'));}
+function _cfBase(m,tk){return 'control_financiero/'+(tk||_cfTK())+'/'+(m||_cfMes);}
+function _cfBasePath(m){return _cfBase(m);}
+function _cfCfgBase(tk){return 'control_financiero/'+(tk||_cfTK())+'/config';}
+function _cfCfgPath(){return _cfCfgBase();}
 function _cfPad(n){return String(n).padStart(2,'0');}
 // Símbolo de moneda configurado para esta tienda (cada tienda puede tener el suyo — no se consolida entre monedas)
 function _cfSim(){return(_cfCfg.moneda&&_cfCfg.moneda.simbolo)||'$';}
@@ -35,9 +40,9 @@ function _cfInit(){
     _cfCfg=JSON.parse(JSON.stringify(_CF_DEF));_cfMD={};_cfPrevMD={};_cfTab('dash');return;
   }
   Promise.all([
-    _db.ref(_cfCfgPath()).once('value'),
-    _db.ref(_cfBasePath()).once('value'),
-    _db.ref(_cfBasePath(prevM)).once('value')
+    _leerTienda(_cfCfgBase),
+    _leerTienda(tk=>_cfBase(null,tk)),
+    _leerTienda(tk=>_cfBase(prevM,tk))
   ]).then(([cs,ms,ps])=>{
     _cfCfg=Object.assign(JSON.parse(JSON.stringify(_CF_DEF)),cs.val()||{});
     _cfMD=ms.val()||{};_cfPrevMD=ps.val()||{};
@@ -78,8 +83,8 @@ function _cfCargarMes(){
   if(typeof _db!=='undefined'){
     document.getElementById('cf-tab-'+_cfCurTab).innerHTML='<div style="padding:40px;text-align:center;color:var(--text-3);font-size:.8rem;">Cargando...</div>';
     Promise.all([
-      _db.ref(_cfBasePath()).once('value'),
-      _db.ref(_cfBasePath(prevM)).once('value')
+      _leerTienda(tk=>_cfBase(null,tk)),
+      _leerTienda(tk=>_cfBase(prevM,tk))
     ]).then(([s,p])=>{
       _cfMD=s.val()||{};
       _cfPrevMD=p.val()||{};
@@ -381,13 +386,17 @@ function _cfSave(sub,val,delay){
   if(_cfSaveT[sub])clearTimeout(_cfSaveT[sub]);
   _cfSaveT[sub]=setTimeout(()=>{
     if(typeof _db==='undefined')return;
+    if(!_tiendaLista('control financiero'))return;
     _db.ref(_cfBasePath()+'/'+sub).set(val);
   },delay);
 }
 function _cfSaveCfg(){
   if(typeof _db==='undefined')return;
   clearTimeout(_cfSaveT['cfg']);
-  _cfSaveT['cfg']=setTimeout(()=>{_db.ref(_cfCfgPath()).set(_cfCfg);},600);
+  _cfSaveT['cfg']=setTimeout(()=>{
+    if(!_tiendaLista('configuración financiera'))return;
+    _db.ref(_cfCfgPath()).set(_cfCfg);
+  },600);
 }
 
 // ── Compute ─────────────────────────────────────────────────────────
@@ -585,6 +594,9 @@ function _cfComparativoData(){
 async function _cfFetchMesesDoc(meses){
   if(typeof _db==='undefined')return meses.map(()=>({}));
   return Promise.all(meses.map(async m=>{
+    // Migrar el mes entero si todavía vive en la clave vieja; leer directo
+    // /cod y /dias habría copiado esos dos subnodos y dejado el resto atrás.
+    await _leerTienda(tk=>_cfBase(m,tk));
     const [codS,diasS]=await Promise.all([
       _db.ref(_cfBasePath(m)+'/cod').once('value'),
       _db.ref(_cfBasePath(m)+'/dias').once('value')

@@ -3313,21 +3313,26 @@ window._meeGuardar = function(){
     }
     // El nombre cambió → la clave de control_financiero/gestiones_diarias
     // (derivada del nombre) también cambia. Migramos el historial para no perderlo.
-    return Promise.all([
-      _db.ref('control_financiero/'+oldKey).once('value'),
-      _db.ref('gestiones_diarias/'+oldKey).once('value')
-    ]).then(([cfSnap,gdSnap])=>{
+    // ro/novedades/anticipos también se clavaban por nombre y no se migraban:
+    // al renombrar quedaban huérfanos (así se perdieron los registros de
+    // ro/frankaro al pasar la tienda a "Frankaro Colombia").
+    const RAICES_POR_NOMBRE=['control_financiero','gestiones_diarias','ro','novedades','anticipos'];
+    return Promise.all(RAICES_POR_NOMBRE.map(r=>_db.ref(r+'/'+oldKey).once('value')))
+      .then(snaps=>{
       const tareas=[];
-      if(cfSnap.exists()){
-        const cfData=cfSnap.val();
-        cfData.config=Object.assign({},cfData.config||{},{moneda});
-        tareas.push(_db.ref('control_financiero/'+newKey).set(cfData).then(()=>_db.ref('control_financiero/'+oldKey).remove()));
-      } else {
-        tareas.push(_db.ref('control_financiero/'+newKey+'/config').update({moneda}));
-      }
-      if(gdSnap.exists()){
-        tareas.push(_db.ref('gestiones_diarias/'+newKey).set(gdSnap.val()).then(()=>_db.ref('gestiones_diarias/'+oldKey).remove()));
-      }
+      snaps.forEach((snap,i)=>{
+        const raiz=RAICES_POR_NOMBRE[i];
+        if(!snap.exists()){
+          if(raiz==='control_financiero') tareas.push(_db.ref('control_financiero/'+newKey+'/config').update({moneda}));
+          return;
+        }
+        let data=snap.val();
+        if(raiz==='control_financiero'){
+          data=Object.assign({},data);
+          data.config=Object.assign({},data.config||{},{moneda});
+        }
+        tareas.push(_db.ref(raiz+'/'+newKey).set(data).then(()=>_db.ref(raiz+'/'+oldKey).remove()));
+      });
       return Promise.all(tareas);
     });
   }).then(()=>{
@@ -4075,9 +4080,12 @@ function _gdadmPoblarTiendas(){
   ]).then(([snapAE, snapEmp])=>{
     const ids = Object.keys(snapAE.val()||{});
     const empresas = snapEmp.val()||{};
+    // key = empresaId (única). keyLegacy = slug del nombre, para seguir viendo
+    // lo guardado antes del cambio de clave. Con el slug, dos tiendas homónimas
+    // de negocios distintos caían en la misma ruta y el admin veía datos ajenos.
     _gdadmTiendasDisponibles = ids.map(empId=>{
       const nombre=(empresas[empId]||{}).nombre||empId;
-      return {key:_gdKey(nombre), nombre};
+      return {key:empId, keyLegacy:_gdKey(nombre), nombre};
     }).sort((a,b)=>a.nombre.localeCompare(b.nombre));
     // La primera vez que se cargan las tiendas, marcarlas todas por defecto
     if(!_gdadmTiendasSel.size) _gdadmTiendasDisponibles.forEach(t=>_gdadmTiendasSel.add(t.key));
@@ -4129,7 +4137,11 @@ function _gdadmCargar(){
   const el=document.getElementById('gdadm-content');
   el.innerHTML='<div style="padding:20px;color:var(--text-3);font-size:.78rem;">Cargando...</div>';
   Promise.all(tiendas.map(t=>
-    _db.ref('gestiones_diarias/'+t.key+'/'+mes).once('value').then(snap=>({tienda:t,snap}))
+    _db.ref('gestiones_diarias/'+t.key+'/'+mes).once('value').then(snap=>{
+      // Si la tienda todavía no migró a la clave por id, leer la ruta vieja.
+      if(snap.exists()||!t.keyLegacy||t.keyLegacy===t.key) return {tienda:t,snap};
+      return _db.ref('gestiones_diarias/'+t.keyLegacy+'/'+mes).once('value').then(sv=>({tienda:t,snap:sv}));
+    })
   )).then(results=>{
     // raw = { asesorKey: { _nombre, dias:{1:{...},2:{...},...}, notas }, ... }
     _gdadmAsesores=[];
@@ -4317,10 +4329,54 @@ function _gdadmRenderTipo(){
   </div>`;
 }
 
-// _gdTK/_gdAK: clave tienda/asesor normalizada — las usa Gestión Logística
-// (ej. _roSyncFromGestion) y Gestiones Diarias, aunque el nombre sugiera GD.
-function _gdTK(){ return _gdKey(window.getLoginTienda?window.getLoginTienda():'_'); }
+// ── IDENTIDAD DE TIENDA ─────────────────────────────────────────────────
+// gestiones_diarias, control_financiero, ro, novedades y anticipos se clavaban
+// con el slug del NOMBRE de la tienda. El nombre se repite entre negocios
+// distintos (dos "Luva" de dos admins → la MISMA ruta), así que esos negocios
+// leían y escribían datos del otro. La clave canónica pasa a ser el empresaId,
+// que es único por tienda.
+//   _gdTK()       → clave de ESCRITURA (empresaId; cae al slug si aún no hay id)
+//   _gdTKLegacy() → clave vieja, solo para leer/migrar lo anterior al cambio
+function _gdTKLegacy(){ return _gdKey(window.getLoginTienda?window.getLoginTienda():'_'); }
+function _gdTK(){
+  return window._currentTiendaId || localStorage.getItem('lgs_empresa_id') || _gdTKLegacy();
+}
 function _gdAK(){ return _gdKey(window.getLoginAsesor?window.getLoginAsesor():'_'); }
+
+// Guard de escritura. Sin tienda resuelta, _gdTK() cae en '_' (el valor que
+// devuelve _gdKey('')) y los datos terminan en un nodo que ninguna tienda puede
+// abrir: así se creó control_financiero/_ con un mes entero de cifras reales
+// dentro. Antes de guardar cualquier dato de tienda hay que pasar por acá.
+function _tiendaLista(que){
+  const tk=_gdTK();
+  if(tk && tk!=='_') return true;
+  console.warn('[TIENDA] escritura bloqueada'+(que?' ('+que+')':'')+': no hay tienda en la sesión');
+  if(typeof toast==='function') toast('⚠️ No hay tienda activa — no se guardó nada. Vuelve a entrar a la tienda.',4500);
+  return false;
+}
+
+// Lee un nodo de tienda tolerando el cambio de clave: si la ruta nueva (por id)
+// está vacía y la vieja (por nombre) tiene datos, los copia una sola vez a la
+// nueva y sigue trabajando ahí. Sin esa copia, la primera escritura sobre un
+// registro leído del legacy crearía una ruta nueva con un solo registro y el
+// resto del historial dejaría de verse.
+// La ruta vieja NO se borra: la migración es reversible y el rescate de datos
+// mezclados entre tiendas homónimas se decide aparte.
+//   rutaFn: tk => 'raiz/'+tk+'/...'      q: ref => ref.orderByChild('ts')  (opcional)
+function _leerTienda(rutaFn, q){
+  const nueva=rutaFn(_gdTK()), vieja=rutaFn(_gdTKLegacy());
+  const ref=r=>{ const base=_db.ref(r); return q?q(base):base; };
+  return ref(nueva).once('value').then(sn=>{
+    if(sn.exists()||nueva===vieja) return sn;
+    return ref(vieja).once('value').then(sv=>{
+      if(!sv.exists()) return sn;
+      // Copiar el nodo completo a la clave nueva antes de que alguien lo edite.
+      return _db.ref(nueva).set(sv.val())
+        .then(()=>ref(nueva).once('value'))
+        .catch(e=>{ console.warn('[TIENDA] no se pudo migrar '+vieja+' → '+nueva, e); return sv; });
+    });
+  });
+}
 // Lee las evidencias/soluciones de un registro de novedad (esquema nuevo
 // soluciones/{key} o el viejo sol1/2/3) — usada por Gestión Logística y GD.
 function _novGetSols(n){
@@ -4340,8 +4396,14 @@ function _roAutoSync(){
   // las 4 páginas, así que el typeof no es opcional (ver bug del "Cargando..."
   // eterno en la pestaña R.O. de Gestiones Diarias).
   if(typeof _db==='undefined'||!window._currentUsername||typeof pedidos==='undefined'||!pedidos.length)return;
+  if(!_tiendaLista('sincronización de oficina'))return;
   const oficinas=pedidos.filter(p=>p.estadoKey==='oficina'&&p.guia);
-  oficinas.forEach(p=>_roSyncFromGestion(p.id));
+  // Migrar el mes de ro/ ANTES de escribir: si esta sync creara el nodo nuevo
+  // con un registro suelto, la lectura posterior lo daría por existente y el
+  // resto del historial (aún en la clave vieja) dejaría de verse.
+  _leerTienda(tk=>'ro/'+tk+'/'+_getMesCargado())
+    .catch(()=>{})
+    .then(()=>oficinas.forEach(p=>_roSyncFromGestion(p.id)));
 }
 
 function _roSyncFromGestion(id){

@@ -11,8 +11,12 @@ function _gdInit(){
   _gdCargar();
 }
 
-// _gdKey/_gdTK/_gdAK viven en shared/app-shared.js
-function _gdBasePath(){ return 'gestiones_diarias/'+_gdTK()+'/'+_gdMes+'/'+_gdAK(); }
+// _gdKey/_gdTK/_gdAK/_leerTienda viven en shared/app-shared.js.
+// _gdBase(tk) permite construir la ruta con cualquier clave de tienda: la nueva
+// (por empresaId) para escribir, la vieja (por nombre) para el fallback de
+// lectura. _gdBasePath() es siempre la de escritura.
+function _gdBase(tk){ return 'gestiones_diarias/'+(tk||_gdTK())+'/'+_gdMes+'/'+_gdAK(); }
+function _gdBasePath(){ return _gdBase(); }
 
 function _gdCargar(){
   const [y,m]=_gdMes.split('-').map(Number);
@@ -20,7 +24,7 @@ function _gdCargar(){
   document.getElementById('gd-mes-label').textContent=label.charAt(0).toUpperCase()+label.slice(1);
   document.getElementById('gd-save-st').textContent='';
   if(typeof _db==='undefined'||!window._currentUsername){_gdData={};_gdRenderTabla();_gdRenderResumen();return;}
-  _db.ref(_gdBasePath()).once('value',snap=>{
+  _leerTienda(_gdBase).then(snap=>{
     const d=snap.val()||{};
     _gdData=d.dias||{};
     document.getElementById('gd-notas-coord').value=d.notas||'';
@@ -36,7 +40,7 @@ function _gdCargarCF(){
   const el=document.getElementById('gd-tienda-resumen');
   if(!el)return;
   if(typeof _db==='undefined'){el.innerHTML='';return;}
-  _db.ref('control_financiero/'+_gdTK()+'/'+_gdMes).once('value').then(ms=>{
+  _leerTienda(tk=>'control_financiero/'+tk+'/'+_gdMes).then(ms=>{
     const d=ms.val()||{};
     _gdRenderTiendaResumen(d.cod||{},d.dias||{});
   }).catch(()=>{el.innerHTML='';});
@@ -231,6 +235,7 @@ function _gdResumenDebounce(){
 
 function _gdGuardar(){
   if(typeof _db==='undefined'||!window._currentUsername)return;
+  if(!_tiendaLista('gestiones diarias')){document.getElementById('gd-save-st').textContent='';return;}
   document.getElementById('gd-save-st').textContent='Guardando...';
   const nombre=window.getLoginAsesor?window.getLoginAsesor():'';
   _db.ref(_gdBasePath()).update({dias:_gdData,_nombre:nombre}).then(()=>{
@@ -362,7 +367,7 @@ function _consoSetDia(dia){
 
 function _consoCargar(){
   if(typeof _db==='undefined'||!window._currentUsername){_consoData={};_consoRender();return;}
-  _db.ref(_gdBasePath()+'/consolidado/'+_consoDia).once('value',snap=>{
+  _leerTienda(tk=>_gdBase(tk)+'/consolidado/'+_consoDia).then(snap=>{
     _consoData=snap.val()||{};
     _consoRender();
   });
@@ -423,12 +428,13 @@ function _consoGuardar(){
 // ── NOVEDADES ───────────────────────────────────────────────────────────
 let _novData={}, _novModalState={mode:'new',id:null,solNum:1}, _novTipoActivo='img', _novEstadoActivo='solucionada';
 
-function _novBasePath(){ return 'novedades/'+_gdTK()+'/'+_gdMes; }
+function _novBase(tk){ return 'novedades/'+(tk||_gdTK())+'/'+_gdMes; }
+function _novBasePath(){ return _novBase(); }
 
 function _novInit(){
   document.getElementById('nov-table-wrap').innerHTML='<div style="padding:20px;color:var(--text-3);font-size:.78rem;text-align:center;">Cargando...</div>';
   if(typeof _db==='undefined'){ _novData={}; _novRender(); return; }
-  _db.ref(_novBasePath()).orderByChild('ts').once('value',snap=>{
+  _leerTienda(_novBase, r=>r.orderByChild('ts')).then(snap=>{
     _novData={};
     snap.forEach(ch=>{ _novData[ch.key]=ch.val(); });
     _novRender();
@@ -712,8 +718,12 @@ async function _novSyncGD(dia){
     else if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
     else { gestion++; }
   });
-  // Leer datos actuales del día en GD (para no pisar otras columnas)
+  // Leer datos actuales del día en GD (para no pisar otras columnas).
+  // _leerTienda sobre el nodo completo primero: si el mes aún vive en la clave
+  // vieja, lo migra entero — leer solo /dias/{dia} habría copiado ese día suelto
+  // y dejado el resto del historial atrás.
   const base=_gdBasePath();
+  await _leerTienda(_gdBase);
   const snap=await _db.ref(base+'/dias/'+dia).once('value');
   const dayData=snap.val()||{};
   dayData.soluc=soluc; dayData.gestion=gestion; dayData.devuelt=devuelt;
@@ -889,7 +899,8 @@ const _RO_ESTADOS=[
 ];
 let _roData={}, _roST={};
 
-function _roPath(){ return 'ro/'+_gdTK()+'/'+_gdMes; }
+function _roBase(tk){ return 'ro/'+(tk||_gdTK())+'/'+_gdMes; }
+function _roPath(){ return _roBase(); }
 
 function _roInit(){
   const wrap=document.getElementById('ro-table-wrap');
@@ -899,7 +910,7 @@ function _roInit(){
   if(typeof _db==='undefined'){_roData={};_roRender();return;}
   // Pequeño delay para que los writes de autoSync lleguen primero
   setTimeout(()=>{
-    _db.ref(_roPath()).orderByChild('ts').once('value',snap=>{
+    _leerTienda(_roBase, r=>r.orderByChild('ts')).then(snap=>{
       _roData={};
       snap.forEach(ch=>{ _roData[ch.key]=ch.val(); });
       _roRender();
@@ -1013,13 +1024,14 @@ const _ANT_TRANSPORTES=[
 ];
 let _antData={con:{},sin:{}}, _antST={};
 
-function _antPath(tipo){ return 'anticipos/'+_gdTK()+'/'+_gdMes+'/'+tipo; }
+function _antBase(tipo,tk){ return 'anticipos/'+(tk||_gdTK())+'/'+_gdMes+'/'+tipo; }
+function _antPath(tipo){ return _antBase(tipo); }
 
 function _antInit(){
   ['con','sin'].forEach(tipo=>{
     document.getElementById('ant-'+tipo+'-wrap').innerHTML='<div style="padding:12px;color:var(--text-3);font-size:.72rem;text-align:center;">Cargando...</div>';
     if(typeof _db==='undefined'){_antData[tipo]={};_antRender(tipo);return;}
-    _db.ref(_antPath(tipo)).orderByChild('ts').once('value',snap=>{
+    _leerTienda(tk=>_antBase(tipo,tk), r=>r.orderByChild('ts')).then(snap=>{
       _antData[tipo]={};
       snap.forEach(ch=>{ _antData[tipo][ch.key]=ch.val(); });
       _antRender(tipo);
