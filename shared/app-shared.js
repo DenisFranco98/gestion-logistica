@@ -686,7 +686,29 @@ function _initLogin(){
     const savedSession = localStorage.getItem(LOGIN_KEY);
     if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); return; }
     if(savedSession==='superadmin'){ _showSuperAdmin(); _superAdmCargar(); if(user)_refrescarBotonCambiarPerfil(user.uid,user.email||''); return; }
-    if(savedSession==='admin'){ _showAdmin(); _admCargarDashboard(); if(user)_refrescarBotonCambiarPerfil(user.uid,user.email||''); return; }
+    if(savedSession==='admin'){
+      // Un admin en una página de módulo (las 3 declaran _PAGINA_MODULO en su
+      // bootstrap; index.html no) abre ese módulo con la última tienda a la que
+      // entró. Antes se caía siempre al Centro de Operaciones y los módulos
+      // eran inalcanzables salvo pasando por 🏪 Tiendas → "Entrar a tienda".
+      const tAdm = localStorage.getItem(TIENDA_KEY), aAdm = localStorage.getItem(ASESOR_KEY);
+      if(window._PAGINA_MODULO && user && tAdm && aAdm){
+        _loginHide();
+        window._currentRol = localStorage.getItem('lgs_rol')||'dueno';
+        window._currentTiendaId = localStorage.getItem('lgs_empresa_id')||null;
+        _registrarPresencia(user.uid, tAdm, aAdm);
+        _refrescarBotonCambiarPerfil(user.uid, user.email||'');
+        window._gdMostrarModeSelect(aAdm);
+        return;
+      }
+      // Sin tienda elegida no hay ruta de datos que leer (_gdTK/_gdAK caerían
+      // en '_') y el módulo saldría vacío sin explicación: mejor quedarse en el
+      // Centro de Operaciones y decir cómo entrar.
+      if(window._PAGINA_MODULO){
+        setTimeout(()=>toast('Para abrir '+window._PAGINA_MODULO+', entra primero a una tienda desde 🏪 Tiendas',4500),800);
+      }
+      _showAdmin(); _admCargarDashboard(); if(user)_refrescarBotonCambiarPerfil(user.uid,user.email||''); return;
+    }
     if(!user){ _loginShow(); document.getElementById('login-user').focus(); return; }
     const uid = user.uid;
     const t = localStorage.getItem(TIENDA_KEY);

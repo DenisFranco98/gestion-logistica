@@ -1794,6 +1794,9 @@ window._sbEstadosToggle=function(){
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestión Logística tras un login/restauración de sesión
 // exitosos. Ver plan de split en 3 páginas.
+// Marca esta página como "de módulo" para que un admin pueda abrirla directo
+// en vez de rebotar al Centro de Operaciones (ver router en app-shared.js).
+window._PAGINA_MODULO = 'Gestión Logística';
 window._gdMostrarModeSelect = function(asesor){
   document.getElementById('upload-zone').style.display='flex';
   checkSesion();

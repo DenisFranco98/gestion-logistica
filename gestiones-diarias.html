@@ -1381,6 +1381,9 @@ window._sbEstadosToggle=function(){
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión
 // exitosos. Ver plan de split en 3 páginas.
+// Marca esta página como "de módulo" para que un admin pueda abrirla directo
+// en vez de rebotar al Centro de Operaciones (ver router en app-shared.js).
+window._PAGINA_MODULO = 'Gestiones Diarias';
 window._gdMostrarModeSelect = function(asesor){
   _gdInit();
 };

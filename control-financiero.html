@@ -1385,6 +1385,9 @@ window._sbEstadosToggle=function(){
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo
 // (mode-select-screen, que no se usa aquí), entra directo a Control Financiero
 // tras un login/restauración de sesión exitosos. Ver plan de split en 3 páginas.
+// Marca esta página como "de módulo" para que un admin pueda abrirla directo
+// en vez de rebotar al Centro de Operaciones (ver router en app-shared.js).
+window._PAGINA_MODULO = 'Control Financiero';
 window._gdMostrarModeSelect = function(asesor){
   if(window._currentRol==='asesor'){
     alert('No tienes acceso a Control Financiero con este perfil.');
