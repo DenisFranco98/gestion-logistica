@@ -3682,7 +3682,7 @@ function crearFila(p,est,esGest){
   row.style.borderLeftColor=esGest?'#94a3b8':(_tcFila||est.color);
   row.innerHTML=
     '<span class="cf-gest-ico">'+gestIco+'</span>'+
-    '<div class="cf-name">'+p.nombre+'<span class="cf-id">'+(p.guia||p.dropiId||'')+'</span></div>'+
+    '<div class="cf-name">'+esc(p.nombre)+'<span class="cf-id">'+esc(p.guia||p.dropiId||'')+'</span></div>'+
     '<div class="cf-tel">'+(telDisplay?'📞 '+telDisplay:'—')+'</div>'+
     '<div class="cf-ciudad">'+(p.ciudad?'📍 '+p.ciudad:'—')+'</div>'+
     '<div class="cf-prod">🛍 '+prodSimple+'</div>'+
@@ -3735,7 +3735,7 @@ function crearFilaNovedad(p){
   row.style.borderLeftColor='#d97706';
   row.innerHTML=
     '<span class="cf-gest-ico">'+gestIco+'</span>'+
-    '<div class="cf-name">'+p.nombre+'<span class="cf-id">'+(p.guia||p.dropiId||'')+'</span></div>'+
+    '<div class="cf-name">'+esc(p.nombre)+'<span class="cf-id">'+esc(p.guia||p.dropiId||'')+'</span></div>'+
     '<div class="cf-tel">'+(telDisplay?'📞 '+telDisplay:'—')+'</div>'+
     '<div class="cf-ciudad">'+(p.ciudad?'📍 '+p.ciudad:'—')+'</div>'+
     '<div class="cf-prod">🛍 '+prodSimple+'</div>'+
@@ -3771,6 +3771,8 @@ function crearFilaNovedad(p){
 // ── HELPERS ────────────────────────────────────────────────────────────
 function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
 function toast(msg,dur=2200){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+// Escapa datos que vienen del Excel/Dropi (nombre del cliente, etc.) antes de insertarlos en innerHTML
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 function _copiarFallback(txt){
   // Copia síncrona con textarea oculto — devuelve true/false según resultado.
@@ -5020,7 +5022,7 @@ function crearCard(p,est,esGest){
       '<div style="flex:1;min-width:0">'+
         '<div class="card-guia copiable" '+(p.guia?'data-val="'+p.guia+'" onclick="event.stopPropagation();copiarTexto(this.dataset.val)"':'')+'>'+(p.guia?'<span class="ico">\u{1F4E6}</span> '+p.guia+' <span style="font-size:.58rem;color:var(--text-3)">copiar</span>':'Sin guía')+'</div>'+
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
-          '<div class="card-name">'+p.nombre+'</div>'+
+          '<div class="card-name">'+esc(p.nombre)+'</div>'+
           (p.tienda?'<span style="font-size:.62rem;font-weight:600;padding:1px 7px;border-radius:6px;border:1px solid var(--border);color:var(--text-2);display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:'+(tiendaColor||'var(--text-3)')+';display:inline-block;"></span>'+p.tienda+'</span>':'')+
         '</div>'+
         (telDisplay?'<div class="card-phone" onclick="event.stopPropagation();copiarTel(\''+p.telefono+'\')"><span class="ico">📞</span> '+telDisplay+'<span class="copy-hint">copiar</span></div>':'<div style="font-size:.78rem;color:var(--text-3)">Sin teléfono</div>')+
@@ -5454,7 +5456,7 @@ function crearCardNovedad(p){
       (p.guia?'<div class="card-guia copiable" data-val="'+p.guia+'" onclick="event.stopPropagation();copiarTexto(this.dataset.val)" title="Copiar guía">\uD83D\uDE9A '+p.guia+'</div>':
                '<div class="card-guia">🧾 Orden: '+p.dropiId+'</div>')+
       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">'+
-        '<div class="card-name">'+p.nombre+'</div>'+
+        '<div class="card-name">'+esc(p.nombre)+'</div>'+
         (p.tienda?'<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:6px;background:'+tiendaColor+';color:white">'+p.tienda+'</span>':'')+
       '</div>'+
       (telDisplay?'<div class="card-phone" onclick="event.stopPropagation();copiarTel(this.dataset.tel)" data-tel="'+p.telefono+'" style="cursor:pointer">📞 '+telDisplay+' <span class="copy-hint">copiar</span></div>':'')+
@@ -5621,7 +5623,7 @@ function crearCardPendiente(p,color){
           '🧾 Orden: '+p.dropiId+' <span style="font-size:.58rem;color:var(--text-3)">copiar</span>'+
         '</div>'+
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">'+
-          '<div class="card-name">'+p.nombre+'</div>'+
+          '<div class="card-name">'+esc(p.nombre)+'</div>'+
           (p.tienda?'<span style="font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:6px;background:'+tiendaColor+';color:white">'+p.tienda+'</span>':'')+
         '</div>'+
         (telDisplay?'<div class="card-phone" onclick="event.stopPropagation();copiarTel(this.dataset.tel)" data-tel="'+p.telefono+'" style="cursor:pointer">📞 '+telDisplay+' <span class="copy-hint">copiar</span></div>':'')+
@@ -5885,8 +5887,8 @@ async function _novSyncSolucionadaGD(id, solucionada){
   const p=_pedidoMap.get(id);
 
   const mes=_getMesCargado();
-  const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
-  const ak=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginAsesor?window.getLoginAsesor():'_');
+  const tk=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');
+  const ak=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
   const novBasePath='novedades/'+tk+'/'+mes;
   const gdDiasPath='gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias';
   const dia=new Date().getDate();
@@ -6495,7 +6497,7 @@ function _getMesCargado(){
 
 // ── Sync novedad Logística → GD ─────────────────────────────────────────
 function _novGDBasePath(){
-  const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
+  const tk=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');
   const mes=_getMesCargado();
   return 'novedades/'+tk+'/'+mes;
 }
@@ -6503,8 +6505,8 @@ function _novGDBasePath(){
 function _novIncrGDCounter(dia, campo, delta){
   if(typeof _db==='undefined'||!dia)return;
   const mes=_getMesCargado();
-  const tk=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');
-  const ak=(typeof _gdKey==='function'?_gdKey:s=>(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginAsesor?window.getLoginAsesor():'_');
+  const tk=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');
+  const ak=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
   _db.ref('gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias/'+dia+'/'+campo)
     .transaction(cur=>Math.max(0,(cur||0)+delta));
 }
@@ -7896,7 +7898,7 @@ function _transpTabla(lista, umbral, mostrarCas){
     const tr = document.createElement('tr');
     tr.innerHTML=
       '<td style="font-family:monospace;font-size:.73rem;cursor:pointer;" onclick="copiarTexto(\''+(p.guia||p.dropiId)+'\')" title="Copiar">'+(p.guia||p.dropiId)+' 📋</td>'+
-      '<td style="font-weight:600;color:var(--text-1)">'+p.nombre+'</td>'+
+      '<td style="font-weight:600;color:var(--text-1)">'+esc(p.nombre)+'</td>'+
       '<td style="cursor:pointer" onclick="copiarTel(\''+p.telefono+'\')">'+(p.telefono?p.telefono.replace(/^57/,''):'—')+'</td>'+
       '<td>'+getProductoSimple(p.productos)+'</td>'+
       '<td>'+(p.transportadora||'—')+'</td>'+
@@ -8100,7 +8102,7 @@ function abrirSinGuia(){
     const tr=document.createElement('tr');
     tr.innerHTML=
       '<td style="font-family:monospace;font-size:.73rem;cursor:pointer;" onclick="copiarTexto(\''+p.dropiId+'\')" title="Copiar">'+p.dropiId+' 📋</td>'+
-      '<td style="font-weight:600;color:var(--text-1)">'+p.nombre+'</td>'+
+      '<td style="font-weight:600;color:var(--text-1)">'+esc(p.nombre)+'</td>'+
       '<td style="cursor:pointer" onclick="copiarTel(\''+p.telefono+'\')">'+(p.telefono?p.telefono.replace(/^57/,''):'—')+'</td>'+
       '<td>'+getProductoSimple(p.productos)+'</td>'+
       '<td>'+(p.tienda||'—')+'</td>'+
@@ -8259,7 +8261,7 @@ function _segTabla(lista, tipo){
     const tr = document.createElement('tr');
     tr.innerHTML =
       '<td><span style="cursor:pointer;font-family:monospace;font-size:.74rem;" onclick="copiarTexto(\''+p.dropiId+'\')" title="Copiar ID">'+p.dropiId+' 📋</span></td>'+
-      '<td style="font-weight:600;color:var(--text-1)">'+p.nombre+'</td>'+
+      '<td style="font-weight:600;color:var(--text-1)">'+esc(p.nombre)+'</td>'+
       '<td><span style="cursor:pointer;" onclick="copiarTel(\''+p.telefono+'\')" title="Copiar teléfono">'+(p.telefono?p.telefono.replace(/^57/,''):'—')+'</span></td>'+
       '<td>'+getProductoSimple(p.productos)+'</td>'+
       '<td>'+( p.tienda||'—')+'</td>'+
@@ -8422,7 +8424,13 @@ const _CF_DEF={
 };
 let _cfMes='',_cfCfg={},_cfMD={},_cfPrevMD={},_cfSaveT={},_cfOrdRows=[],_cfCurTab='dash';
 
-function _cfTK(){return (typeof _gdKey==='function'?_gdKey:s=>(s||'').trim().toLowerCase().replace(/[^a-z0-9_]/g,'_'))(window.getLoginTienda?window.getLoginTienda():'_');}
+// Fallback de _gdKey (normaliza tildes/ñ igual que la real, línea ~10486) — usado si _gdKey aún no está definida en esta página
+function _gdKeyFallback(s){
+  return (s||'').trim().toLowerCase()
+    .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u').replace(/ñ/g,'n')
+    .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'')||'_';
+}
+function _cfTK(){return (typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');}
 function _cfBasePath(m){return 'control_financiero/'+_cfTK()+'/'+(m||_cfMes);}
 function _cfCfgPath(){return 'control_financiero/'+_cfTK()+'/config';}
 function _cfPad(n){return String(n).padStart(2,'0');}
@@ -10554,7 +10562,7 @@ function _gdRenderTiendaResumen(cod,dias){
       </div>
     </div>`;
   el.innerHTML=`
-    <div style="font-size:.58rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">🏪 Cómo va la tienda — ${_cfMesLabel(_gdMes)}</div>
+    <div style="font-size:.58rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">🏪 Cómo va la tienda — ${typeof _cfMesLabel==='function'?_cfMesLabel(_gdMes):_gdMes}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       ${countCard('💰','Ventas totales','total del mes',totalN,null,'#6366f1','rgba(99,102,241,.1)')}
       ${countCard('✅','Entregados','% sobre despachados',entN,pEnt,'#16a34a','var(--success-soft)')}
@@ -12031,15 +12039,11 @@ function _initLogin(){
       window._currentSessionKey = _sesRef.key;
       _sesRef.onDisconnect().update({ end: firebase.database.ServerValue.TIMESTAMP });
     }catch(_){}
-    // Marcar offline si el usuario cierra o recarga la pestaña sin hacer logout (solo registrar una vez)
-    if(!window._beforeunloadPresencia){
-      window._beforeunloadPresencia = true;
-      window.addEventListener('beforeunload', ()=>{
-        if(_currentUsername) _db.ref('presence/'+_currentUsername).update({ online: false, lastSeen: Date.now() });
-        if(_currentUsername && window._currentSessionKey)
-          _db.ref('session_hist/'+_currentUsername+'/'+window._currentSessionKey).update({ end: Date.now() });
-      });
-    }
+    // Nota: el cierre real (offline en presence/ y end en session_hist) ya lo cubren
+    // los onDisconnect() de arriba (líneas ~12030/12038) — se retiró el listener de
+    // beforeunload que hacía lo mismo porque también se dispara cuando Chrome descarga
+    // la pestaña en segundo plano (no solo al cerrar de verdad), marcando "offline"
+    // a un asesor que sigue trabajando y cortando su session_hist antes de tiempo.
     // Escuchar si el admin fuerza cierre de sesión.
     // Detach del listener anterior: sin esto cada login/logout acumula
     // listeners y el cierre forzado se dispararía múltiples veces.
