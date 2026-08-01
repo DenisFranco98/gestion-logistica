@@ -723,37 +723,71 @@ function _novRender(){
   </table></div>`;
 }
 
+// Evidencias como una fila de 5 cuadros chicos en vez de las imágenes en
+// grande: los que tienen registro se ven nítidos con el color de su estado, los
+// libres quedan atenuados y sirven para agregar. La imagen o el texto se abren
+// en el visor al hacer clic, así la fila de la tabla no crece.
+const _NOV_SLOTS=5;
 function _novSolsCell(id,n,sols){
-  let html='<div style="display:flex;flex-direction:column;gap:6px;padding:6px 0;">';
-  sols.forEach((s,i)=>{
+  const cuadro=(contenido,estilo,extra)=>
+    `<div style="width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;position:relative;flex:none;${estilo}" ${extra||''}>${contenido}</div>`;
+
+  let html='<div style="display:flex;gap:5px;align-items:center;padding:6px 0;flex-wrap:wrap;">';
+
+  sols.slice(0,_NOV_SLOTS).forEach((s,i)=>{
     const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
     const bg=s.estado==='solucionada'?'#dcfce7':s.estado==='devuelta'?'#fef3c7':'#e0f2fe';
     // El tercer caso solo aparece en soluciones guardadas antes de retirar el
     // estado "en gestión"; ya no se puede elegir al registrar.
     const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 Pendiente';
-    const delBtn=s._key
-      ?`<button onclick="_novDelSol('${id}','${s._key}')" style="background:var(--danger-soft);color:var(--danger);border:none;border-radius:5px;padding:2px 6px;font-size:.6rem;cursor:pointer;font-family:inherit;" title="Eliminar">🗑️</button>`
-      :s._legacyNum
-      ?`<button onclick="_novClearSol('${id}',${s._legacyNum})" style="background:var(--danger-soft);color:var(--danger);border:none;border-radius:5px;padding:2px 6px;font-size:.6rem;cursor:pointer;font-family:inherit;" title="Eliminar">🗑️</button>`
-      :'';
-    html+=`<div style="border:1.5px solid ${color}30;border-radius:8px;overflow:hidden;">`;
-    html+=`<div style="background:${bg};padding:4px 8px;display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:.58rem;font-weight:700;color:${color};">${label} · ${i+1}ª evidencia</span>
-      <div style="display:flex;align-items:center;gap:4px;">
-        <span style="font-size:.52rem;color:var(--text-3);">${s.fechaLabel||''}</span>
-        ${delBtn}
-      </div>
-    </div>`;
-    if(s.tipo==='img'){
-      html+=`<img src="${s.val}" onclick="_novVerImg(this.src)" style="width:100%;max-height:120px;object-fit:cover;cursor:zoom-in;display:block;">`;
-    } else {
-      html+=`<div style="padding:6px 8px;font-size:.68rem;color:var(--text-1);">${s.val}</div>`;
-    }
-    html+='</div>';
+    const icono=s.tipo==='img'?'📷':'📝';
+    const resumen=s.tipo==='img'?'Imagen':String(s.val||'').slice(0,90);
+    const titulo=esc(label+' · '+(s.fechaLabel||'')+(resumen?' — '+resumen:''));
+    const abrir=s.tipo==='img'
+      ? `_novVerImg(_novSolSrc('${id}',${i}))`
+      : `_novVerTexto(_novSolSrc('${id}',${i}))`;
+    const del=s._key?`_novDelSol('${id}','${s._key}')`:s._legacyNum?`_novClearSol('${id}',${s._legacyNum})`:'';
+    const btnDel=del
+      ? `<button onclick="event.stopPropagation();${del}" title="Eliminar evidencia"
+           style="position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;border:none;background:var(--danger);color:white;font-size:.55rem;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;font-family:inherit;">×</button>`
+      : '';
+    html+=cuadro(icono+btnDel,
+      `background:${bg};border:1.5px solid ${color};cursor:zoom-in;`,
+      `title="${titulo}" onclick="${abrir}"`);
   });
-  html+=`<button onclick="_novAbrirSol('${id}')" style="width:100%;padding:6px;border:1.5px dashed #e2e8f0;border-radius:8px;background:none;color:var(--text-3);font-size:.7rem;cursor:pointer;font-family:inherit;" onmouseover="this.style.borderColor='#7c3aed';this.style.color='#7c3aed';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8';">+ Agregar evidencia</button>`;
+
+  // Slots libres: mismo cuadro, atenuado, para sumar una evidencia más
+  for(let i=sols.length;i<_NOV_SLOTS;i++){
+    html+=cuadro('📎',
+      'background:var(--bg-hover);border:1.5px dashed var(--border);opacity:.35;cursor:pointer;',
+      `title="Agregar evidencia" onclick="_novAbrirSol('${id}')" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='.35'"`);
+  }
+
+  // Si alguna novedad tiene más de 5, avisarlo en vez de esconderlas en silencio
+  if(sols.length>_NOV_SLOTS){
+    html+=`<span style="font-size:.6rem;font-weight:700;color:var(--text-3);margin-left:2px;" title="Hay más evidencias de las que caben en la fila">+${sols.length-_NOV_SLOTS}</span>`;
+  }
   html+='</div>';
   return html;
+}
+
+// El contenido de una evidencia se busca al abrirla (no se incrusta en el
+// onclick): las imágenes son data URIs enormes y meterlas en un atributo
+// inflaría el HTML de toda la tabla.
+function _novSolSrc(id,indice){
+  const sols=_novGetSols(_novData[id]||{});
+  const s=sols[indice]||{};
+  return s.val||'';
+}
+
+function _novVerTexto(txt){
+  const img=document.getElementById('nov-lb-img');
+  const cont=document.getElementById('nov-lb-txt');
+  if(img) img.style.display='none';
+  if(cont){ cont.textContent=txt||''; cont.style.display='block'; }
+  document.getElementById('nov-lightbox').classList.add('open');
+  const hint=document.getElementById('nov-lb-hint');
+  if(hint) hint.style.display='none';
 }
 
 function _novNuevo(){
@@ -975,6 +1009,10 @@ let _lbPinchStart=null,_lbZoomStart=1,_lbSetup=false;
 
 function _novVerImg(src){
   const img=document.getElementById('nov-lb-img');
+  // El visor se comparte con las evidencias de texto: restaurar la imagen
+  const cont=document.getElementById('nov-lb-txt');
+  if(cont) cont.style.display='none';
+  img.style.display='';
   img.src=src; _lbZoom=1; _lbX=0; _lbY=0; _lbUpdate();
   document.getElementById('nov-lightbox').classList.add('open');
   const hint=document.getElementById('nov-lb-hint');
