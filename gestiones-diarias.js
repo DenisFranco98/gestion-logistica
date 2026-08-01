@@ -504,10 +504,21 @@ function _consoCargar(){
   });
 }
 
+// "Viernes, 31 de Julio" para el día del mes que se está viendo. Cae a "DÍA n"
+// si _gdMes todavía no está cargado.
+function _consoFechaLabel(dia){
+  const [y,m]=String(_gdMes||'').split('-').map(Number);
+  if(!y||!m) return 'DÍA '+dia;
+  const txt=new Date(y,m-1,dia).toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
+  // es-CO devuelve todo en minúscula ("viernes, 31 de julio"): se capitaliza
+  // la primera palabra y el mes, que es lo que va después de " de ".
+  return txt.replace(/(^|\sde\s)([a-záéíóúñ])/g,(_,pre,letra)=>pre+letra.toUpperCase());
+}
+
 function _consoRender(){
   const nombre=(window.getLoginAsesor?window.getLoginAsesor():'').toUpperCase()||'—';
   let html=`<div style="background:#131920;color:white;padding:10px 16px;border-radius:10px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
-    <div style="font-size:.82rem;font-weight:800;">DÍA ${_consoDia}</div>
+    <div style="font-size:.82rem;font-weight:800;">${_consoFechaLabel(_consoDia)}</div>
     <div style="font-size:.62rem;opacity:.6;">CAPTURADO POR: <strong style="opacity:1;">${nombre}</strong></div>
   </div>`;
   _CORTES.forEach(corte=>{
