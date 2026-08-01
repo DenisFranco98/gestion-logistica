@@ -2880,7 +2880,9 @@ function _fmtDuracion(ms){ const m=Math.floor(ms/60000); if(m<1)return'<1m'; if(
 
 function _admAbrirAgregar(){
   ['adm-new-user','adm-new-pass','adm-new-asesor','adm-new-tienda'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('adm-new-rol').value='asesor';
+  // Sin rol preseleccionado: el default en 'asesor' hizo que se crearan dueños
+  // marcados como asesores, y el rol no se puede corregir después desde el panel.
+  document.getElementById('adm-new-rol').value='';
   document.getElementById('adm-add-error').style.display='none';
   document.getElementById('adm-add-modal').classList.add('open');
 }
@@ -2891,13 +2893,16 @@ function _admGuardarUsuario(){
   const p=document.getElementById('adm-new-pass').value.trim();
   const a=document.getElementById('adm-new-asesor').value.trim();
   const t=document.getElementById('adm-new-tienda').value.trim();
-  const rol=document.getElementById('adm-new-rol').value||'asesor';
+  const rol=document.getElementById('adm-new-rol').value;
   const err=document.getElementById('adm-add-error');
   err.style.display='none';
   if(!email||!p){ err.textContent='Correo y contraseña son obligatorios'; err.style.display='block'; return; }
   if(!email.includes('@')){ err.textContent='Ingresa un correo válido'; err.style.display='block'; return; }
   if(!a){ err.textContent='El nombre completo es obligatorio'; err.style.display='block'; return; }
   if(!t){ err.textContent='La tienda es obligatoria'; err.style.display='block'; return; }
+  // El rol define permisos (notas del coordinador, Control Financiero) y hoy no
+  // se puede corregir desde el panel: hay que elegirlo a conciencia al crear.
+  if(rol!=='asesor'&&rol!=='dueno'){ err.textContent='Elige si es Asesor o Dueño de tienda'; err.style.display='block'; return; }
   const secAuth=window._fbSecAuth;
   if(!secAuth){ err.textContent='Error interno. Recarga la página.'; err.style.display='block'; return; }
   secAuth.createUserWithEmailAndPassword(email, p)
