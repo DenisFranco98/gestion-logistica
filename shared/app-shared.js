@@ -298,6 +298,59 @@ window._migrarTiendas = function(){
   }).catch(e=>console.error('[MIGRAR tiendas] falló (¿sesión de admin?):',e));
 };
 
+// Rescata las novedades que quedaron bajo la clave vieja DESPUÉS de migrar.
+// Pasó con la extensión de Dropi: siguió escribiendo en novedades/{slug} un
+// tiempo más, y _migrarTiendas() no las trae porque salta los meses que ya
+// existen en destino (para no pisar lo migrado).
+// A diferencia de _migrarTiendas, esto FUSIONA registro a registro:
+//   - novedad que no está en destino          → se copia entera
+//   - novedad que sí está pero con soluciones
+//     que el destino no tiene                 → se copian solo esas soluciones
+// Identidad de una novedad: guía + día. Nada se borra del origen.
+// Ejecutar desde la consola como admin: _fusionarNovedades()
+window._fusionarNovedades = function(){
+  const idNov=n=>String((n&&n.guia)||'').trim()+'|'+String((n&&n.dia)||'');
+  const idSol=s=>String((s&&s.estado)||'')+'|'+String((s&&s.ts)||'')+'|'+String((s&&s.val)||'').slice(0,40);
+  console.log('%c[FUSIONAR novedades] leyendo...','font-weight:bold');
+  Promise.all([_db.ref('empresas').once('value'),_db.ref('novedades').once('value')]).then(([se,sn])=>{
+    const empresas=se.val()||{}, nov=sn.val()||{};
+    const nuevas=[], solsNuevas=[];
+    Object.entries(empresas).forEach(([id,e])=>{
+      const slug=_gdKey(e.nombre||id);
+      if(slug===id||!nov[slug]) return;
+      Object.entries(nov[slug]).forEach(([mes,regs])=>{
+        if(!regs||typeof regs!=='object') return;
+        const destino=(nov[id]&&nov[id][mes])||{};
+        const porId={};
+        Object.entries(destino).forEach(([k,v])=>{ porId[idNov(v)]=Object.assign({_key:k},v); });
+        Object.values(regs).forEach(r=>{
+          const gemela=porId[idNov(r)];
+          if(!gemela){ nuevas.push({tienda:e.nombre,id,mes,guia:r.guia,dia:r.dia,_val:r}); return; }
+          const yaHay=new Set(Object.values(gemela.soluciones||{}).map(idSol));
+          Object.values(r.soluciones||{}).forEach(s=>{
+            if(!yaHay.has(idSol(s))) solsNuevas.push({tienda:e.nombre,id,mes,destKey:gemela._key,guia:r.guia,estado:s.estado,_val:s});
+          });
+        });
+      });
+    });
+    if(!nuevas.length&&!solsNuevas.length){ console.log('%cNada que rescatar: no hay novedades ni soluciones sueltas en las rutas viejas.','color:#15803d;font-weight:bold'); return; }
+    if(nuevas.length){ console.group('%cNovedades a recuperar ('+nuevas.length+')','color:#0e7490;font-weight:bold');
+      console.table(nuevas.map(({tienda,mes,guia,dia})=>({tienda,mes,guia,dia}))); console.groupEnd(); }
+    if(solsNuevas.length){ console.group('%cSoluciones sueltas a recuperar ('+solsNuevas.length+')','color:#0e7490;font-weight:bold');
+      console.table(solsNuevas.map(({tienda,mes,guia,estado})=>({tienda,mes,guia,estado}))); console.groupEnd(); }
+    let n=0,f=0;
+    const tareas=[
+      ...nuevas.map(x=>()=>_db.ref('novedades/'+x.id+'/'+x.mes).push(x._val)),
+      ...solsNuevas.map(x=>()=>_db.ref('novedades/'+x.id+'/'+x.mes+'/'+x.destKey+'/soluciones').push(x._val))
+    ];
+    tareas.reduce((p,t)=>p.then(()=>t().then(()=>{n++;}).catch(e=>{f++;console.error('  ✗',e);})),Promise.resolve())
+      .then(()=>{
+        console.log('%c[FUSIONAR novedades] listo: '+n+' recuperados, '+f+' con error.','font-weight:bold;color:'+(f?'#b91c1c':'#15803d'));
+        console.log('Las rutas viejas quedan intactas. Los contadores del día se recalculan al abrir cada novedad o al guardar una solución.');
+      });
+  }).catch(e=>console.error('[FUSIONAR novedades] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
