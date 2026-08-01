@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Anticipos Chateapro → Gestión Logística",
+  "version": "1.4.0",
+  "description": "Arrastra el comprobante, el nombre y el teléfono del cliente desde Chateapro y guárdalos directo en Guías con Anticipo.",
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://chateapro.app/*", "https://*.chateapro.app/*"],
+      "js": ["shared.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://redking-tulogistica.com/*", "https://www.redking-tulogistica.com/*"],
+      "js": ["inject-auth.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://redking-tulogistica.com/*", "https://www.redking-tulogistica.com/*"],
+      "js": ["shared.js", "auth-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Configurar tienda — Anticipos Chateapro"
+  }
+}

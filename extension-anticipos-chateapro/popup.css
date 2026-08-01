@@ -1,0 +1,157 @@
+/* Estilo REDKING — mismo look que #login-screen / .login-box de index.html:
+   fondo degradado oscuro, tarjeta glass, tipografías Syne/DM Sans, CTA azul. */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+* { box-sizing: border-box; }
+
+body {
+  width: 320px;
+  margin: 0;
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  background: linear-gradient(130deg, #070A0E 0%, #0D1117 45%, #131920 100%);
+  color: #E2EAF4;
+  padding: 18px;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark; /* el <select> nativo (lista desplegable) usa esquema oscuro en vez del claro por defecto */
+}
+
+.pp-card {
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.2px;
+  margin: 0 0 12px;
+  color: #f8fafc;
+}
+
+h1 span { color: #8B9DB5; font-weight: 700; }
+
+label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #a5b4cb;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin: 10px 0 5px;
+}
+
+select, input[type="text"], input[type="email"], input[type="password"] {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1.5px solid rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, .06);
+  color: #f8fafc;
+  outline: none;
+  transition: all .15s;
+}
+
+select:focus, input:focus {
+  border-color: #3971E6;
+  background: rgba(255, 255, 255, .09);
+  box-shadow: 0 0 0 3px rgba(57, 113, 230, .2);
+}
+
+/* La lista desplegable del <select> no hereda el fondo del control (es una
+   ventana nativa aparte); hay que pintar el fondo de cada <option> a mano
+   o queda texto claro sobre blanco. */
+select option {
+  background-color: #131920;
+  color: #E2EAF4;
+}
+
+select option:checked,
+select option:hover {
+  background-color: #3971E6;
+  color: #fff;
+}
+
+::placeholder { color: #64748b; }
+
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 12px;
+  background: linear-gradient(135deg, #3971E6, #2456C4);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: .2px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(57, 113, 230, .35);
+  transition: all .2s;
+  font-family: inherit;
+}
+
+button:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(57, 113, 230, .5); }
+button:disabled { opacity: .6; cursor: default; transform: none; }
+
+button.secondary {
+  background: rgba(255, 255, 255, .07);
+  color: #8B9DB5;
+  box-shadow: none;
+}
+
+button.secondary:hover { background: rgba(255, 255, 255, .1); transform: none; box-shadow: none; }
+
+#sesionActual {
+  font-size: 10.5px;
+  color: #8B9DB5;
+  margin-bottom: 6px;
+}
+
+#actual {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(230, 181, 57, .12);
+  border: 1px solid rgba(230, 181, 57, .25);
+  color: #E6B539;
+  margin-bottom: 4px;
+}
+
+#actual.set {
+  background: rgba(57, 230, 122, .12);
+  border-color: rgba(57, 230, 122, .25);
+  color: #39E67A;
+}
+
+#status, #loginStatus {
+  font-size: 11px;
+  margin-top: 8px;
+  min-height: 14px;
+  font-weight: 600;
+}
+
+#status.ok { color: #39E67A; }
+#status.err, #loginStatus { color: #FF7A7A; }
+
+.hint {
+  font-size: 10.5px;
+  color: #4A5568;
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+#ppBrand {
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  color: #4A5568;
+  margin-top: 14px;
+}

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Anticipos Chateapro</title>
+<link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="pp-card">
+    <h1>💰 Anticipos <span>Chateapro</span></h1>
+
+    <div id="loginSection">
+      <p class="hint">Se inicia sesión sola cuando entras y te logueas en redking-tulogistica.com. Si aún no lo has hecho, o prefieres entrar solo aquí, hazlo abajo con tu cuenta de Gestión Logística.</p>
+      <label for="loginEmail">Correo</label>
+      <input id="loginEmail" type="email" placeholder="correo@ejemplo.com" autocomplete="username">
+      <label for="loginPass">Contraseña</label>
+      <input id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password">
+      <button id="loginBtn">Iniciar sesión</button>
+      <div id="loginStatus"></div>
+    </div>
+
+    <div id="tiendaSection" style="display:none;">
+      <div id="sesionActual"></div>
+      <div id="actual">Cargando tienda actual...</div>
+      <label for="tiendaSel">Tienda</label>
+      <select id="tiendaSel"><option value="">Cargando tiendas...</option></select>
+      <label for="tiendaManual">O escribe el nombre exacto de la tienda</label>
+      <input id="tiendaManual" type="text" placeholder="Nombre de la tienda" />
+      <button id="guardarBtn">Guardar tienda</button>
+      <div id="status"></div>
+      <button id="logoutBtn" class="secondary">Cerrar sesión</button>
+      <p class="hint">Al abrir Chateapro verás un botón flotante 💰 para cargar anticipos directo en Guías con Anticipo.</p>
+    </div>
+
+    <div id="ppBrand">REDKING · Gestión Logística</div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

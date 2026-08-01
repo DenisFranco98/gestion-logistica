@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Dropi - Detector de Pedidos Duplicados",
+  "version": "1.0.0",
+  "description": "Resalta pedidos duplicados (mismo teléfono) en la tabla de Mis Pedidos de Dropi.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://app.dropi.co/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://app.dropi.co/dashboard/orders*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Detector de Duplicados Dropi"
+  }
+}

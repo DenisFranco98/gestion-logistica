@@ -1,0 +1,41 @@
+tr.dup-telefono {
+  outline: 2px dashed rgba(13, 110, 253, 0.6);
+  outline-offset: -2px;
+}
+
+.dup-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+
+.dup-badge-telefono {
+  background-color: #0d6efd;
+  color: #fff;
+}
+
+.dup-badge-reviewed {
+  background-color: #2b8a3e;
+  color: #fff;
+}
+
+tr.dup-reviewed {
+  opacity: 0.55;
+}
+
+tr.dup-flash {
+  animation: dup-flash-anim 2s ease-out;
+}
+
+@keyframes dup-flash-anim {
+  0%, 40% {
+    background-color: rgba(13, 110, 253, 0.55) !important;
+  }
+  100% {
+    background-color: transparent;
+  }
+}

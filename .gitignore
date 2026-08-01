@@ -1,0 +1,3 @@
+# Los .zip son artefactos: se regeneran empaquetando la carpeta de cada
+# extensión, así que se versiona el código fuente y no el paquete.
+*.zip

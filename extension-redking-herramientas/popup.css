@@ -1,0 +1,289 @@
+/* Estilo REDKING — mismo look que #login-screen / .login-box de index.html:
+   fondo degradado oscuro, tarjeta glass, tipografías Syne/DM Sans, CTA azul. */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+* { box-sizing: border-box; }
+
+body {
+  width: 340px;
+  margin: 0;
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  background: linear-gradient(130deg, #070A0E 0%, #0D1117 45%, #131920 100%);
+  color: #E2EAF4;
+  padding: 18px;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark; /* el <select> nativo (lista desplegable) usa esquema oscuro en vez del claro por defecto */
+}
+
+.pp-card {
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.2px;
+  margin: 0 0 12px;
+  color: #f8fafc;
+}
+
+h1 span { color: #8B9DB5; font-weight: 700; }
+
+/* ── Pestañas (mismo patrón que .wam-tab de index.html) ── */
+.pp-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1.5px solid rgba(255, 255, 255, .1);
+  margin-bottom: 14px;
+}
+
+.pp-tab {
+  flex: 1;
+  padding: 8px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #8B9DB5;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2.5px solid transparent;
+  white-space: nowrap;
+  transition: all .15s;
+  margin: 0;
+  box-shadow: none;
+}
+
+.pp-tab:hover { color: #E2EAF4; transform: none; box-shadow: none; }
+.pp-tab.active { color: #f8fafc; border-bottom-color: #3971E6; }
+
+.pp-tabpanel { display: none; }
+.pp-tabpanel.active { display: block; }
+
+label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #a5b4cb;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin: 10px 0 5px;
+}
+
+select, input[type="text"], input[type="email"], input[type="password"] {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1.5px solid rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, .06);
+  color: #f8fafc;
+  outline: none;
+  transition: all .15s;
+}
+
+select:focus, input:focus {
+  border-color: #3971E6;
+  background: rgba(255, 255, 255, .09);
+  box-shadow: 0 0 0 3px rgba(57, 113, 230, .2);
+}
+
+/* La lista desplegable del <select> no hereda el fondo del control (es una
+   ventana nativa aparte); hay que pintar el fondo de cada <option> a mano
+   o queda texto claro sobre blanco. */
+select option {
+  background-color: #131920;
+  color: #E2EAF4;
+}
+
+select option:checked,
+select option:hover {
+  background-color: #3971E6;
+  color: #fff;
+}
+
+::placeholder { color: #64748b; }
+
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 12px;
+  background: linear-gradient(135deg, #3971E6, #2456C4);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: .2px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(57, 113, 230, .35);
+  transition: all .2s;
+  font-family: inherit;
+}
+
+button:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(57, 113, 230, .5); }
+button:disabled { opacity: .6; cursor: default; transform: none; }
+
+button.secondary {
+  background: rgba(255, 255, 255, .07);
+  color: #8B9DB5;
+  box-shadow: none;
+}
+
+button.secondary:hover { background: rgba(255, 255, 255, .1); transform: none; box-shadow: none; }
+
+#sesionActual {
+  font-size: 10.5px;
+  color: #8B9DB5;
+  margin-bottom: 6px;
+}
+
+#actual {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(230, 181, 57, .12);
+  border: 1px solid rgba(230, 181, 57, .25);
+  color: #E6B539;
+  margin-bottom: 4px;
+}
+
+#actual.set {
+  background: rgba(57, 230, 122, .12);
+  border-color: rgba(57, 230, 122, .25);
+  color: #39E67A;
+}
+
+#status, #loginStatus {
+  font-size: 11px;
+  margin-top: 8px;
+  min-height: 14px;
+  font-weight: 600;
+}
+
+#status.ok { color: #39E67A; }
+#status.err, #loginStatus { color: #FF7A7A; }
+
+.hint {
+  font-size: 10.5px;
+  color: #4A5568;
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+/* ── Tab Duplicados Dropi ── */
+#summary {
+  font-size: 11.5px;
+  margin: 10px 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #8B9DB5;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .08);
+}
+
+#summary.summary-ok {
+  background: rgba(57, 230, 122, .12);
+  border-color: rgba(57, 230, 122, .25);
+  color: #39E67A;
+  font-weight: 700;
+}
+
+#summary.summary-warn {
+  background: rgba(230, 181, 57, .12);
+  border-color: rgba(230, 181, 57, .25);
+  color: #E6B539;
+  font-weight: 700;
+}
+
+#list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+#list::-webkit-scrollbar { width: 5px; }
+#list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .14); border-radius: 4px; }
+
+#list > li {
+  font-size: 11.5px;
+  padding: 7px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.group-header {
+  margin-bottom: 4px;
+  color: #E2EAF4;
+  font-weight: 600;
+}
+
+.row-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.row-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0 3px 12px;
+}
+
+.reviewed-checkbox {
+  flex: none;
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #3971E6;
+}
+
+.row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10.5px;
+  color: #8B9DB5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-label-reviewed {
+  text-decoration: line-through;
+  color: #4A5568;
+}
+
+.locate-btn {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(57, 113, 230, .18);
+  color: #a9c2f7;
+  border: 1px solid rgba(57, 113, 230, .3);
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.locate-btn:hover { background: rgba(57, 113, 230, .3); transform: none; box-shadow: none; }
+
+#ppBrand {
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  color: #4A5568;
+  margin-top: 14px;
+}

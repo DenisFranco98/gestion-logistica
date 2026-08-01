@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "REDKING Herramientas — Gestión Logística",
+  "version": "2.1.2",
+  "description": "Anticipos Chateapro + Detector de duplicados Dropi + Novedades Dropi, en una sola extensión para Gestión Logística.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://chateapro.app/*", "https://*.chateapro.app/*"],
+      "js": ["shared.js", "anticipos-content.js"],
+      "css": ["anticipos-styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://redking-tulogistica.com/*", "https://www.redking-tulogistica.com/*"],
+      "js": ["inject-auth.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://redking-tulogistica.com/*", "https://www.redking-tulogistica.com/*"],
+      "js": ["shared.js", "auth-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.dropi.co/dashboard/orders*"],
+      "js": ["dropi-content.js"],
+      "css": ["dropi-styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.dropi.co/dashboard/novelties*"],
+      "js": ["shared.js", "novedades-content.js"],
+      "css": ["novedades-styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "REDKING Herramientas"
+  }
+}

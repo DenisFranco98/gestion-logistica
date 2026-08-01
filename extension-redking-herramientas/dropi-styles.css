@@ -1,0 +1,43 @@
+/* Colores alineados a la paleta REDKING (--accent #3971E6, --success #39E67A). */
+tr.dup-telefono {
+  outline: 2px dashed rgba(57, 113, 230, 0.6);
+  outline-offset: -2px;
+}
+
+.dup-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  font-family: 'DM Sans', 'Segoe UI', sans-serif;
+}
+
+.dup-badge-telefono {
+  background-color: #3971E6;
+  color: #fff;
+}
+
+.dup-badge-reviewed {
+  background-color: #1DA855;
+  color: #fff;
+}
+
+tr.dup-reviewed {
+  opacity: 0.55;
+}
+
+tr.dup-flash {
+  animation: dup-flash-anim 2s ease-out;
+}
+
+@keyframes dup-flash-anim {
+  0%, 40% {
+    background-color: rgba(57, 113, 230, 0.5) !important;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
