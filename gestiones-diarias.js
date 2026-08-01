@@ -461,7 +461,9 @@ const _CS={
   },
   cierre:{
     label:'CIERRE',color:'#374151',
-    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.']],
+    // 'ventasWppValor' es un monto, no un conteo como el resto. La sección
+    // tiene noTotal, así que no se mezcla con ninguna suma de gestiones.
+    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.'],['ventasWppValor','VALOR VENTAS WPP']],
     noTotal:true
   }
 };
