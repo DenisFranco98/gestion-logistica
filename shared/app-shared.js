@@ -11,6 +11,16 @@ function toast(msg,dur=2200){const t=document.getElementById('toast');if(!t)retu
 // Escapa datos que vienen del Excel/Dropi (nombre del cliente, etc.) antes de insertarlos en innerHTML
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
+// Fecha YYYY-MM-DD en la zona horaria del equipo. toISOString() devuelve UTC:
+// en Colombia (UTC-5) a partir de las 19:00 ya informa el día siguiente, así
+// que todo lo gestionado de tarde-noche se guardaba con la fecha de mañana
+// (historial diario, evidencias de novedades, fechas de R.O., rangos de la
+// analítica). Usar siempre esta función para "hoy", nunca toISOString().
+function _hoyLocal(d){
+  const f=d||new Date();
+  return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0');
+}
+
 // Normaliza nombre → clave Firebase segura (sin tildes, sin espacios, solo a-z0-9_)
 function _gdKey(s){
   return (s||'').trim().toLowerCase()
@@ -1640,7 +1650,7 @@ function _fbActualizarHistorial(){
   // Debounce: historial_diario solo se escribe como máximo 1 vez cada 30s
   if(_fbHistTimer) clearTimeout(_fbHistTimer);
   _fbHistTimer = setTimeout(()=>{
-    const hoy=new Date().toISOString().slice(0,10);
+    const hoy=_hoyLocal();
     const user=window._currentUsername;
     const asesorRaw=window.getLoginAsesor?window.getLoginAsesor():'';
     const asesorKey=_fbKey((asesorRaw||user).trim().toLowerCase());
@@ -2430,19 +2440,19 @@ function _anlGetFechas(){
   const period = document.getElementById('anl-period-filter').value;
   const fechas = [];
   if(period==='today'){
-    fechas.push(new Date().toISOString().slice(0,10));
+    fechas.push(_hoyLocal());
   } else if(period==='yesterday'){
-    const d=new Date(); d.setDate(d.getDate()-1); fechas.push(d.toISOString().slice(0,10));
+    const d=new Date(); d.setDate(d.getDate()-1); fechas.push(_hoyLocal(d));
   } else if(period==='custom'){
     const from = document.getElementById('anl-date-from').value;
     const to   = document.getElementById('anl-date-to').value;
     if(!from||!to) return [];
     const cur = new Date(from);
     const end = new Date(to);
-    while(cur<=end){ fechas.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+    while(cur<=end){ fechas.push(_hoyLocal(cur)); cur.setDate(cur.getDate()+1); }
   } else {
     const dias = parseInt(period);
-    for(let i=dias-1;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); fechas.push(d.toISOString().slice(0,10)); }
+    for(let i=dias-1;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); fechas.push(_hoyLocal(d)); }
   }
   return fechas;
 }
@@ -3013,10 +3023,10 @@ function _rnkCargar(){
   podio.innerHTML='';
   const fechas=[];
   if(period==='today'){
-    fechas.push(new Date().toISOString().slice(0,10));
+    fechas.push(_hoyLocal());
   } else {
     const dias=parseInt(period);
-    for(let i=dias-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);fechas.push(d.toISOString().slice(0,10));}
+    for(let i=dias-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);fechas.push(_hoyLocal(d));}
   }
   const users=userFilter?[userFilter]:_admUsuariosCache.filter(u=>u.uid).map(u=>u.uid);
   const _rnkUserMap=new Map(_admUsuariosCache.map(u=>[u.uid,u]));
@@ -4599,7 +4609,7 @@ function _roSyncFromGestion(id){
     if(g.devolucion)       estado='DEVUELTO';
     else if(g.gestion_final) estado='ENTREGADO';
     else if(g.llamada)     estado='EN PROCESO';
-    const hoy=new Date().toISOString().split('T')[0];
+    const hoy=_hoyLocal();
     const mes=_getMesCargado();
     const tel=(p.telefono||'').replace(/^57/,'');
     const rKey=_fbKey(p.guia);

@@ -2882,40 +2882,7 @@ async function _novSyncSolucionadaGD(id, solucionada){
     await _db.ref(novBasePath+'/'+gdNovKey+'/solucionadaDropi').remove();
   }
 
-  // Recontar el día desde Firebase. Misma regla que _novSyncGD en
-  // gestiones-diarias.js: solucionada o devuelta, devuelta gana si hay de ambas,
-  // y las que no tienen ninguna solución quedan pendientes sin sumar.
-  const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(diaReal).once('value');
-  let soluc=0, devuelt=0;
-  (diaNovsSnap.val()?Object.values(diaNovsSnap.val()):[]).forEach(n=>{
-    // Necesitamos leer las soluciones actualizadas de Firebase (ya están en n si el push fue antes)
-    const sols=_novGetSols(n);
-    if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
-    else if(n.solucionadaDropi||sols.some(s=>s.estado==='solucionada')){ soluc++; }
-  });
-
-  // Leer dia actual de GD para no pisar otras columnas
-  const diaSnap=await _db.ref(gdDiasPath+'/'+diaReal).once('value');
-  const diaData=diaSnap.val()||{};
-  diaData.soluc=soluc; diaData.devuelt=devuelt;
-  delete diaData.gestion; // campo retirado: se limpia al recalcular el día
-  await _db.ref(gdDiasPath+'/'+diaReal).set(diaData);
-
-  // Si GD está cargado en memoria, actualizar también la UI
-  if(typeof _gdData!=='undefined'&&_gdData){
-    if(!_gdData[diaReal]) _gdData[diaReal]={};
-    Object.assign(_gdData[diaReal],{soluc,devuelt});
-    delete _gdData[diaReal].gestion;
-    if(document.getElementById('gd-soluc-'+diaReal)) document.getElementById('gd-soluc-'+diaReal).textContent=soluc||'';
-    if(document.getElementById('gd-devuelt-'+diaReal)) document.getElementById('gd-devuelt-'+diaReal).textContent=devuelt||'';
-    if(typeof _gdCalc==='function'){
-      const t=_gdCalc();
-      if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
-      if(document.getElementById('gdt-devuelt')) document.getElementById('gdt-devuelt').textContent=t.devuelt;
-      if(document.getElementById('gdt-gral')) document.getElementById('gdt-gral').textContent=t.gral;
-    }
-    if(typeof _gdRenderResumen==='function') _gdRenderResumen();
-  }
+  await _novRecontarDiaGD(diaReal);
   toast(solucionada?'✅ Novedad marcada como solucionada en GD':'↩️ Novedad desmarcada en GD',2500);
 }
 
@@ -3351,7 +3318,84 @@ function marcarDevolucion(id){
   gestiones[id].devolucion=true;
   gestiones[id].devolucion_razon=notas[notas.length-1].texto;
   guardar();_fbSyncGestion(id);_roSyncFromGestion(id);
+  // Si el pedido tiene novedad en GD, dejarla marcada como devuelta: es el
+  // único camino que la cuenta en la columna DEVUELTO de Gestiones Diarias.
+  // Antes esto solo se lograba eligiendo "Devuelta" en el modal de evidencia,
+  // que ya no decide estados.
+  _novMarcarDevueltaGD(id, notas[notas.length-1].texto);
   animarCompletado(id,()=>_completarYLimpiar(id),'🔄');
+}
+
+// Recuenta las novedades de un día y actualiza la fila de Gestiones Diarias.
+// Misma regla que _novSyncGD en gestiones-diarias.js: solucionada o devuelta,
+// devuelta gana si hay de ambas, y las que no tienen ninguna solución quedan
+// pendientes sin sumar.
+async function _novRecontarDiaGD(dia){
+  if(typeof _db==='undefined'||!dia) return;
+  const mes=_getMesCargado();
+  const ak=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
+  const novBasePath=_novGDBasePath();
+  const gdDiasPath='gestiones_diarias/'+_gdTK()+'/'+mes+'/'+ak+'/dias';
+
+  const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(dia).once('value');
+  let soluc=0, devuelt=0;
+  (diaNovsSnap.val()?Object.values(diaNovsSnap.val()):[]).forEach(n=>{
+    const sols=_novGetSols(n);
+    if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
+    else if(n.solucionadaDropi||sols.some(s=>s.estado==='solucionada')){ soluc++; }
+  });
+
+  // Leer el día actual de GD para no pisar las otras columnas
+  const diaSnap=await _db.ref(gdDiasPath+'/'+dia).once('value');
+  const diaData=diaSnap.val()||{};
+  diaData.soluc=soluc; diaData.devuelt=devuelt;
+  delete diaData.gestion; // campo retirado: se limpia al recalcular el día
+  await _db.ref(gdDiasPath+'/'+dia).set(diaData);
+
+  // Si Gestiones Diarias está cargado en memoria, refrescar también su UI
+  if(typeof _gdData!=='undefined'&&_gdData){
+    if(!_gdData[dia]) _gdData[dia]={};
+    Object.assign(_gdData[dia],{soluc,devuelt});
+    delete _gdData[dia].gestion;
+    if(document.getElementById('gd-soluc-'+dia)) document.getElementById('gd-soluc-'+dia).textContent=soluc||'';
+    if(document.getElementById('gd-devuelt-'+dia)) document.getElementById('gd-devuelt-'+dia).textContent=devuelt||'';
+    if(typeof _gdCalc==='function'){
+      const t=_gdCalc();
+      if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
+      if(document.getElementById('gdt-devuelt')) document.getElementById('gdt-devuelt').textContent=t.devuelt;
+      if(document.getElementById('gdt-gral')) document.getElementById('gdt-gral').textContent=t.gral;
+    }
+    if(typeof _gdRenderResumen==='function') _gdRenderResumen();
+  }
+}
+
+// Registra en la novedad de GD que el pedido se devolvió, y recalcula los
+// contadores del día. Sin esto, "🔄 Devolver pedido" marcaba el pedido pero
+// dejaba la novedad como pendiente, y nunca aparecía en DEVUELTO.
+async function _novMarcarDevueltaGD(id, razon){
+  try{
+    if(typeof _db==='undefined'||!window._currentUsername) return;
+    const g=gestiones[id]||{};
+    if(!g.gdNovKey) return; // el pedido no tiene novedad registrada en GD
+    await _novGDMigrarMes();
+    const base=_novGDBasePath();
+    const novSnap=await _db.ref(base+'/'+g.gdNovKey).once('value');
+    const nov=novSnap.val();
+    if(!nov) return; // la novedad ya no existe
+    const yaDevuelta=Object.values(nov.soluciones||{}).some(s=>s&&s.estado==='devuelta');
+    if(!yaDevuelta){
+      await _db.ref(base+'/'+g.gdNovKey+'/soluciones').push({
+        estado:'devuelta', tipo:'txt',
+        val: razon||'Producto devuelto',
+        fechaLabel: new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'}),
+        ts: Date.now(), fromLogistica:true
+      });
+    }
+    // Una novedad devuelta ya no está solucionada en Dropi
+    await _db.ref(base+'/'+g.gdNovKey+'/solucionadaDropi').remove();
+    gestiones[id].gdTieneSols=true;
+    await _novRecontarDiaGD(nov.dia);
+  }catch(e){ console.warn('[NOV] no se pudo marcar la devolución en GD',e); }
 }
 
 // ── CARD OFICINA: checklist de contacto + resultado (dropdowns) ────────
@@ -3544,7 +3588,7 @@ function _novEvidenciaModal(id){
     // Siempre mostrar form — sin límite
     document.getElementById('nov-ev-form').style.display='block';
     // Precargar fecha de hoy
-    document.getElementById('nov-ev-fecha').value=new Date().toISOString().slice(0,10);
+    document.getElementById('nov-ev-fecha').value=_hoyLocal();
   }));
   _novEvTipo('img');
   document.getElementById('nov-ev-modal').style.display='flex';
@@ -3590,7 +3634,13 @@ async function _novEvGuardar(){
   const btn=document.getElementById('nov-ev-save');
   btn.textContent='Guardando...';btn.disabled=true;
   try{
-    const estado=document.getElementById('nov-ev-estado').value;
+    // Este modal SOLO adjunta evidencia (imagen o texto): no decide si la
+    // novedad quedó solucionada o devuelta. Eso lo define el dropdown
+    // "Resultado de la gestión" de la card, que además exige la evidencia como
+    // requisito. Antes había aquí un <select> de estado cuyo primer valor era
+    // "En gestión"; al quedar la lista en solo dos opciones, el default pasó a
+    // "Solucionada" y guardar una evidencia daba la novedad por resuelta.
+    const estado='';
     const evFechaVal=document.getElementById('nov-ev-fecha')?.value;
     const evFechaBase=evFechaVal?new Date(evFechaVal+'T12:00:00'):new Date();
     const fechaLabel=evFechaBase.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});

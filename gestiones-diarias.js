@@ -548,7 +548,7 @@ function _novNuevo(){
   document.getElementById('nov-m-sol-section').style.display='block';
   document.getElementById('nov-m-title').textContent='Nueva Novedad';
   document.getElementById('nov-m-sol-label').textContent='Solución 1 (opcional)';
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=_hoyLocal();
   document.getElementById('nov-m-fecha').value=hoy;
   document.getElementById('nov-sol-fecha').value=hoy;
   document.getElementById('nov-m-guia').value='';
@@ -569,7 +569,7 @@ function _novAbrirSol(id){
   document.getElementById('nov-m-img').value='';
   document.getElementById('nov-m-txt').value='';
   // Precargar fecha de hoy
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=_hoyLocal();
   document.getElementById('nov-sol-fecha').value=hoy;
   _novSetEstado('solucionada');
   document.getElementById('nov-modal').classList.add('open');
@@ -1002,7 +1002,7 @@ function _roCambio(id,campo,valor){
 
 function _roAgregar(){
   if(typeof _db==='undefined')return;
-  const hoy=new Date().toISOString().split('T')[0];
+  const hoy=_hoyLocal();
   const obj={fechaContacto:hoy,cliente:'',telefono:'',guia:'',notaCliente:'',estado:'',notaSeguimiento:'',fechaEstado:'',ts:Date.now()};
   const ref=_db.ref(_roPath()).push(obj);
   _roData[ref.key]=Object.assign({},obj);
