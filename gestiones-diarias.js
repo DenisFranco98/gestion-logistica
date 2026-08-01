@@ -463,7 +463,10 @@ const _CS={
     label:'CIERRE',color:'#374151',
     // 'ventasWppValor' es un monto, no un conteo como el resto. La sección
     // tiene noTotal, así que no se mezcla con ninguna suma de gestiones.
-    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.'],['ventasWppValor','VALOR VENTAS WPP']],
+    // 'carritosRecup' lleva {desde:'recupCarri'}: no se escribe acá, se lee de
+    // la columna RECUP. de ese día en la tabla de Gestión. Antes el mismo dato
+    // se cargaba dos veces por separado y podían quedar en desacuerdo.
+    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.',{desde:'recupCarri'}],['ventasWppValor','VALOR VENTAS WPP']],
     noTotal:true
   }
 };
@@ -546,7 +549,16 @@ function _consoRender(){
       const sd=cd[secId]||{};
       const tot=def.total?def.total(sd):null;
       html+=`<div class="conso-sec"><div class="conso-sec-hdr" style="background:${def.color};">${def.label}</div>`;
-      def.fields.forEach(([key,lbl])=>{
+      def.fields.forEach(([key,lbl,opt])=>{
+        if(opt&&opt.desde){
+          // Campo derivado de la tabla de Gestión: se muestra bloqueado, con el
+          // valor del día que se esté viendo en el consolidado.
+          const val=(_gdData[_consoDia]||{})[opt.desde]||0;
+          html+=`<div class="conso-row"><span class="conso-lbl">${lbl} 🔒</span>
+            <span class="conso-inp conso-inp-ro" id="ci-${corte.id}-${secId}-${key}"
+              title="Se toma de la columna RECUP. de este día en la tabla de Gestión">${val}</span></div>`;
+          return;
+        }
         html+=`<div class="conso-row"><span class="conso-lbl">${lbl}</span>
           <input type="number" min="0" value="${sd[key]||''}" placeholder="0" class="conso-inp"
             id="ci-${corte.id}-${secId}-${key}"

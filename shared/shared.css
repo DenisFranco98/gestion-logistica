@@ -828,6 +828,8 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 .conso-inp{width:52px;border:1px solid var(--border);border-radius:5px;padding:2px 5px;font-size:.72rem;font-weight:700;text-align:right;outline:none;background:var(--bg-hover);font-family:inherit;-moz-appearance:textfield;}
 .conso-inp::-webkit-inner-spin-button,.conso-inp::-webkit-outer-spin-button{-webkit-appearance:none;}
 .conso-inp:focus{border-color:#3b82f6;background:var(--bg-card);}
+/* Campo que no se escribe acá: se toma de la tabla de Gestión de ese día */
+.conso-inp-ro{display:inline-block;background:transparent;border-style:dashed;color:var(--text-2);cursor:default;box-sizing:border-box;}
 .conso-total-row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#111827;}
 .conso-total-lbl{font-size:.63rem;color:white;font-weight:800;}
 .conso-total-val{font-size:.85rem;font-weight:900;color:white;}
