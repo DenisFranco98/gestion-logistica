@@ -114,7 +114,6 @@ function _gdRenderResumen(){
   const t=_gdCalc();
   const dias=_gdDiasEnMes(_gdMes);
   const avg=dias>0?(t.gral/dias).toFixed(1):'0';
-  const pct=t.gral>0?Math.round(t.conf/t.gral*100):0;
   // Tarjetas estilo REDKING: superficie oscura con acento de color en borde superior
   const card=(titulo,vals,color)=>`
     <div style="background:var(--bg-elevated);border:1px solid var(--border);border-top:2px solid ${color};border-radius:9px;padding:8px 12px;flex-shrink:0;">
@@ -128,7 +127,7 @@ function _gdRenderResumen(){
       ${card('Novedades',`<span style="color:#3971E6" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">sol</span><span style="color:#E63946" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:var(--text-3);margin-left:2px">dev</span>`,'#3971E6')}
       ${card('Carritos',`<span style="color:#9B59E6">${t.recupCarri}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">|</span><span style="color:var(--text-2)">${t.contNoRecup}</span>`,'#9B59E6')}
       ${card('Ventas WPP',`<span style="color:#E6823A;font-size:1rem">${t.ventasWpp}</span>`,'#E6823A')}
-      ${card('General',`<span style="color:#E6B539;font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:#E6B539;font-weight:600">${avg}/día</span><span style="font-size:.75rem;color:#39E67A">${pct}%</span>`,'#E6B539')}
+      ${card('General',`<span style="color:#E6B539;font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:#E6B539;font-weight:600">${avg}/día</span>`,'#E6B539')}
     </div>`;
 }
 
