@@ -728,11 +728,17 @@ function _novRender(){
 // libres quedan atenuados y sirven para agregar. La imagen o el texto se abren
 // en el visor al hacer clic, así la fila de la tabla no crece.
 const _NOV_SLOTS=5;
+const _NOV_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 function _novSolsCell(id,n,sols){
-  const cuadro=(contenido,estilo,extra)=>
-    `<div style="width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;position:relative;flex:none;${estilo}" ${extra||''}>${contenido}</div>`;
+  // Cada slot es una columna: el cuadro y, debajo, la fecha en que se gestionó.
+  // Los libres llevan un hueco del mismo alto para que la fila no se desalinee.
+  const slot=(contenido,estilo,extra,pie)=>
+    `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:none;">
+      <div style="width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;position:relative;${estilo}" ${extra||''}>${contenido}</div>
+      <span style="font-size:.5rem;color:var(--text-3);white-space:nowrap;line-height:1;">${pie||'&nbsp;'}</span>
+    </div>`;
 
-  let html='<div style="display:flex;gap:5px;align-items:center;padding:6px 0;flex-wrap:wrap;">';
+  let html='<div style="display:flex;gap:5px;align-items:flex-start;padding:6px 0;flex-wrap:wrap;">';
 
   sols.slice(0,_NOV_SLOTS).forEach((s,i)=>{
     const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
@@ -751,16 +757,25 @@ function _novSolsCell(id,n,sols){
       ? `<button onclick="event.stopPropagation();${del}" title="Eliminar evidencia"
            style="position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;border:none;background:var(--danger);color:white;font-size:.55rem;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;font-family:inherit;">×</button>`
       : '';
-    html+=cuadro(icono+btnDel,
+    // Fecha corta debajo del cuadro ("31 jul"): fechaLabel viene largo ("31 de
+    // julio de 2026") y no entra bajo un cuadro de 38px. Se arma a mano y no con
+    // toLocaleDateString: es-CO con month:'short' devuelve "1 de ago" según el
+    // entorno, y acá el formato tiene que ser siempre el mismo.
+    const fechaPie=esc(s.ts
+      ? new Date(s.ts).getDate()+' '+_NOV_MESES[new Date(s.ts).getMonth()]
+      : String(s.fechaLabel||'').replace(/\s+de\s+\d{4}$/,'').replace(/\s+de\s+/g,' ').replace(/([a-záéíóú]{3})[a-záéíóú]*$/i,'$1'));
+    html+=slot(icono+btnDel,
       `background:${bg};border:1.5px solid ${color};cursor:zoom-in;`,
-      `title="${titulo}" onclick="${abrir}"`);
+      `title="${titulo}" onclick="${abrir}"`,
+      fechaPie);
   });
 
   // Slots libres: mismo cuadro, atenuado, para sumar una evidencia más
   for(let i=sols.length;i<_NOV_SLOTS;i++){
-    html+=cuadro('📎',
+    html+=slot('📎',
       'background:var(--bg-hover);border:1.5px dashed var(--border);opacity:.35;cursor:pointer;',
-      `title="Agregar evidencia" onclick="_novAbrirSol('${id}')" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='.35'"`);
+      `title="Agregar evidencia" onclick="_novAbrirSol('${id}')" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='.35'"`,
+      '');
   }
 
   // Si alguna novedad tiene más de 5, avisarlo en vez de esconderlas en silencio
