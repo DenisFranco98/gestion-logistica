@@ -742,7 +742,7 @@ function _novSolsCell(id,n,sols){
 
   let html='<div style="display:flex;gap:5px;align-items:flex-start;padding:6px 0;flex-wrap:wrap;">';
 
-  sols.slice(0,_NOV_SLOTS).forEach((s,i)=>{
+  sols.forEach((s,i)=>{
     const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
     const bg=s.estado==='solucionada'?'#dcfce7':s.estado==='devuelta'?'#fef3c7':'#e0f2fe';
     // El tercer caso solo aparece en soluciones guardadas antes de retirar el
@@ -772,7 +772,7 @@ function _novSolsCell(id,n,sols){
       fechaPie);
   });
 
-  // Slots libres: mismo cuadro, atenuado, para sumar una evidencia más
+  // Slots libres hasta completar la fila de 5: atenuados, para sumar evidencia
   for(let i=sols.length;i<_NOV_SLOTS;i++){
     html+=slot('📎',
       'background:var(--bg-hover);border:1.5px dashed var(--border);opacity:.35;cursor:pointer;',
@@ -780,9 +780,14 @@ function _novSolsCell(id,n,sols){
       '');
   }
 
-  // Si alguna novedad tiene más de 5, avisarlo en vez de esconderlas en silencio
-  if(sols.length>_NOV_SLOTS){
-    html+=`<span style="font-size:.6rem;font-weight:700;color:var(--text-3);margin-left:2px;" title="Hay más evidencias de las que caben en la fila">+${sols.length-_NOV_SLOTS}</span>`;
+  // Con la fila llena ya no quedan huecos donde hacer clic, así que el "+" es
+  // la única forma de seguir agregando. Las de más se muestran igual: la fila
+  // envuelve en vez de esconderlas.
+  if(sols.length>=_NOV_SLOTS){
+    html+=slot('+',
+      'background:transparent;border:1.5px dashed var(--accent);color:var(--accent);font-weight:800;font-size:1.1rem;cursor:pointer;',
+      `title="Agregar otra evidencia" onclick="_novAbrirSol('${id}')" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'"`,
+      '');
   }
   html+='</div>';
   return html;
