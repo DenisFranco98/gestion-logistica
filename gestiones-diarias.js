@@ -461,12 +461,11 @@ const _CS={
   },
   cierre:{
     label:'CIERRE',color:'#374151',
-    // 'ventasWppValor' es un monto, no un conteo como el resto. La sección
-    // tiene noTotal, así que no se mezcla con ninguna suma de gestiones.
-    // 'carritosRecup' lleva {desde:'recupCarri'}: no se escribe acá, se lee de
-    // la columna RECUP. de ese día en la tabla de Gestión. Antes el mismo dato
-    // se cargaba dos veces por separado y podían quedar en desacuerdo.
-    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.',{desde:'recupCarri'}],['ventasWppValor','VALOR VENTAS WPP']],
+    // CIERRE es solo cantidades, nunca importes.
+    // 'carritosRecup' y 'ventasWpp' llevan {desde:...}: no se escriben acá, se
+    // leen de las columnas RECUP. y VENTAS WPP de ese día en la tabla de
+    // Gestión. Antes el mismo dato se cargaba dos veces y podía discrepar.
+    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.',{desde:'recupCarri'}],['ventasWpp','VENTAS WPP',{desde:'ventasWpp'}]],
     noTotal:true
   }
 };
@@ -556,7 +555,7 @@ function _consoRender(){
           const val=(_gdData[_consoDia]||{})[opt.desde]||0;
           html+=`<div class="conso-row"><span class="conso-lbl">${lbl} 🔒</span>
             <span class="conso-inp conso-inp-ro" id="ci-${corte.id}-${secId}-${key}"
-              title="Se toma de la columna RECUP. de este día en la tabla de Gestión">${val}</span></div>`;
+              title="Se toma de la tabla de Gestión, del día que estás viendo">${val}</span></div>`;
           return;
         }
         html+=`<div class="conso-row"><span class="conso-lbl">${lbl}</span>
