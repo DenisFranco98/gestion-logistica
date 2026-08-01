@@ -170,6 +170,78 @@ window._auditHistorialEstructura = function(){
   });
 };
 
+// Diagnóstico: inventario de las 5 raíces que se clavan por tienda, para saber
+// qué migró ya a empresaId, qué sigue en la clave vieja (slug del nombre), qué
+// rutas comparten dos negocios distintos y qué quedó sin dueño.
+// Ejecutar desde la consola como admin: _auditTiendas()
+// Solo lee — no escribe ni borra nada.
+window._auditTiendas = function(){
+  const RAICES=['gestiones_diarias','control_financiero','ro','novedades','anticipos'];
+  const cuenta=n=>{ // registros aproximados de un nodo de tienda (hojas por mes)
+    let t=0;
+    Object.entries(n||{}).forEach(([mes,v])=>{ if(mes==='config'||!v||typeof v!=='object')return; t+=Object.keys(v).length; });
+    return t;
+  };
+  console.log('%c[AUDIT tiendas] leyendo...','font-weight:bold');
+  Promise.all([
+    _db.ref('empresas').once('value'),
+    _db.ref('admin_empresas').once('value'),
+    ...RAICES.map(r=>_db.ref(r).once('value'))
+  ]).then(snaps=>{
+    const empresas=snaps[0].val()||{}, adminEmp=snaps[1].val()||{};
+    const datos={}; RAICES.forEach((r,i)=>datos[r]=snaps[i+2].val()||{});
+    // dueño de cada empresa: el admin que la tiene asignada (o creadoPor)
+    const duenoDe={};
+    Object.entries(adminEmp).forEach(([adm,emps])=>Object.keys(emps||{}).forEach(e=>{ (duenoDe[e]=duenoDe[e]||new Set()).add(adm); }));
+    const slugDe={}, porSlug={};
+    Object.entries(empresas).forEach(([id,e])=>{
+      const s=_gdKey(e.nombre||id); slugDe[id]=s;
+      (porSlug[s]=porSlug[s]||[]).push({id,nombre:e.nombre,creadoPor:e.creadoPor});
+    });
+
+    console.group('%c1) Colisiones — un slug, varios negocios','color:#b91c1c;font-weight:bold');
+    const colis=[];
+    Object.entries(porSlug).forEach(([slug,lista])=>{
+      if([...new Set(lista.map(x=>x.creadoPor))].length<2) return;
+      colis.push(slug);
+      const filas=lista.map(x=>({tienda:x.nombre,empresaId:x.id,admin:(x.creadoPor||'').slice(0,10)+'…'}));
+      console.log('%c'+slug,'font-weight:bold'); console.table(filas);
+      RAICES.forEach(r=>{ const n=cuenta(datos[r][slug]); if(n) console.log('   '+r+'/'+slug+' → '+n+' registros aún en la ruta compartida'); });
+    });
+    if(!colis.length) console.log('Ninguna. Todas las tiendas tienen ruta propia.');
+    console.groupEnd();
+
+    console.group('%c2) Estado de migración por tienda','color:#0e7490;font-weight:bold');
+    const estado=Object.entries(empresas).map(([id,e])=>{
+      const f={tienda:e.nombre,empresaId:id};
+      RAICES.forEach(r=>{
+        // Vale la EXISTENCIA del nodo, no su conteo: un nodo ya migrado que solo
+        // tenga /config cuenta 0 registros y no por eso está sin migrar.
+        const yaMigrado=!!datos[r][id], viejo=cuenta(datos[r][slugDe[id]]);
+        f[r]=yaMigrado?('✔ '+cuenta(datos[r][id])):(viejo?('pendiente ('+viejo+')'):'—');
+      });
+      return f;
+    }).sort((a,b)=>String(a.tienda).localeCompare(String(b.tienda)));
+    console.table(estado);
+    console.log('✔ n = ya migrado a la clave por empresaId, n registros. "pendiente (n)" = sigue solo en la clave vieja.');
+    console.groupEnd();
+
+    console.group('%c3) Nodos sin dueño','color:#a16207;font-weight:bold');
+    const vivos=new Set([...Object.keys(empresas),...Object.values(slugDe)]);
+    let hay=false;
+    RAICES.forEach(r=>Object.keys(datos[r]).forEach(k=>{
+      if(vivos.has(k))return;
+      hay=true;
+      console.log(r+'/'+k+'  → '+cuenta(datos[r][k])+' registros'+(k==='_'?'   (clave vacía: se guardó sin tienda en sesión)':''));
+    }));
+    if(!hay) console.log('Ninguno.');
+    console.log('Ojo: "sin dueño" es relativo a las tiendas que ESTA sesión puede leer de /empresas. Si las reglas limitan la lectura a tus propias tiendas, las de otros negocios aparecerán acá sin serlo.');
+    console.groupEnd();
+
+    console.log('%cRecordá: las rutas viejas son el respaldo de la migración. No las borres hasta que TODAS las tiendas que comparten ese slug aparezcan con ✔ arriba.','color:#b91c1c');
+  }).catch(e=>console.error('[AUDIT tiendas] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
