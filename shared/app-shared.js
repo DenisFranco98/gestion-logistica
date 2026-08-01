@@ -242,6 +242,62 @@ window._auditTiendas = function(){
   }).catch(e=>console.error('[AUDIT tiendas] falló (¿sesión de admin?):',e));
 };
 
+// Migración masiva de las 5 raíces por tienda: copia todo lo que siga bajo la
+// clave vieja (slug del nombre) a la clave por empresaId. Existe porque la
+// migración perezosa de _leerTienda solo cubre el mes que se está mirando, y
+// hacerlo a mano son 25 tiendas × 5 módulos × varios meses.
+// Ejecutar desde la consola como admin: _migrarTiendas()
+// - Copia mes por mes (segundo nivel de cada raíz) y también /config.
+// - NUNCA sobrescribe un mes que ya exista en destino: lo salta y lo reporta.
+// - No borra nada: la ruta vieja queda intacta como respaldo.
+// Ojo: en los slugs que comparten dos negocios, ambas tiendas reciben copia del
+// histórico mezclado — separar registros ajenos es un trabajo posterior y manual.
+window._migrarTiendas = function(){
+  const RAICES=['gestiones_diarias','control_financiero','ro','novedades','anticipos'];
+  console.log('%c[MIGRAR tiendas] leyendo...','font-weight:bold');
+  Promise.all([_db.ref('empresas').once('value'),...RAICES.map(r=>_db.ref(r).once('value'))]).then(snaps=>{
+    const empresas=snaps[0].val()||{};
+    const datos={}; RAICES.forEach((r,i)=>datos[r]=snaps[i+1].val()||{});
+    const copias=[], saltados=[];
+    Object.entries(empresas).forEach(([id,e])=>{
+      const slug=_gdKey(e.nombre||id);
+      if(slug===id) return;
+      RAICES.forEach(raiz=>{
+        const origen=datos[raiz][slug]; if(!origen) return;
+        const destino=datos[raiz][id]||{};
+        Object.keys(origen).forEach(mes=>{
+          const item={raiz,tienda:e.nombre,id,slug,mes,
+            n:(origen[mes]&&typeof origen[mes]==='object')?Object.keys(origen[mes]).length:1};
+          if(destino[mes]!==undefined){ saltados.push(item); return; }  // ya migrado: no pisar
+          item._val=origen[mes];
+          copias.push(item);
+        });
+      });
+    });
+    if(saltados.length){
+      console.group('%cYa estaban en destino — se dejan como están ('+saltados.length+')','color:#a16207');
+      console.table(saltados.map(({raiz,tienda,mes,n})=>({raiz,tienda,mes,registros:n})));
+      console.groupEnd();
+    }
+    if(!copias.length){ console.log('%cNada que migrar: todo lo viejo ya tiene su equivalente por empresaId.','color:#15803d;font-weight:bold'); return; }
+    console.group('%cA copiar ('+copias.length+' nodos)','color:#0e7490;font-weight:bold');
+    console.table(copias.map(({raiz,tienda,slug,id,mes,n})=>({raiz,tienda,de:raiz+'/'+slug+'/'+mes,a:raiz+'/'+id+'/'+mes,registros:n})));
+    console.groupEnd();
+    // Secuencial a propósito: son escrituras sobre datos de producción y así el
+    // log queda en orden y un fallo no deja la mitad en el aire sin avisar.
+    let hechas=0, fallidas=0;
+    copias.reduce((p,c)=>p.then(()=>
+      _db.ref(c.raiz+'/'+c.id+'/'+c.mes).set(c._val)
+        .then(()=>{ hechas++; })
+        .catch(err=>{ fallidas++; console.error('  ✗ '+c.raiz+'/'+c.id+'/'+c.mes,err); })
+    ), Promise.resolve()).then(()=>{
+      console.log('%c[MIGRAR tiendas] listo: '+hechas+' copiados, '+fallidas+' con error, '+saltados.length+' ya existían.',
+        'font-weight:bold;color:'+(fallidas?'#b91c1c':'#15803d'));
+      console.log('Las rutas viejas siguen intactas. Verificá con _auditTiendas() y recién después borrá una ruta legacy, solo si TODAS las tiendas que comparten ese slug quedaron en ✔.');
+    });
+  }).catch(e=>console.error('[MIGRAR tiendas] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
