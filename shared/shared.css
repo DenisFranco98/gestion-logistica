@@ -808,8 +808,15 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 .gd-tab-btn.active{background:rgba(57,113,230,.16);color:white;border-left-color:#3971E6;}
 /* ── CONSOLIDADO ──────────────────────── */
 #gd-tab-consolidado{display:none;flex:1;overflow:auto;padding:12px 14px 40px;}
+/* Cada corte (8 AM / 12 PM / 5 PM) es su propio bloque para poder capturarlo
+   suelto con el botón "Capturar registro" y mandarlo por WhatsApp. */
+.conso-corte{padding:2px;}
 .conso-corte-hdr{background:#111827;color:white;padding:8px 14px;border-radius:8px;margin-bottom:8px;font-size:.75rem;font-weight:800;letter-spacing:.5px;}
 .conso-secs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.conso-cap-btn:hover{background:rgba(255,255,255,.26)!important;}
+.conso-cap-btn:disabled{opacity:.6;cursor:default;}
+/* Cabecera que solo sale en la imagen capturada (tienda, corte, fecha, asesor) */
+.conso-cap-hdr{margin-bottom:8px;}
 .conso-sec{flex:1;min-width:170px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;}
 .conso-sec-hdr{padding:7px 10px;font-size:.6rem;font-weight:800;letter-spacing:.4px;color:white;}
 .conso-row{display:flex;align-items:center;justify-content:space-between;padding:5px 9px;border-bottom:1px solid var(--border);gap:6px;}

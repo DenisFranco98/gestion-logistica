@@ -521,9 +521,24 @@ function _consoRender(){
     <div style="font-size:.82rem;font-weight:800;">${_consoFechaLabel(_consoDia)}</div>
     <div style="font-size:.62rem;opacity:.6;">CAPTURADO POR: <strong style="opacity:1;">${nombre}</strong></div>
   </div>`;
+  const tienda=((window.getLoginTienda?window.getLoginTienda():'')||'REDKING').toUpperCase();
   _CORTES.forEach(corte=>{
     const cd=_consoData[corte.id]||{};
-    html+=`<div class="conso-corte-hdr">${corte.label}</div><div class="conso-secs">`;
+    // Cada corte va en su propio contenedor para poder capturarlo suelto.
+    // La cabecera de captura está oculta en pantalla (la fecha ya se ve arriba)
+    // y solo aparece en la imagen, para que quien la reciba por WhatsApp sepa
+    // de qué tienda, día, corte y asesor es.
+    html+=`<div class="conso-corte" id="conso-corte-${corte.id}">
+      <div class="conso-cap-hdr" id="conso-cap-hdr-${corte.id}" style="display:none;background:#131920;color:white;padding:9px 14px;border-radius:9px 9px 0 0;">
+        <div style="font-size:.78rem;font-weight:800;">${esc(tienda)} — ${corte.label}</div>
+        <div style="font-size:.62rem;opacity:.7;margin-top:2px;">${esc(_consoFechaLabel(_consoDia))} · ${esc(nombre)}</div>
+      </div>
+      <div class="conso-corte-hdr" id="conso-hdr-${corte.id}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <span>${corte.label}</span>
+        <button class="conso-cap-btn" id="conso-cap-btn-${corte.id}" onclick="_consoCapturar('${corte.id}')"
+          style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:inherit;border-radius:7px;padding:4px 10px;font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">📸 Capturar registro</button>
+      </div>
+      <div class="conso-secs">`;
     corte.secs.forEach(secId=>{
       const def=_CS[secId];
       const sd=cd[secId]||{};
@@ -540,9 +555,54 @@ function _consoRender(){
       }
       html+=`</div>`;
     });
-    html+=`</div>`;
+    html+=`</div></div>`; // cierra .conso-secs y .conso-corte
   });
   document.getElementById('conso-form').innerHTML=html;
+}
+
+// Captura un corte (8 AM / 12 PM / 5 PM) como imagen y la deja en el
+// portapapeles, lista para pegar en WhatsApp. Si el navegador no permite
+// escribir imágenes en el portapapeles, la descarga como PNG.
+async function _consoCapturar(corteId){
+  const cont=document.getElementById('conso-corte-'+corteId);
+  if(!cont)return;
+  const btn=document.getElementById('conso-cap-btn-'+corteId);
+  const cab=document.getElementById('conso-cap-hdr-'+corteId);
+  const hdr=document.getElementById('conso-hdr-'+corteId);
+  const txtBtn=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Capturando...';}
+  try{
+    await _cargarLib(_LIB_H2C);
+    // En la imagen, la cabecera con tienda/fecha/asesor reemplaza al header de
+    // pantalla (que lleva el botón): así no quedan dos franjas oscuras seguidas.
+    if(hdr) hdr.style.display='none';
+    if(cab) cab.style.display='block';
+    // Fondo sólido: sin esto el PNG sale transparente y en WhatsApp se ve negro.
+    const fondo=getComputedStyle(document.body).backgroundColor||'#ffffff';
+    const canvas=await html2canvas(cont,{backgroundColor:fondo,scale:2,logging:false,useCORS:true});
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+    if(!blob) throw new Error('no se pudo generar la imagen');
+    const nombreArch='Consolidado_'+corteId+'_'+_gdMes+'-'+String(_consoDia).padStart(2,'0')+'.png';
+    try{
+      if(!navigator.clipboard||!window.ClipboardItem) throw new Error('sin portapapeles');
+      await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+      toast('📋 Registro copiado — pégalo en WhatsApp');
+    }catch(errClip){
+      // Firefox y los navegadores sin permiso de portapapeles caen acá
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download=nombreArch; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),4000);
+      toast('📥 Tu navegador no deja copiar imágenes: se descargó '+nombreArch,4500);
+    }
+  }catch(e){
+    console.error('[CONSO] captura falló',e);
+    toast('⚠️ No se pudo capturar: '+(e&&e.message||e),4000);
+  }finally{
+    if(cab) cab.style.display='none';
+    if(hdr) hdr.style.display='';
+    if(btn){btn.disabled=false;btn.textContent=txtBtn;}
+  }
 }
 
 function _consoCambio(corteId,secId,campo,valor){

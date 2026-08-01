@@ -60,6 +60,7 @@ function _getMesCargado(){
 // las trae en el <head>, resuelve de inmediato sin volver a descargarlas.
 const _LIB_XLSX  = {global:'XLSX',  url:'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'};
 const _LIB_CHART = {global:'Chart', url:'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'};
+const _LIB_H2C   = {global:'html2canvas', url:'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'};
 const _libsPendientes = {};
 function _cargarLib(lib){
   if(window[lib.global]) return Promise.resolve();
