@@ -732,10 +732,12 @@ const _NOV_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','n
 function _novSolsCell(id,n,sols){
   // Cada slot es una columna: el cuadro y, debajo, la fecha en que se gestionó.
   // Los libres llevan un hueco del mismo alto para que la fila no se desalinee.
+  // La fecha hace de título/identificador de la evidencia, así que va legible
+  // y no como una nota al pie.
   const slot=(contenido,estilo,extra,pie)=>
-    `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:none;">
+    `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:none;min-width:40px;">
       <div style="width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;position:relative;${estilo}" ${extra||''}>${contenido}</div>
-      <span style="font-size:.5rem;color:var(--text-3);white-space:nowrap;line-height:1;">${pie||'&nbsp;'}</span>
+      <span style="font-size:.66rem;font-weight:700;color:var(--text-2);white-space:nowrap;line-height:1.1;">${pie||'&nbsp;'}</span>
     </div>`;
 
   let html='<div style="display:flex;gap:5px;align-items:flex-start;padding:6px 0;flex-wrap:wrap;">';
