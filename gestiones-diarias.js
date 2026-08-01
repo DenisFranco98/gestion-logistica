@@ -106,7 +106,9 @@ function _gdCalc(){
     contNoRecup+=d.contNoRecup||0; recupCarri+=d.recupCarri||0; ventasWpp+=d.ventasWpp||0;
   });
   const totalConf=conf+cancel;
-  const gral=totalConf+soluc+recupCarri+ventasWpp;
+  // El total cuenta todo el trabajo del día, con resultado positivo o no:
+  // las devueltas y los no recuperados también son gestiones hechas.
+  const gral=totalConf+soluc+devuelt+recupCarri+contNoRecup+ventasWpp;
   return{conf,cancel,totalConf,soluc,devuelt,contNoRecup,recupCarri,ventasWpp,gral};
 }
 
@@ -165,7 +167,7 @@ function _gdRenderTabla(){
   for(let d=1;d<=total;d++){
     const r=_gdData[d]||{};
     const tc=(r.conf||0)+(r.cancel||0);
-    const tg=tc+(r.soluc||0)+(r.recupCarri||0)+(r.ventasWpp||0);
+    const tg=tc+(r.soluc||0)+(r.devuelt||0)+(r.recupCarri||0)+(r.contNoRecup||0)+(r.ventasWpp||0);
     const vacio=!r.conf&&!r.cancel&&!r.soluc&&!r.devuelt&&!r.contNoRecup&&!r.recupCarri&&!r.ventasWpp&&!r.obs;
     const esHoy=d===diaHoy;
     const n=(key,val,color)=>`<input type="number" min="0" value="${val||''}" placeholder="·" oninput="_gdCambio(${d},'${key}',this.value)" style="color:${color};">`;
@@ -207,7 +209,7 @@ function _gdCambio(dia,campo,valor){
   // Actualizar celdas auto de esa fila
   const r=_gdData[dia];
   const tc=(r.conf||0)+(r.cancel||0);
-  const tg=tc+(r.soluc||0)+(r.recupCarri||0)+(r.ventasWpp||0);
+  const tg=tc+(r.soluc||0)+(r.devuelt||0)+(r.recupCarri||0)+(r.contNoRecup||0)+(r.ventasWpp||0);
   const tcEl=document.getElementById('gd-tc-'+dia);
   const tgEl=document.getElementById('gd-tg-'+dia);
   if(tcEl)tcEl.textContent=tc||'';
@@ -745,7 +747,7 @@ async function _novSyncGD(dia){
     const t=_gdCalc();
     if(document.getElementById('gd-soluc-'+dia)) document.getElementById('gd-soluc-'+dia).textContent=soluc||'';
     if(document.getElementById('gd-devuelt-'+dia)) document.getElementById('gd-devuelt-'+dia).textContent=devuelt||'';
-    const tg=(_gdData[dia].conf||0)+(_gdData[dia].cancel||0)+soluc+(_gdData[dia].recupCarri||0)+(_gdData[dia].ventasWpp||0);
+    const tg=(_gdData[dia].conf||0)+(_gdData[dia].cancel||0)+soluc+devuelt+(_gdData[dia].recupCarri||0)+(_gdData[dia].contNoRecup||0)+(_gdData[dia].ventasWpp||0);
     const tgEl=document.getElementById('gd-tg-'+dia); if(tgEl) tgEl.textContent=tg||'';
     if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
     if(document.getElementById('gdt-devuelt')) document.getElementById('gdt-devuelt').textContent=t.devuelt;
