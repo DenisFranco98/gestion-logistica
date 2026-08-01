@@ -96,15 +96,18 @@ function _gdDiasEnMes(ym){
   return new Date(y,m,0).getDate();
 }
 
+// Las novedades son binarias: solucionada o devuelta. El bucket intermedio
+// ("gestionadas") se eliminó — el campo d.gestion puede seguir existiendo en
+// registros viejos de Firebase, pero ya no se lee ni se suma en ningún lado.
 function _gdCalc(){
-  let conf=0,cancel=0,soluc=0,gestion=0,devuelt=0,contNoRecup=0,recupCarri=0,ventasWpp=0;
+  let conf=0,cancel=0,soluc=0,devuelt=0,contNoRecup=0,recupCarri=0,ventasWpp=0;
   Object.values(_gdData).forEach(d=>{
-    conf+=d.conf||0; cancel+=d.cancel||0; soluc+=d.soluc||0; gestion+=d.gestion||0; devuelt+=d.devuelt||0;
+    conf+=d.conf||0; cancel+=d.cancel||0; soluc+=d.soluc||0; devuelt+=d.devuelt||0;
     contNoRecup+=d.contNoRecup||0; recupCarri+=d.recupCarri||0; ventasWpp+=d.ventasWpp||0;
   });
   const totalConf=conf+cancel;
-  const gral=totalConf+soluc+gestion+recupCarri+ventasWpp;
-  return{conf,cancel,totalConf,soluc,gestion,devuelt,contNoRecup,recupCarri,ventasWpp,gral};
+  const gral=totalConf+soluc+recupCarri+ventasWpp;
+  return{conf,cancel,totalConf,soluc,devuelt,contNoRecup,recupCarri,ventasWpp,gral};
 }
 
 function _gdRenderResumen(){
@@ -122,7 +125,7 @@ function _gdRenderResumen(){
     <div style="font-size:.58rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📊 Resumen del mes (auto-calculado)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       ${card('Confirmaciones',`<span style="color:#39E67A">${t.conf}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">+</span><span style="color:#E63946">${t.cancel}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">=</span><span style="color:#39E67A;font-size:1rem">${t.totalConf}</span>`,'#39E67A')}
-      ${card('Novedades',`<span style="color:#3971E6" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">sol</span><span style="color:#67e8f9" title="Gestionadas">${t.gestion}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">gest</span><span style="color:#E63946" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:var(--text-3);margin-left:2px">dev</span>`,'#3971E6')}
+      ${card('Novedades',`<span style="color:#3971E6" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">sol</span><span style="color:#E63946" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:var(--text-3);margin-left:2px">dev</span>`,'#3971E6')}
       ${card('Carritos',`<span style="color:#9B59E6">${t.recupCarri}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">|</span><span style="color:var(--text-2)">${t.contNoRecup}</span>`,'#9B59E6')}
       ${card('Ventas WPP',`<span style="color:#E6823A;font-size:1rem">${t.ventasWpp}</span>`,'#E6823A')}
       ${card('General',`<span style="color:#E6B539;font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:#E6B539;font-weight:600">${avg}/día</span><span style="font-size:.75rem;color:#39E67A">${pct}%</span>`,'#E6B539')}
@@ -146,7 +149,7 @@ function _gdRenderTabla(){
     <tr>
       <th rowspan="2" class="gdx-g gdx-day-h" style="border-bottom:2px solid var(--border-strong);">DÍA</th>
       ${gh('CONFIRMACIONES',C.conf,3)}
-      ${gh('NOVEDADES',C.nov,3)}
+      ${gh('NOVEDADES',C.nov,2)}
       ${gh('CARRITOS',C.carr,2)}
       <th rowspan="2" class="gdx-g" style="border-bottom:2px solid ${C.wpp};color:${C.wpp};">VENTAS<br>WPP</th>
       <th rowspan="2" class="gdx-g" style="border-bottom:2px solid ${C.tot};color:${C.tot};">TOTAL</th>
@@ -154,7 +157,7 @@ function _gdRenderTabla(){
     </tr>
     <tr>
       ${sh('CONF.')}${sh('CANCEL.')}${sh('TOTAL')}
-      ${sh('SOLUC. 🔒')}${sh('GESTIÓN 🔒')}${sh('DEVUELTO 🔒')}
+      ${sh('SOLUC. 🔒')}${sh('DEVUELTO 🔒')}
       ${sh('RECUP.')}${sh('NO REC.')}
     </tr>
   </thead>
@@ -163,7 +166,7 @@ function _gdRenderTabla(){
   for(let d=1;d<=total;d++){
     const r=_gdData[d]||{};
     const tc=(r.conf||0)+(r.cancel||0);
-    const tg=tc+(r.soluc||0)+(r.gestion||0)+(r.recupCarri||0)+(r.ventasWpp||0);
+    const tg=tc+(r.soluc||0)+(r.recupCarri||0)+(r.ventasWpp||0);
     const vacio=!r.conf&&!r.cancel&&!r.soluc&&!r.devuelt&&!r.contNoRecup&&!r.recupCarri&&!r.ventasWpp&&!r.obs;
     const esHoy=d===diaHoy;
     const n=(key,val,color)=>`<input type="number" min="0" value="${val||''}" placeholder="·" oninput="_gdCambio(${d},'${key}',this.value)" style="color:${color};">`;
@@ -173,7 +176,6 @@ function _gdRenderTabla(){
       <td>${n('cancel',r.cancel,C.cancel)}</td>
       <td class="gdx-auto" style="color:${C.conf};" id="gd-tc-${d}">${tc||''}</td>
       <td class="gdx-auto" style="color:${C.nov};" title="Auto-calculado desde Novedades" id="gd-soluc-${d}">${r.soluc||''}</td>
-      <td class="gdx-auto" style="color:#67e8f9;" title="Auto-calculado desde Novedades" id="gd-gestion-${d}">${r.gestion||''}</td>
       <td class="gdx-auto" style="color:${C.cancel};" title="Auto-calculado desde Novedades" id="gd-devuelt-${d}">${r.devuelt||''}</td>
       <td>${n('recupCarri',r.recupCarri,C.carr)}</td>
       <td>${n('contNoRecup',r.contNoRecup,'#8B9DB5')}</td>
@@ -190,7 +192,6 @@ function _gdRenderTabla(){
     <td style="color:${C.cancel};" id="gdt-cancel">${t.cancel}</td>
     <td style="color:${C.conf};" id="gdt-tc">${t.totalConf}</td>
     <td style="color:${C.nov};" id="gdt-soluc">${t.soluc}</td>
-    <td style="color:#67e8f9;" id="gdt-gestion">${t.gestion}</td>
     <td style="color:${C.cancel};" id="gdt-devuelt">${t.devuelt}</td>
     <td style="color:${C.carr};" id="gdt-recupCarri">${t.recupCarri}</td>
     <td style="color:#8B9DB5;" id="gdt-contNoRecup">${t.contNoRecup}</td>
@@ -473,7 +474,9 @@ function _novRender(){
           ?`<span style="background:var(--warning-soft);color:var(--warning);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">🔄 Devuelta</span>${lastFecha}`
           :lastSol.estado==='solucionada'
             ?`<span style="background:var(--success-soft);color:var(--success);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">✅ Solucionada</span>${lastFecha}`
-            :`<span style="background:var(--info-soft);color:var(--info);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">📋 Gestionada</span>${lastFecha}`;
+            // Registros anteriores al retiro del estado "gestionada": no están
+            // resueltos ni devueltos, así que se muestran como pendientes.
+            :`<span style="background:var(--info-soft);color:var(--info);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">📋 Pendiente</span>${lastFecha}`;
     rows+=`<tr>
       <td style="white-space:nowrap;color:var(--text-2);font-size:.7rem;vertical-align:top;padding-top:10px;">${n.fecha||'—'}</td>
       <td style="font-weight:800;font-size:.82rem;white-space:nowrap;vertical-align:top;padding-top:10px;">
@@ -511,7 +514,9 @@ function _novSolsCell(id,n,sols){
   sols.forEach((s,i)=>{
     const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
     const bg=s.estado==='solucionada'?'#dcfce7':s.estado==='devuelta'?'#fef3c7':'#e0f2fe';
-    const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 En gestión';
+    // El tercer caso solo aparece en soluciones guardadas antes de retirar el
+    // estado "en gestión"; ya no se puede elegir al registrar.
+    const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 Pendiente';
     const delBtn=s._key
       ?`<button onclick="_novDelSol('${id}','${s._key}')" style="background:var(--danger-soft);color:var(--danger);border:none;border-radius:5px;padding:2px 6px;font-size:.6rem;cursor:pointer;font-family:inherit;" title="Eliminar">🗑️</button>`
       :s._legacyNum
@@ -709,14 +714,17 @@ async function _novGuardar(){
 // Recalcula soluc/devuelt del día en GD a partir de todas las novedades
 async function _novSyncGD(dia){
   if(typeof _db==='undefined'||!window._currentUsername||!_gdMes||!dia) return;
-  // Contar los 3 buckets de novedades del día
-  let soluc=0, gestion=0, devuelt=0;
+  // Una novedad es solucionada o devuelta, nada más. Devuelta gana si hay de
+  // ambas. Las que no tienen ninguna solución registrada siguen pendientes y no
+  // suman en ninguna de las dos columnas: contarlas como resueltas inflaría el
+  // dato. Antes 'soluc' era solo lo sincronizado a Dropi y todo lo demás caía en
+  // el bucket 'gestion', que ya no existe.
+  let soluc=0, devuelt=0;
   Object.values(_novData).forEach(n=>{
     if((n.dia||0)!==dia) return;
     const sols=_novGetSols(n);
-    if(n.solucionadaDropi){ soluc++; }
-    else if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
-    else { gestion++; }
+    if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
+    else if(n.solucionadaDropi||sols.some(s=>s.estado==='solucionada')){ soluc++; }
   });
   // Leer datos actuales del día en GD (para no pisar otras columnas).
   // _leerTienda sobre el nodo completo primero: si el mes aún vive en la clave
@@ -726,21 +734,21 @@ async function _novSyncGD(dia){
   await _leerTienda(_gdBase);
   const snap=await _db.ref(base+'/dias/'+dia).once('value');
   const dayData=snap.val()||{};
-  dayData.soluc=soluc; dayData.gestion=gestion; dayData.devuelt=devuelt;
+  dayData.soluc=soluc; dayData.devuelt=devuelt;
+  delete dayData.gestion; // campo retirado: se limpia al recalcular el día
   await _db.ref(base+'/dias/'+dia).set(dayData);
   // Actualizar cache local y UI si la tabla está visible
   if(!_gdData[dia]) _gdData[dia]={};
-  Object.assign(_gdData[dia], {soluc, gestion, devuelt});
+  Object.assign(_gdData[dia], {soluc, devuelt});
+  delete _gdData[dia].gestion;
   const tabGestion=document.getElementById('gd-tab-gestion');
   if(tabGestion&&tabGestion.style.display!=='none'){
     const t=_gdCalc();
     if(document.getElementById('gd-soluc-'+dia)) document.getElementById('gd-soluc-'+dia).textContent=soluc||'';
-    if(document.getElementById('gd-gestion-'+dia)) document.getElementById('gd-gestion-'+dia).textContent=gestion||'';
     if(document.getElementById('gd-devuelt-'+dia)) document.getElementById('gd-devuelt-'+dia).textContent=devuelt||'';
-    const tg=(_gdData[dia].conf||0)+(_gdData[dia].cancel||0)+soluc+gestion+(_gdData[dia].recupCarri||0)+(_gdData[dia].ventasWpp||0);
+    const tg=(_gdData[dia].conf||0)+(_gdData[dia].cancel||0)+soluc+(_gdData[dia].recupCarri||0)+(_gdData[dia].ventasWpp||0);
     const tgEl=document.getElementById('gd-tg-'+dia); if(tgEl) tgEl.textContent=tg||'';
     if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
-    if(document.getElementById('gdt-gestion')) document.getElementById('gdt-gestion').textContent=t.gestion;
     if(document.getElementById('gdt-devuelt')) document.getElementById('gdt-devuelt').textContent=t.devuelt;
     if(document.getElementById('gdt-gral')) document.getElementById('gdt-gral').textContent=t.gral;
     _gdRenderResumen();

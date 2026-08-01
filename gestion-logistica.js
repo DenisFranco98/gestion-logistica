@@ -2875,34 +2875,35 @@ async function _novSyncSolucionadaGD(id, solucionada){
     await _db.ref(novBasePath+'/'+gdNovKey+'/solucionadaDropi').remove();
   }
 
-  // Recontar los 3 buckets del día desde Firebase
+  // Recontar el día desde Firebase. Misma regla que _novSyncGD en
+  // gestiones-diarias.js: solucionada o devuelta, devuelta gana si hay de ambas,
+  // y las que no tienen ninguna solución quedan pendientes sin sumar.
   const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(diaReal).once('value');
-  let soluc=0, gestion=0, devuelt=0;
+  let soluc=0, devuelt=0;
   (diaNovsSnap.val()?Object.values(diaNovsSnap.val()):[]).forEach(n=>{
     // Necesitamos leer las soluciones actualizadas de Firebase (ya están en n si el push fue antes)
     const sols=_novGetSols(n);
-    if(n.solucionadaDropi){ soluc++; }
-    else if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
-    else { gestion++; }
+    if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
+    else if(n.solucionadaDropi||sols.some(s=>s.estado==='solucionada')){ soluc++; }
   });
 
   // Leer dia actual de GD para no pisar otras columnas
   const diaSnap=await _db.ref(gdDiasPath+'/'+diaReal).once('value');
   const diaData=diaSnap.val()||{};
-  diaData.soluc=soluc; diaData.gestion=gestion; diaData.devuelt=devuelt;
+  diaData.soluc=soluc; diaData.devuelt=devuelt;
+  delete diaData.gestion; // campo retirado: se limpia al recalcular el día
   await _db.ref(gdDiasPath+'/'+diaReal).set(diaData);
 
   // Si GD está cargado en memoria, actualizar también la UI
   if(typeof _gdData!=='undefined'&&_gdData){
     if(!_gdData[diaReal]) _gdData[diaReal]={};
-    Object.assign(_gdData[diaReal],{soluc,gestion,devuelt});
+    Object.assign(_gdData[diaReal],{soluc,devuelt});
+    delete _gdData[diaReal].gestion;
     if(document.getElementById('gd-soluc-'+diaReal)) document.getElementById('gd-soluc-'+diaReal).textContent=soluc||'';
-    if(document.getElementById('gd-gestion-'+diaReal)) document.getElementById('gd-gestion-'+diaReal).textContent=gestion||'';
     if(document.getElementById('gd-devuelt-'+diaReal)) document.getElementById('gd-devuelt-'+diaReal).textContent=devuelt||'';
     if(typeof _gdCalc==='function'){
       const t=_gdCalc();
       if(document.getElementById('gdt-soluc')) document.getElementById('gdt-soluc').textContent=t.soluc;
-      if(document.getElementById('gdt-gestion')) document.getElementById('gdt-gestion').textContent=t.gestion;
       if(document.getElementById('gdt-devuelt')) document.getElementById('gdt-devuelt').textContent=t.devuelt;
       if(document.getElementById('gdt-gral')) document.getElementById('gdt-gral').textContent=t.gral;
     }
@@ -3442,14 +3443,11 @@ function _novGDBasePath(){
   return 'novedades/'+tk+'/'+mes;
 }
 
-function _novIncrGDCounter(dia, campo, delta){
-  if(typeof _db==='undefined'||!dia)return;
-  const mes=_getMesCargado();
-  const tk=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');
-  const ak=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
-  _db.ref('gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias/'+dia+'/'+campo)
-    .transaction(cur=>Math.max(0,(cur||0)+delta));
-}
+// _novIncrGDCounter() se eliminó junto con el bucket "gestionadas": era su
+// único uso. Además escribía con _gdKey(nombreTienda) en vez de _gdTK(), o sea
+// en la clave vieja, así que había quedado desalineada del cambio de identidad
+// de tienda. Los contadores del día los recalcula _novSyncGD/_novSyncSolucionadaGD
+// contando las novedades reales, que es más fiable que ir sumando de a uno.
 
 function _syncNovToGD(id){
   if(typeof _db==='undefined'||!window._currentUsername)return;
@@ -3481,8 +3479,8 @@ function _syncNovToGD(id){
     gestiones[id].gdNovKey=ref.key;
     guardar();_fbSyncGestion(id);
     toast('🔗 Novedad registrada en Gestiones Diarias');
-    // Incrementar contador Gestionada del día en GD
-    _novIncrGDCounter(novData.dia, 'gestion', 1);
+    // Una novedad recién registrada no está resuelta ni devuelta: queda
+    // pendiente y no suma en la tabla de GD hasta que se le cargue una solución.
   });
 }
 
@@ -3513,7 +3511,9 @@ function _novEvidenciaModal(id){
     if(!sols.length){solsEl.innerHTML='<div style="font-size:.7rem;color:var(--text-3);text-align:center;padding:8px;">Sin evidencias aún</div>';}
     sols.forEach((s,i)=>{
       const color=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
-      const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 En gestión';
+      // El tercer caso solo aparece en soluciones guardadas antes de retirar el
+      // estado "en gestión"; ya no se puede elegir al registrar.
+      const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 Pendiente';
       let content=s.tipo==='img'
         ?'<img src="'+s.val+'" style="width:100%;border-radius:6px;margin-top:4px;max-height:100px;object-fit:cover;">'
         :'<div style="font-size:.72rem;color:var(--text-1);margin-top:4px;">'+s.val+'</div>';
