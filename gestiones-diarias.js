@@ -1,5 +1,5 @@
 // ===== GESTIONES DIARIAS =====
-let _gdMes='', _gdData={}, _gdSaveTimer=null, _gdActiveTab='gestion', _gdNotas={};
+let _gdMes='', _gdData={}, _gdSaveTimer=null, _gdActiveTab='gestion', _gdNotas={}, _gdNotaEditando=null;
 
 function _gdInit(){
   const now=new Date();
@@ -28,6 +28,7 @@ function _gdCargar(){
     const d=snap.val()||{};
     _gdData=d.dias||{};
     _gdNotas=Object.assign({},d.notasHist||{});
+    _gdNotaEditando=null; // cambiar de mes cancela cualquier edición en curso
     // La nota única del esquema anterior (/notas, un string) se muestra como la
     // entrada más antigua para no perderla. Sin ts, queda al final de la lista.
     if(d.notas&&String(d.notas).trim()&&!_gdNotas._legacy){
@@ -275,16 +276,94 @@ function _gdRenderNotas(){
       +(_gdEsDueno()?'Todavía no hay notas este mes.':'El coordinador no ha dejado notas este mes.')+'</div>';
     return;
   }
+  const dueno=_gdEsDueno();
   cont.innerHTML=items.map(n=>{
     const fecha=n.ts
       ? new Date(n.ts).toLocaleString('es-CO',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})
       : (n.fechaLabel||'—');
     const autor=n.autor?' · '+esc(n.autor):'';
+    // Marcar las editadas: el historial deja de ser fiel si una nota cambia
+    // sin avisar, así que la fecha original se conserva y se anota la edición.
+    const editada=n.editadoTs
+      ? ' · <span style="font-style:italic;">editada el '+esc(new Date(n.editadoTs).toLocaleString('es-CO',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}))+'</span>'
+      : '';
+    const cab='<div style="font-size:.6rem;color:var(--text-3);font-weight:700;margin-bottom:3px;">'+esc(fecha)+autor+editada+'</div>';
+
+    if(_gdNotaEditando===n._key){
+      return '<div style="background:var(--bg-card);border:1px solid #3971E6;border-left:3px solid #3971E6;border-radius:8px;padding:9px 12px;margin-bottom:7px;">'
+        +cab
+        +'<textarea id="gd-nota-edit" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.78rem;resize:vertical;min-height:56px;font-family:inherit;color:var(--text-1);outline:none;box-sizing:border-box;">'+esc(n.texto||'')+'</textarea>'
+        +'<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">'
+          +'<button onclick="_gdCancelarEdicion()" style="background:transparent;color:var(--text-2);border:1.5px solid var(--border);border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;">Cancelar</button>'
+          +'<button onclick="_gdGuardarEdicion(\''+n._key+'\')" style="background:#131920;color:white;border:none;border-radius:7px;padding:5px 14px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;">Guardar</button>'
+        +'</div></div>';
+    }
+
+    const acciones=dueno
+      ? '<div style="display:flex;gap:10px;margin-top:6px;">'
+        +'<button onclick="_gdEditarNota(\''+n._key+'\')" style="background:none;border:none;padding:0;color:var(--text-3);font-size:.63rem;font-weight:700;cursor:pointer;font-family:inherit;">✏️ Editar</button>'
+        +'<button onclick="_gdBorrarNota(\''+n._key+'\')" style="background:none;border:none;padding:0;color:var(--text-3);font-size:.63rem;font-weight:700;cursor:pointer;font-family:inherit;">🗑️ Borrar</button>'
+        +'</div>'
+      : '';
     return '<div style="background:var(--bg-card);border:1px solid var(--border);border-left:3px solid #3971E6;border-radius:8px;padding:9px 12px;margin-bottom:7px;">'
-      +'<div style="font-size:.6rem;color:var(--text-3);font-weight:700;margin-bottom:3px;">'+esc(fecha)+autor+'</div>'
+      +cab
       +'<div style="font-size:.78rem;color:var(--text-1);white-space:pre-wrap;">'+esc(n.texto||'')+'</div>'
+      +acciones
       +'</div>';
   }).join('');
+}
+
+function _gdEditarNota(key){
+  if(!_gdEsDueno())return;
+  _gdNotaEditando=key;
+  _gdRenderNotas();
+  const ta=document.getElementById('gd-nota-edit');
+  if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); }
+}
+function _gdCancelarEdicion(){ _gdNotaEditando=null; _gdRenderNotas(); }
+
+function _gdGuardarEdicion(key){
+  if(!_gdEsDueno())return;
+  const ta=document.getElementById('gd-nota-edit');
+  const texto=(ta?ta.value:'').trim();
+  if(!texto){toast('⚠️ La nota no puede quedar vacía');return;}
+  const prev=_gdNotas[key]||{};
+  const editadoTs=Date.now();
+  // La nota del esquema viejo vive en /notas (un string suelto): al editarla se
+  // pasa a /notasHist como una nota normal y se limpia el campo antiguo.
+  if(key==='_legacy'){
+    const nota={texto, ts:prev.ts||editadoTs, autor:prev.autor||'', editadoTs};
+    _db.ref(_gdBasePath()+'/notasHist').push(nota).then(ref=>{
+      delete _gdNotas._legacy;
+      _gdNotas[ref.key]=nota;
+      return _db.ref(_gdBasePath()+'/notas').remove();
+    }).then(()=>{ _gdNotaEditando=null; _gdRenderNotas(); toast('✏️ Nota actualizada'); })
+      .catch(e=>toast('⚠️ No se pudo guardar: '+(e&&e.message||e)));
+    return;
+  }
+  _db.ref(_gdBasePath()+'/notasHist/'+key).update({texto, editadoTs}).then(()=>{
+    _gdNotas[key]=Object.assign({},prev,{texto, editadoTs});
+    _gdNotaEditando=null;
+    _gdRenderNotas();
+    toast('✏️ Nota actualizada');
+  }).catch(e=>toast('⚠️ No se pudo guardar: '+(e&&e.message||e)));
+}
+
+function _gdBorrarNota(key){
+  if(!_gdEsDueno())return;
+  const n=_gdNotas[key]||{};
+  const resumen=(n.texto||'').slice(0,60)+((n.texto||'').length>60?'…':'');
+  _mConfirm('¿Borrar esta nota?','Se eliminará del historial y no se puede deshacer:\n\n"'+resumen+'"',()=>{
+    const ref=key==='_legacy'
+      ? _db.ref(_gdBasePath()+'/notas')
+      : _db.ref(_gdBasePath()+'/notasHist/'+key);
+    ref.remove().then(()=>{
+      delete _gdNotas[key];
+      if(_gdNotaEditando===key) _gdNotaEditando=null;
+      _gdRenderNotas();
+      toast('🗑️ Nota eliminada');
+    }).catch(e=>toast('⚠️ No se pudo borrar: '+(e&&e.message||e)));
+  });
 }
 
 function _gdAgregarNota(){
