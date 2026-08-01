@@ -664,8 +664,7 @@ function _novRender(){
   const allNov=Object.entries(_novData).sort((a,b)=>b[1].ts-a[1].ts);
   const entries=allNov.filter(([,n])=>{
     if(_nq&&![(n.guia||''),(n.asesor||'')].some(v=>v.toLowerCase().includes(_nq)))return false;
-    if(_novFilter.sol==='sin'){if(_novGetSols(n).length)return false;}
-    else if(_novFilter.sol==='solucionada'){if(!_novGetSols(n).some(s=>s.estado==='solucionada'))return false;}
+    if(_novFilter.sol==='solucionada'){if(!_novGetSols(n).some(s=>s.estado==='solucionada'))return false;}
     else if(_novFilter.sol==='devuelta'){if(!_novGetSols(n).some(s=>s.estado==='devuelta'))return false;}
     return true;
   });
