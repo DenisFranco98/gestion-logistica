@@ -533,7 +533,7 @@ function _consoRender(){
         <div style="font-size:.78rem;font-weight:800;">${esc(tienda)} — ${corte.label}</div>
         <div style="font-size:.62rem;opacity:.7;margin-top:2px;">${esc(_consoFechaLabel(_consoDia))} · ${esc(nombre)}</div>
       </div>
-      <div class="conso-corte-hdr" id="conso-hdr-${corte.id}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div class="conso-corte-hdr" id="conso-hdr-${corte.id}">
         <span>${corte.label}</span>
         <button class="conso-cap-btn" id="conso-cap-btn-${corte.id}" onclick="_consoCapturar('${corte.id}')"
           style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:inherit;border-radius:7px;padding:4px 10px;font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">📸 Capturar registro</button>

@@ -811,7 +811,10 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 /* Cada corte (8 AM / 12 PM / 5 PM) es su propio bloque para poder capturarlo
    suelto con el botón "Capturar registro" y mandarlo por WhatsApp. */
 .conso-corte{padding:2px;}
-.conso-corte-hdr{background:#111827;color:white;padding:8px 14px;border-radius:8px;margin-bottom:8px;font-size:.75rem;font-weight:800;letter-spacing:.5px;}
+/* El display va acá y no en un style inline: al capturar se oculta el header y
+   luego se restaura con style.display='', lo que borraría un flex inline y
+   dejaría el botón pegado a la hora en vez de alineado a la derecha. */
+.conso-corte-hdr{background:#111827;color:white;padding:8px 14px;border-radius:8px;margin-bottom:8px;font-size:.75rem;font-weight:800;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .conso-secs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
 .conso-cap-btn:hover{background:rgba(255,255,255,.26)!important;}
 .conso-cap-btn:disabled{opacity:.6;cursor:default;}
