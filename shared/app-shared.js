@@ -362,6 +362,47 @@ window._fusionarNovedades = function(){
   }).catch(e=>console.error('[FUSIONAR novedades] falló (¿sesión de admin?):',e));
 };
 
+// Igual que _fusionarNovedades pero para anticipos, que la extensión vieja de
+// ChateaPro siguió escribiendo bajo el slug del nombre después de la migración.
+// La ruta tiene un nivel más: anticipos/{tienda}/{mes}/{con|sin}/{id}.
+// Identidad de un anticipo: ts + cliente + teléfono (no hay guía).
+// Ejecutar desde la consola como admin: _fusionarAnticipos()
+window._fusionarAnticipos = function(){
+  const idAnt=a=>String((a&&a.ts)||'')+'|'+String((a&&a.cliente)||'').trim().toLowerCase()+'|'+String((a&&a.telefono)||'').replace(/\D/g,'');
+  console.log('%c[FUSIONAR anticipos] leyendo...','font-weight:bold');
+  Promise.all([_db.ref('empresas').once('value'),_db.ref('anticipos').once('value')]).then(([se,sa])=>{
+    const empresas=se.val()||{}, ant=sa.val()||{};
+    const faltan=[];
+    Object.entries(empresas).forEach(([id,e])=>{
+      const slug=_gdKey(e.nombre||id);
+      if(slug===id||!ant[slug]) return;
+      Object.entries(ant[slug]).forEach(([mes,tipos])=>{
+        if(!tipos||typeof tipos!=='object') return;
+        ['con','sin'].forEach(tipo=>{
+          const origen=tipos[tipo];
+          if(!origen||typeof origen!=='object') return;
+          const destino=(((ant[id]||{})[mes])||{})[tipo]||{};
+          const yaHay=new Set(Object.values(destino).map(idAnt));
+          Object.values(origen).forEach(a=>{
+            if(!yaHay.has(idAnt(a))) faltan.push({tienda:e.nombre,id,mes,tipo,cliente:a.cliente||'',_val:a});
+          });
+        });
+      });
+    });
+    if(!faltan.length){ console.log('%cNada que rescatar: no hay anticipos sueltos en las rutas viejas.','color:#15803d;font-weight:bold'); return; }
+    console.group('%cAnticipos a recuperar ('+faltan.length+')','color:#0e7490;font-weight:bold');
+    console.table(faltan.map(({tienda,mes,tipo,cliente})=>({tienda,mes,tipo,cliente})));
+    console.groupEnd();
+    let n=0,f=0;
+    faltan.reduce((p,x)=>p.then(()=>
+      _db.ref('anticipos/'+x.id+'/'+x.mes+'/'+x.tipo).push(x._val).then(()=>{n++;}).catch(e=>{f++;console.error('  ✗',e);})
+    ),Promise.resolve()).then(()=>{
+      console.log('%c[FUSIONAR anticipos] listo: '+n+' recuperados, '+f+' con error.','font-weight:bold;color:'+(f?'#b91c1c':'#15803d'));
+      console.log('Las rutas viejas quedan intactas.');
+    });
+  }).catch(e=>console.error('[FUSIONAR anticipos] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){

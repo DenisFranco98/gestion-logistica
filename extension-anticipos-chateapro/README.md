@@ -1,3 +1,16 @@
+# ⛔ DESCONTINUADA — no instalar
+
+**Usá `extension-redking-herramientas`, que ya incluye Anticipos** además de duplicados Dropi y novedades.
+
+Esta extensión quedó fuera de uso el 2026-08-01 por dos motivos:
+
+1. **Guarda con la clave de tienda vieja** (el slug del nombre). Los anticipos terminaban en `anticipos/{slug}/{mes}/con`, una ruta que el panel ya no lee: desde el cambio a `empresaId`, dos tiendas con el mismo nombre compartían datos y por eso se migró todo. Ver la nota de identidad de tienda del proyecto.
+2. **Se pisa con REDKING Herramientas.** Las dos corren en `chateapro.app` y usan las mismas claves de `chrome.storage` (`antChateaproTienda` y `antChateaproAuth`), así que con ambas instaladas aparecen dos paneles y la configuración de tienda de una sobrescribe la de la otra.
+
+Se conserva solo como referencia del código. Si alguna vez hiciera falta revivirla, hay que corregir esos dos puntos antes.
+
+---
+
 # Anticipos Chateapro → Gestión Logística
 
 Extensión de Chrome que agrega un botón flotante 💰 en Chateapro para cargar comprobantes de anticipo directo en **Guías con Anticipo** (pestaña Anticipos de Gestiones Diarias), sin salir del chat.
