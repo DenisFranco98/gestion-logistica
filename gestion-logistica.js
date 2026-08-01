@@ -2829,11 +2829,18 @@ async function _novSyncSolucionadaGD(id, solucionada){
   const p=_pedidoMap.get(id);
 
   const mes=_getMesCargado();
-  const tk=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');
+  // _gdTK() (empresaId), no el slug del nombre: Gestiones Diarias lee por
+  // empresaId, así que escribir en la clave vieja dejaba estas novedades y
+  // estos contadores invisibles para GD en cuanto el mes estaba migrado.
+  const tk=_gdTK();
   const ak=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
   const novBasePath='novedades/'+tk+'/'+mes;
   const gdDiasPath='gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias';
   const dia=new Date().getDate();
+  // Migrar el mes si todavía vive en la clave vieja, antes de escribir: si no,
+  // el nodo nuevo nacería con un registro suelto y escondería el resto.
+  await _leerTienda(t=>'novedades/'+t+'/'+mes).catch(()=>{});
+  await _leerTienda(t=>'gestiones_diarias/'+t+'/'+mes+'/'+ak).catch(()=>{});
 
   // Si no hay registro GD aún, crearlo ahora
   if(!g.gdNovKey && p && p.guia){
@@ -3437,10 +3444,18 @@ function eliminarGestion(id){
 // _getMesCargado vive en shared/app-shared.js
 
 // ── Sync novedad Logística → GD ─────────────────────────────────────────
+// Clave por empresaId (_gdTK), igual que la que usa Gestiones Diarias para
+// leer. Con el slug del nombre, las novedades creadas desde Gestión Logística
+// caían en otra ruta y GD dejaba de verlas apenas migraba el mes.
 function _novGDBasePath(){
-  const tk=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginTienda?window.getLoginTienda():'_');
+  return 'novedades/'+_gdTK()+'/'+_getMesCargado();
+}
+// Migra el mes de novedades si aún vive en la clave vieja. Hay que llamarla
+// antes de la primera escritura para no crear el nodo nuevo con un registro
+// suelto y esconder el historial anterior.
+function _novGDMigrarMes(){
   const mes=_getMesCargado();
-  return 'novedades/'+tk+'/'+mes;
+  return _leerTienda(t=>'novedades/'+t+'/'+mes).catch(()=>{});
 }
 
 // _novIncrGDCounter() se eliminó junto con el bucket "gestionadas": era su
@@ -3456,7 +3471,9 @@ function _syncNovToGD(id){
   const g=gestiones[id]||{};
   if(g.gdNovKey){return;} // ya sincronizado
   const base=_novGDBasePath();
-  // Evitar duplicados por guía
+  // Evitar duplicados por guía (tras migrar el mes, para que la búsqueda vea
+  // también las novedades que aún estuvieran bajo la clave vieja de tienda)
+  _novGDMigrarMes().then(()=>
   _db.ref(base).orderByChild('guia').equalTo(p.guia).once('value',snap=>{
     if(snap.exists()){
       // Ya existe — guardar key referencia
@@ -3481,7 +3498,7 @@ function _syncNovToGD(id){
     toast('🔗 Novedad registrada en Gestiones Diarias');
     // Una novedad recién registrada no está resuelta ni devuelta: queda
     // pendiente y no suma en la tabla de GD hasta que se le cargue una solución.
-  });
+  }));
 }
 
 // ── Modal evidencia ──────────────────────────────────────────────────────
@@ -3501,8 +3518,10 @@ function _novEvidenciaModal(id){
     return;
   }
   document.getElementById('nov-ev-guia-lbl').textContent='Guía: '+p.guia+' · '+((p.tipoNovedad||p.novedad||'Novedad').toUpperCase());
-  // Mostrar soluciones existentes
+  // Mostrar soluciones existentes (migrando antes el mes: gdNovKey puede
+  // apuntar a un registro que todavía viva bajo la clave vieja de tienda)
   const base=_novGDBasePath();
+  _novGDMigrarMes().then(()=>
   _db.ref(base+'/'+g.gdNovKey).once('value',snap=>{
     const d=snap.val()||{};
     const sols=_novGetSols?_novGetSols(d):[];
@@ -3526,7 +3545,7 @@ function _novEvidenciaModal(id){
     document.getElementById('nov-ev-form').style.display='block';
     // Precargar fecha de hoy
     document.getElementById('nov-ev-fecha').value=new Date().toISOString().slice(0,10);
-  });
+  }));
   _novEvTipo('img');
   document.getElementById('nov-ev-modal').style.display='flex';
 }
@@ -3589,6 +3608,7 @@ async function _novEvGuardar(){
       if(!txt){toast('⚠️ Escribe la evidencia');btn.textContent='Guardar';btn.disabled=false;return;}
       solObj={estado,tipo:'txt',val:txt,fechaLabel,ts:Date.now()};
     }
+    await _novGDMigrarMes(); // el registro puede seguir bajo la clave vieja
     const base=_novGDBasePath();
     const novRef=_db.ref(base+'/'+g.gdNovKey);
     // Siempre push a soluciones/ — sin límite
