@@ -877,7 +877,14 @@ window._sbEstadosToggle=function(){
       <div id="gd-table-wrap" style="overflow-x:auto;"></div>
       <div style="margin-top:18px;">
         <div style="font-size:.63rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">📝 Notas del coordinador</div>
-        <textarea id="gd-notas-coord" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.78rem;resize:vertical;min-height:64px;font-family:inherit;color:var(--text-1);outline:none;" placeholder="Notas del coordinador..." oninput="_gdSaveNotas()"></textarea>
+        <!-- Formulario solo para el dueño de la tienda; el asesor ve nada más el historial -->
+        <div id="gd-notas-form" style="display:none;margin-bottom:12px;">
+          <textarea id="gd-notas-coord" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.78rem;resize:vertical;min-height:64px;font-family:inherit;color:var(--text-1);outline:none;box-sizing:border-box;" placeholder="Escribe una nota para el equipo..."></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+            <button id="gd-notas-btn" onclick="_gdAgregarNota()" style="background:#131920;color:white;border:none;border-radius:8px;padding:7px 16px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Agregar nota</button>
+          </div>
+        </div>
+        <div id="gd-notas-lista"></div>
       </div>
     </div>
   </div>

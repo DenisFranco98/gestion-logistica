@@ -1,5 +1,5 @@
 // ===== GESTIONES DIARIAS =====
-let _gdMes='', _gdData={}, _gdSaveTimer=null, _gdActiveTab='gestion';
+let _gdMes='', _gdData={}, _gdSaveTimer=null, _gdActiveTab='gestion', _gdNotas={};
 
 function _gdInit(){
   const now=new Date();
@@ -27,9 +27,15 @@ function _gdCargar(){
   _leerTienda(_gdBase).then(snap=>{
     const d=snap.val()||{};
     _gdData=d.dias||{};
-    document.getElementById('gd-notas-coord').value=d.notas||'';
+    _gdNotas=Object.assign({},d.notasHist||{});
+    // La nota única del esquema anterior (/notas, un string) se muestra como la
+    // entrada más antigua para no perderla. Sin ts, queda al final de la lista.
+    if(d.notas&&String(d.notas).trim()&&!_gdNotas._legacy){
+      _gdNotas._legacy={texto:String(d.notas).trim(),ts:0,autor:'',fechaLabel:'Nota anterior (sin fecha)'};
+    }
     _gdRenderTabla();
     _gdRenderResumen();
+    _gdRenderNotas();
   });
   _gdCargarCF();
 }
@@ -246,13 +252,57 @@ function _gdGuardar(){
   });
 }
 
-function _gdSaveNotas(){
+// ── NOTAS DEL COORDINADOR ───────────────────────────────────────────────
+// Historial: cada nota queda con su fecha y quién la escribió, y no se pisa.
+// Escribe solo el dueño de la tienda; el asesor ve el registro en modo lectura.
+// Antes era un único textarea guardado en /notas (un string que se
+// sobrescribía). Ese valor se sigue leyendo y se muestra como la entrada más
+// antigua, para no perder lo que ya estaba escrito.
+function _gdEsDueno(){
+  return (window._currentRol||localStorage.getItem('lgs_rol')||'dueno')!=='asesor';
+}
+
+function _gdRenderNotas(){
+  const form=document.getElementById('gd-notas-form');
+  if(form) form.style.display=_gdEsDueno()?'block':'none';
+  const cont=document.getElementById('gd-notas-lista');
+  if(!cont)return;
+  const items=Object.entries(_gdNotas||{})
+    .map(([k,n])=>Object.assign({_key:k},n))
+    .sort((a,b)=>(b.ts||0)-(a.ts||0)); // más reciente arriba
+  if(!items.length){
+    cont.innerHTML='<div style="font-size:.72rem;color:var(--text-3);padding:10px 0;">'
+      +(_gdEsDueno()?'Todavía no hay notas este mes.':'El coordinador no ha dejado notas este mes.')+'</div>';
+    return;
+  }
+  cont.innerHTML=items.map(n=>{
+    const fecha=n.ts
+      ? new Date(n.ts).toLocaleString('es-CO',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      : (n.fechaLabel||'—');
+    const autor=n.autor?' · '+esc(n.autor):'';
+    return '<div style="background:var(--bg-card);border:1px solid var(--border);border-left:3px solid #3971E6;border-radius:8px;padding:9px 12px;margin-bottom:7px;">'
+      +'<div style="font-size:.6rem;color:var(--text-3);font-weight:700;margin-bottom:3px;">'+esc(fecha)+autor+'</div>'
+      +'<div style="font-size:.78rem;color:var(--text-1);white-space:pre-wrap;">'+esc(n.texto||'')+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function _gdAgregarNota(){
+  if(!_gdEsDueno()){toast('Solo el dueño de la tienda puede escribir notas');return;}
   if(typeof _db==='undefined'||!window._currentUsername)return;
-  if(_gdSaveTimer)clearTimeout(_gdSaveTimer);
-  _gdSaveTimer=setTimeout(()=>{
-    const notas=document.getElementById('gd-notas-coord').value;
-    _db.ref(_gdBasePath()+'/notas').set(notas);
-  },900);
+  const ta=document.getElementById('gd-notas-coord');
+  const texto=(ta.value||'').trim();
+  if(!texto){toast('⚠️ Escribe la nota antes de agregarla');return;}
+  const btn=document.getElementById('gd-notas-btn');
+  if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+  const nota={texto, ts:Date.now(), autor:(window.getLoginAsesor?window.getLoginAsesor():'')||''};
+  _db.ref(_gdBasePath()+'/notasHist').push(nota).then(ref=>{
+    _gdNotas[ref.key]=nota;
+    ta.value='';
+    _gdRenderNotas();
+    toast('📝 Nota agregada');
+  }).catch(e=>toast('⚠️ No se pudo guardar la nota: '+(e&&e.message||e)))
+    .then(()=>{ if(btn){btn.disabled=false;btn.textContent='Agregar nota';} });
 }
 
 function _gdPrevMes(){
