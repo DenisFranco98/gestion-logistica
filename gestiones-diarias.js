@@ -27,16 +27,11 @@ function _gdCargar(){
   _leerTienda(_gdBase).then(snap=>{
     const d=snap.val()||{};
     _gdData=d.dias||{};
-    _gdNotas=Object.assign({},d.notasHist||{});
     _gdNotaEditando=null; // cambiar de mes cancela cualquier edición en curso
-    // La nota única del esquema anterior (/notas, un string) se muestra como la
-    // entrada más antigua para no perderla. Sin ts, queda al final de la lista.
-    if(d.notas&&String(d.notas).trim()&&!_gdNotas._legacy){
-      _gdNotas._legacy={texto:String(d.notas).trim(),ts:0,autor:'',fechaLabel:'Nota anterior (sin fecha)'};
-    }
     _gdRenderTabla();
     _gdRenderResumen();
-    _gdRenderNotas();
+    // Las notas cuelgan de la tienda, no del asesor: se cargan aparte
+    _gdCargarNotas(d);
   });
   _gdCargarCF();
 }
@@ -263,6 +258,42 @@ function _gdEsDueno(){
   return (window._currentRol||localStorage.getItem('lgs_rol')||'dueno')!=='asesor';
 }
 
+// Las notas del coordinador son de la TIENDA y las lee todo su equipo, así que
+// cuelgan del mes y no del asesor. Antes usaban _gdBasePath(), que incluye la
+// clave del asesor: cada persona escribía y leía en su propio nodo, y una nota
+// del dueño era invisible para sus asesores.
+function _gdNotasBase(tk){ return 'gestiones_diarias/'+(tk||_gdTK())+'/'+_gdMes+'/notasHist'; }
+function _gdNotasPath(){ return _gdNotasBase(); }
+
+// Carga las notas de la tienda y sube las que hayan quedado bajo el nodo del
+// asesor (esquema anterior), para que dejen de estar aisladas.
+// `d` es el nodo del asesor que ya se leyó, para no volver a pedirlo.
+function _gdCargarNotas(d){
+  d=d||{};
+  _leerTienda(_gdNotasBase).then(snap=>{
+    _gdNotas=Object.assign({},snap.val()||{});
+    const propias=Object.assign({},d.notasHist||{});
+    // Nota única del esquema más viejo (/notas, un string suelto)
+    if(d.notas&&String(d.notas).trim()){
+      propias._legacy={texto:String(d.notas).trim(),ts:0,autor:'',fechaLabel:'Nota anterior (sin fecha)'};
+    }
+    const pendientes=Object.values(propias);
+    if(!pendientes.length){ _gdRenderNotas(); return; }
+    // Mover al nivel tienda y limpiar el origen, para no duplicarlas en la
+    // próxima carga. Si algo falla se muestran igual, sin perderse.
+    Promise.all(pendientes.map(n=>_db.ref(_gdNotasPath()).push(n).then(ref=>{ _gdNotas[ref.key]=n; })))
+      .then(()=>Promise.all([
+        _db.ref(_gdBasePath()+'/notasHist').remove(),
+        d.notas?_db.ref(_gdBasePath()+'/notas').remove():Promise.resolve()
+      ]))
+      .catch(e=>{
+        console.warn('[GD] no se pudieron mover las notas al nivel de tienda',e);
+        Object.assign(_gdNotas,propias);
+      })
+      .then(()=>_gdRenderNotas());
+  }).catch(()=>{ _gdNotas={}; _gdRenderNotas(); });
+}
+
 function _gdRenderNotas(){
   const form=document.getElementById('gd-notas-form');
   if(form) form.style.display=_gdEsDueno()?'block':'none';
@@ -329,19 +360,10 @@ function _gdGuardarEdicion(key){
   if(!texto){toast('⚠️ La nota no puede quedar vacía');return;}
   const prev=_gdNotas[key]||{};
   const editadoTs=Date.now();
-  // La nota del esquema viejo vive en /notas (un string suelto): al editarla se
-  // pasa a /notasHist como una nota normal y se limpia el campo antiguo.
-  if(key==='_legacy'){
-    const nota={texto, ts:prev.ts||editadoTs, autor:prev.autor||'', editadoTs};
-    _db.ref(_gdBasePath()+'/notasHist').push(nota).then(ref=>{
-      delete _gdNotas._legacy;
-      _gdNotas[ref.key]=nota;
-      return _db.ref(_gdBasePath()+'/notas').remove();
-    }).then(()=>{ _gdNotaEditando=null; _gdRenderNotas(); toast('✏️ Nota actualizada'); })
-      .catch(e=>toast('⚠️ No se pudo guardar: '+(e&&e.message||e)));
-    return;
-  }
-  _db.ref(_gdBasePath()+'/notasHist/'+key).update({texto, editadoTs}).then(()=>{
+  // _legacy solo sobrevive si falló el traslado al nivel de tienda; editarla
+  // escribiría en una ruta que ya no se lee, así que se pide recargar.
+  if(key==='_legacy'){ toast('⚠️ Recarga la página para poder editar esta nota'); return; }
+  _db.ref(_gdNotasPath()+'/'+key).update({texto, editadoTs}).then(()=>{
     _gdNotas[key]=Object.assign({},prev,{texto, editadoTs});
     _gdNotaEditando=null;
     _gdRenderNotas();
@@ -355,8 +377,8 @@ function _gdBorrarNota(key){
   const resumen=(n.texto||'').slice(0,60)+((n.texto||'').length>60?'…':'');
   _mConfirm('¿Borrar esta nota?','Se eliminará del historial y no se puede deshacer:\n\n"'+resumen+'"',()=>{
     const ref=key==='_legacy'
-      ? _db.ref(_gdBasePath()+'/notas')
-      : _db.ref(_gdBasePath()+'/notasHist/'+key);
+      ? _db.ref(_gdBasePath()+'/notas')   // solo si falló el traslado a la tienda
+      : _db.ref(_gdNotasPath()+'/'+key);
     ref.remove().then(()=>{
       delete _gdNotas[key];
       if(_gdNotaEditando===key) _gdNotaEditando=null;
@@ -375,7 +397,7 @@ function _gdAgregarNota(){
   const btn=document.getElementById('gd-notas-btn');
   if(btn){btn.disabled=true;btn.textContent='Guardando...';}
   const nota={texto, ts:Date.now(), autor:(window.getLoginAsesor?window.getLoginAsesor():'')||''};
-  _db.ref(_gdBasePath()+'/notasHist').push(nota).then(ref=>{
+  _db.ref(_gdNotasPath()).push(nota).then(ref=>{
     _gdNotas[ref.key]=nota;
     ta.value='';
     _gdRenderNotas();
