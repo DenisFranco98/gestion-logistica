@@ -634,6 +634,62 @@ window._auditMembresias = function(opts){
   }).catch(e=>console.error('[MEMBRESÍAS] falló (¿sesión de admin?):',e));
 };
 
+// Mueve las Gestiones Diarias de un asesor cuando le cambian el nombre.
+// La carpeta donde se guardan sale de _gdKey(nombre), así que al renombrarlo
+// las gestiones nuevas empiezan en otra clave y lo anterior queda bajo la vieja
+// (el asesor "pierde" su historial y aparece partido en dos en el consolidado).
+// Solo afecta a gestiones_diarias: novedades, R.O. y anticipos cuelgan de la
+// tienda, y historial_diario se indexa por uid.
+//
+// Nunca pisa un día que ya exista en destino — si el mismo día está en las dos
+// claves lo reporta y lo deja quieto, porque sumar duplicaría. El origen no se
+// borra: la migración es reversible.
+//
+// Ejecutar desde la consola como admin:
+//   _migrarAsesor('PAQUETIN','Wildropshop','Laura')                 → simula
+//   _migrarAsesor('PAQUETIN','Wildropshop','Laura',{aplicar:true})  → aplica
+window._migrarAsesor = function(nombreTienda, nombreViejo, nombreNuevo, opts){
+  const aplicar=!!(opts||{}).aplicar;
+  const kViejo=_gdKey(nombreViejo||''), kNuevo=_gdKey(nombreNuevo||'');
+  if(!kViejo||!kNuevo||kViejo==='_'||kNuevo==='_'){ console.error('Faltan nombres: _migrarAsesor("TIENDA","Nombre viejo","Nombre nuevo")'); return; }
+  if(kViejo===kNuevo){ console.log('Los dos nombres dan la misma clave ("'+kViejo+'"): no hay nada que mover.'); return; }
+  const kTienda=_gdKey(nombreTienda||'');
+  console.log('%c[MIGRAR asesor] '+kViejo+' → '+kNuevo+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
+  Promise.all([_db.ref('empresas').once('value'),_db.ref('gestiones_diarias').once('value')]).then(([se,sg])=>{
+    const empresas=se.val()||{}, gd=sg.val()||{};
+    const tiendas=Object.entries(empresas).filter(([,e])=>_gdKey((e||{}).nombre||'')===kTienda);
+    if(!tiendas.length){ console.error('No hay ninguna tienda que se llame así.'); return; }
+    if(tiendas.length>1) console.warn('⚠ '+tiendas.length+' tiendas comparten ese nombre: se procesan todas.');
+    const mover=[], conflictos=[];
+    tiendas.forEach(([tid,emp])=>{
+      Object.entries(gd[tid]||{}).forEach(([mes,asesores])=>{
+        const origen=(asesores||{})[kViejo]; if(!origen) return;
+        const destino=(asesores||{})[kNuevo]||{};
+        Object.entries(origen.dias||{}).forEach(([dia,d])=>{
+          if((destino.dias||{})[dia]) conflictos.push({tienda:emp.nombre,mes,dia:+dia});
+          else mover.push({tienda:emp.nombre,mes,dia:+dia,_path:'gestiones_diarias/'+tid+'/'+mes+'/'+kNuevo+'/dias/'+dia,_val:d});
+        });
+        if(!destino._nombre) mover.push({tienda:emp.nombre,mes,dia:'—',_path:'gestiones_diarias/'+tid+'/'+mes+'/'+kNuevo+'/_nombre',_val:nombreNuevo});
+      });
+    });
+    if(conflictos.length){
+      console.group('%c⚠ Días que ya existen en la clave nueva ('+conflictos.length+') — no se tocan','color:#b45309;font-weight:bold');
+      console.table(conflictos);
+      console.log('Revisá esos días a mano: sumarlos duplicaría las gestiones.');
+      console.groupEnd();
+    }
+    if(!mover.length){ console.log('%cNada que mover.','color:#15803d;font-weight:bold'); return; }
+    console.group('%cDías a mover ('+mover.filter(m=>m.dia!=='—').length+')','color:#0e7490;font-weight:bold');
+    console.table(mover.filter(m=>m.dia!=='—').map(({tienda,mes,dia})=>({tienda,mes,dia})));
+    console.groupEnd();
+    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para aplicar: _migrarAsesor("'+nombreTienda+'","'+nombreViejo+'","'+nombreNuevo+'",{aplicar:true})','font-weight:bold'); return; }
+    const updates={}; mover.forEach(m=>{ updates[m._path]=m._val; });
+    _db.ref().update(updates)
+      .then(()=>console.log('%c[MIGRAR asesor] listo: '+mover.length+' nodos copiados. La clave vieja queda intacta por si hay que revisar.','font-weight:bold;color:#15803d'))
+      .catch(e=>console.error('  ✗',e));
+  }).catch(e=>console.error('[MIGRAR asesor] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
@@ -1246,7 +1302,28 @@ function _initLogin(){
       // onAuthStateChanged, así que el selector siempre termina bien pintado.
       _setTiendaIds(Object.keys(tiendas||{}));
       if(typeof window._refrescarBtnCambiarTienda==='function') window._refrescarBtnCambiarTienda();
+      _sincronizarNombreAsesor(uid, userData);
     });
+  }
+
+  // Si el admin le cambió el nombre, la sesión abierta tiene que enterarse. El
+  // nombre vivía solo en el localStorage del asesor, puesto al iniciar sesión, y
+  // _registrarPresencia lo reescribe en presence con un set completo en cada
+  // navegación: el cambio del admin duraba hasta que el asesor cambiaba de
+  // página. Había que cerrar sesión y volver a entrar para que tomara.
+  function _sincronizarNombreAsesor(uid, userData){
+    const nuevo = ((userData||{}).asesor||'').trim();
+    if(!nuevo) return;
+    const actual = (localStorage.getItem(ASESOR_KEY)||'').trim();
+    if(actual === nuevo) return;
+    console.log('[SESIÓN] el nombre cambió: "'+actual+'" → "'+nuevo+'"');
+    localStorage.setItem(ASESOR_KEY, nuevo);
+    // Que el panel lo vea sin esperar a la próxima navegación del asesor.
+    if(typeof _db!=='undefined' && uid) _db.ref('presence/'+uid+'/asesor').set(nuevo);
+    // OJO: _gdAK() —la carpeta donde se guardan sus gestiones— sale de este
+    // nombre. A partir de acá escribe bajo la clave nueva; lo cargado antes
+    // queda bajo la vieja. Ver _migrarAsesor() para mover lo anterior.
+    if(typeof toast==='function') toast('Tu nombre se actualizó a "'+nuevo+'"', 4000);
   }
 
   // Restauración de sesión via Firebase Auth
@@ -2683,7 +2760,11 @@ function _buildEnliveCards(usuarios, presencia){
 }
 
 function _mkEnliveCard(u, p, isOnline){
-  const name=isOnline&&p.asesor?p.asesor:(u.asesor||u.email||u.uid);
+  // users/{uid}.asesor manda: es lo que edita el admin. presence.asesor lo
+  // reescribe el propio navegador del asesor en cada navegación, con el nombre
+  // que tenga guardado en su localStorage — por eso un cambio de nombre parecía
+  // no aplicarse nunca. presence queda solo como respaldo.
+  const name=u.asesor||p.asesor||u.email||u.uid;
   const tienda=isOnline&&p.tienda?p.tienda:(u.tienda||'—');
   const color=_avatarColor(name);
   const initials=_avatarInitials(name);
@@ -2836,7 +2917,8 @@ function _buildEquipoList(){
   sorted.forEach(u=>{
     const p=presencia[u.uid]||{};
     const isOnline=_estaOnline(p);
-    const name=isOnline&&p.asesor?p.asesor:u.asesor;
+    // Igual que en las tarjetas: manda users/{uid}.asesor, que es lo editable.
+    const name=u.asesor||p.asesor||u.email||u.uid;
     // Los filtros y la búsqueda miran TODAS sus tiendas, no una sola.
     if(fTienda && !u.tiendaIds.includes(fTienda)) return;
     if(fRol && u.rol!==fRol) return;
