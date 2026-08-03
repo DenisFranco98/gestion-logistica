@@ -2694,12 +2694,17 @@ function _mkEnliveCard(u, p, isOnline){
   const keyDe=typeof _gdKey==='function'?_gdKey:_gdKeyFallback;
   const g=(_admGDHoy||{})[keyDe(u.asesor||p.asesor||'')]||{};
   const gConf=g.conf||0, gSoluc=g.soluc||0, gCarri=g.carri||0, gWpp=g.wpp||0, gCancel=g.cancel||0;
-  // El score ES el total de gestiones del día: la misma suma que el Consolidado
-  // y el Ranking, así el número es verificable y comparable entre asesores.
+  // Avance sobre el kanban de Gestión Logística: cuántos pedidos del Excel le
+  // faltan y cuántos cerró. Vienen de presence, que los actualiza en vivo.
+  const kTotal=p.totalPedidos||0, kFin=p.finalizados||0;
+  const kPend=Math.max(0,kTotal-kFin);
+  // Score = avance, terminadas sobre el total asignado. Sin Excel cargado no hay
+  // denominador y se muestra "—" en vez de un 0% que parecería mal desempeño.
   // La fórmula anterior (fin*5 + tasaCierre − devoluciones*4 + ritmo/minuto) no
   // tenía tope, sumaba cantidades con porcentajes y premiaba cerrar rápido.
-  const score=g.total||0;
-  const scoreColor=score>=40?'#4ade80':score>=15?'#fbbf24':'#f87171';
+  const hayAvance=kTotal>0;
+  const score=hayAvance?Math.min(100,Math.round(kFin/kTotal*100)):0;
+  const scoreColor=!hayAvance?'var(--text-3)':score>=70?'#4ade80':score>=40?'#fbbf24':'#f87171';
   const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
   const card=document.createElement('div');
   card.className='enlive-card'+(isOnline?' online':'');
@@ -2721,11 +2726,24 @@ function _mkEnliveCard(u, p, isOnline){
           ? '<div class="enlive-online-pill"><span class="adm-live-dot"></span>EN VIVO</div>'
           : '<div class="enlive-offline-pill">Offline</div>')+
         (tiempoActivo?'<div class="enlive-time">'+tiempoActivo+'</div>':(p.lastSeen?'<div class="enlive-time">'+_fmtTiempo(p.lastSeen)+'</div>':''))+
-        (isOnline?'<div class="enlive-score" style="color:'+scoreColor+'" title="Total de gestiones de hoy (confirmadas + canceladas + novedades + carritos + ventas WPP)">'+score+'</div><div class="enlive-score-lbl">gestiones hoy</div>':'')+
+        (isOnline?'<div class="enlive-score" style="color:'+scoreColor+'" title="Avance: pedidos terminados sobre el total asignado en Gestión Logística">'+(hayAvance?score+'%':'—')+'</div><div class="enlive-score-lbl">avance</div>':'')+
       '</div>'+
     '</div>'+
     (isOnline
-      ? '<div class="enlive-gd">'+
+      ? '<div class="enlive-linea"><span class="enlive-linea-lbl">Tiempo de actividad</span>'+
+          '<b class="enlive-linea-val">'+(tiempoActivo||'—')+'</b></div>'+
+        // Pendientes vs terminadas del kanban. Sin Excel cargado no hay nada que
+        // repartir, así que se avisa en vez de mostrar dos ceros.
+        '<div class="enlive-linea"><span class="enlive-linea-lbl">Gestiones</span>'+
+          (kTotal>0
+            ? '<span class="enlive-linea-val"><b style="color:#fbbf24">'+kPend+'</b>'+
+              '<span class="enlive-linea-sep">pend.</span>'+
+              '<b style="color:#4ade80">'+kFin+'</b>'+
+              '<span class="enlive-linea-sep">term.</span></span>'
+            : '<span class="enlive-linea-val" style="color:var(--text-3);font-weight:600;font-size:.66rem;">Sin Excel cargado</span>')+
+        '</div>'+
+        '<div class="enlive-gd">'+
+          '<div class="enlive-gd-cab">Hoy</div>'+
           '<div class="enlive-gd-row"><span>Órdenes confirmadas</span><b style="color:#4ade80">'+gConf+'</b></div>'+
           '<div class="enlive-gd-row"><span>Novedades solucionadas</span><b style="color:#60a5fa">'+gSoluc+'</b></div>'+
           '<div class="enlive-gd-row"><span>Carritos recuperados</span><b style="color:#a78bfa">'+gCarri+'</b></div>'+

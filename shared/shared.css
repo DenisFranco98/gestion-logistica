@@ -1042,6 +1042,13 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 /* Gestiones del día por asesor. Reemplazan a las cajas de métricas del kanban,
    que quedaban en cero para quien trabaja desde Gestiones Diarias. Como fila con
    etiqueta y número: son cinco conceptos que hay que poder leer sin adivinar. */
+/* Filas de encabezado de la tarjeta: tiempo de actividad y avance del kanban.
+   Etiqueta a la izquierda, valor a la derecha, en una línea cada una. */
+.enlive-linea{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);}
+.enlive-linea-lbl{font-size:.62rem;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+.enlive-linea-val{font-size:.9rem;font-weight:900;color:var(--text-1);font-family:var(--f-mono);letter-spacing:-.5px;display:flex;align-items:baseline;gap:3px;}
+.enlive-linea-sep{font-size:.55rem;color:var(--text-3);font-weight:600;text-transform:uppercase;margin-right:4px;font-family:var(--f-sans,inherit);}
+.enlive-gd-cab{font-size:.55rem;color:var(--text-3);font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 2px;}
 .enlive-gd{display:flex;flex-direction:column;margin-bottom:10px;}
 .enlive-gd-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);}
 .enlive-gd-row:last-child{border-bottom:none;}
