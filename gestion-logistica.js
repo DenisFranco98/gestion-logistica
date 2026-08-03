@@ -953,11 +953,18 @@ function parsear(data){
   // mapEstado devuelve null y el ID completo se omite.
   // Si un cliente tiene 2 IDs (uno cancelado, uno activo), cada ID se evalúa
   // por separado: el cancelado queda fuera, el activo genera su tarjeta.
+  // Los pedidos PENDIENTE DE CONFIRMACIÓN se descartan del kanban (están en la
+  // lista `ignorar` de ESTADO_KEYS), pero el Centro de Operaciones necesita el
+  // número, así que se cuentan acá antes de que mapEstado los deje fuera.
+  // Se cuentan IDs únicos, no filas: un pedido con varios productos ocupa
+  // varias filas del Excel.
+  const _idsPendConf=new Set();
   const mapa=new Map();let _idx=0;
   rows.forEach(r=>{
     const id=String(r[cID]||'').trim();if(!id)return;
     const guia=String(r[cG]||'').trim();
     const transportadora=String(r[cTr]||'').trim();
+    if(norm(r[cE]).includes('pendiente confirmacion')) _idsPendConf.add(id);
     const _estadoRaw=mapEstado(r[cE],transportadora);
     if(!_estadoRaw)return;
     // Sin guía: solo se admiten PENDIENTE y RECHAZADO (pueden no tener guía generada)
@@ -1031,7 +1038,28 @@ function parsear(data){
     delete p._valorAT;
     if(!p.valor)p.valor=null;
   });
+  // Snapshot para el Centro de Operaciones. El Excel es de TODA la tienda, así
+  // que se publica por tienda y la última carga reemplaza a la anterior — sumar
+  // entre asesores multiplicaría el número, porque todos suben el mismo archivo.
+  _publicarSnapshotLogistica(result, _idsPendConf.size);
   return result;
+}
+
+// Publica en logistica_live/{empresaId} el pulso del último Excel cargado.
+// Se escribe una sola vez por carga (no por gestión), y lleva quién y cuándo
+// para que el admin sepa si el dato está fresco o es de hace horas.
+function _publicarSnapshotLogistica(pedidos, pendConfirmacion){
+  try{
+    if(typeof _db==='undefined'||!window._currentUsername) return;
+    if(typeof _tiendaLista==='function' && !_tiendaLista('snapshot logística')) return;
+    _db.ref('logistica_live/'+_gdTK()).set({
+      pendConfirmacion: pendConfirmacion||0,
+      enNovedad: pedidos.filter(p=>p.estadoKey==='novedad').length,
+      totalPedidos: pedidos.length,
+      ts: Date.now(),
+      porAsesor: (window.getLoginAsesor?window.getLoginAsesor():'')||''
+    });
+  }catch(e){ console.warn('[LIVE] no se pudo publicar el snapshot de logística',e); }
 }
 
 // ── COMPLETITUD ────────────────────────────────────────────────────────

@@ -119,30 +119,30 @@ window._sbEstadosToggle=function(){
 
       <!-- Command bar — siempre visible -->
       <div class="adm-cmdbar">
-        <div class="adm-cmd-card blue">
-          <div class="adm-cmd-icon">👥</div>
-          <div class="adm-cmd-val" id="adm-stat-total">0</div>
-          <div class="adm-cmd-lbl">Usuarios registrados</div>
-        </div>
-        <div class="adm-cmd-card green">
-          <div class="adm-cmd-icon">🟢</div>
-          <div class="adm-cmd-val" id="adm-stat-online" style="color:#10b981">0</div>
-          <div class="adm-cmd-lbl">En línea ahora</div>
-        </div>
+        <!-- Los dos primeros salen del último Excel cargado en Gestión Logística
+             (logistica_live/{empresaId}). El Excel es de toda la tienda, así que
+             la última carga reemplaza a la anterior: no se suma entre asesores. -->
         <div class="adm-cmd-card amber">
-          <div class="adm-cmd-icon">⚡</div>
-          <div class="adm-cmd-val" id="adm-stat-gest">0</div>
-          <div class="adm-cmd-lbl">Gestiones esta sesión</div>
-        </div>
-        <div class="adm-cmd-card purple">
-          <div class="adm-cmd-icon">🏁</div>
-          <div class="adm-cmd-val" id="adm-stat-fin" style="color:#a78bfa">0</div>
-          <div class="adm-cmd-lbl">Finalizados en vivo</div>
+          <div class="adm-cmd-icon">🕒</div>
+          <div class="adm-cmd-val" id="adm-stat-pendconf" style="color:#f59e0b">—</div>
+          <div class="adm-cmd-lbl">Pendientes de confirmación</div>
+          <!-- Sin la hora, un número de hace 6 horas se lee como si fuera de ahora -->
+          <div class="adm-cmd-lbl" id="adm-stat-pendconf-sub" style="text-transform:none;letter-spacing:0;color:var(--text-3);font-weight:600;opacity:.75;">Sin Excel cargado hoy</div>
         </div>
         <div class="adm-cmd-card">
-          <div class="adm-cmd-icon">📦</div>
-          <div class="adm-cmd-val" id="adm-stat-tp" style="color:var(--text-2)">—</div>
-          <div class="adm-cmd-lbl">Total pedidos hoy</div>
+          <div class="adm-cmd-icon">⚠️</div>
+          <div class="adm-cmd-val" id="adm-stat-novedad" style="color:#d97706">—</div>
+          <div class="adm-cmd-lbl">Pedidos en novedad</div>
+        </div>
+        <!-- Resumen del día, sumando a todos los asesores de la tienda. Sale de
+             Gestiones Diarias (gestiones_diarias/{tienda}/{mes}/{asesor}/dias). -->
+        <div class="adm-cmd-card blue adm-cmd-resumen">
+          <div class="adm-cmd-lbl" style="margin-bottom:6px;">Hoy · toda la tienda</div>
+          <div class="adm-res-row"><span>Órdenes confirmadas</span><b id="adm-res-conf">0</b></div>
+          <div class="adm-res-row"><span>Novedades solucionadas</span><b id="adm-res-soluc">0</b></div>
+          <div class="adm-res-row"><span>Carritos recuperados</span><b id="adm-res-carri">0</b></div>
+          <div class="adm-res-row"><span>Ventas WPP cargadas a Dropi</span><b id="adm-res-wpp">0</b></div>
+          <div class="adm-res-row"><span>Órdenes canceladas</span><b id="adm-res-cancel">0</b></div>
         </div>
       </div>
 
@@ -522,7 +522,12 @@ window._sbEstadosToggle=function(){
     <div class="adm-field"><label>Correo electrónico</label><input type="email" id="adm-new-user" placeholder="correo@gmail.com" autocomplete="off"/></div>
     <div class="adm-field"><label>Contraseña</label><div style="position:relative;"><input type="password" id="adm-new-pass" placeholder="Contraseña" style="width:100%;padding-right:38px;"/><span onclick="const i=document.getElementById('adm-new-pass');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁️':'🙈';" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:.9rem;user-select:none;">👁️</span></div></div>
     <div class="adm-field"><label>Nombre completo</label><input type="text" id="adm-new-asesor" placeholder="Ej: Juan García" autocomplete="off"/></div>
-    <div class="adm-field"><label>Tienda</label><input type="text" id="adm-new-tienda" placeholder="Ej: Tienda Norte" autocomplete="off"/></div>
+    <!-- Antes era texto libre: el nombre quedaba suelto en users/{uid}.tienda y
+         la pertenencia real (empresa_asesores / user_tiendas) se escribía con la
+         empresa del selector del encabezado, que puede valer "__todas__". Así se
+         crearon asesores que no pertenecían a ninguna tienda real y no aparecían
+         en el panel. Ahora la tienda se elige acá y define ambos índices. -->
+    <div class="adm-field"><label>Tienda</label><select id="adm-new-tienda"><option value="" disabled selected>Selecciona la tienda…</option></select></div>
     <div class="adm-field"><label>Rol</label>
       <select id="adm-new-rol" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:10px;font-size:.85rem;color:var(--text-1);outline:none;background:var(--bg-card);font-family:inherit;">
         <option value="" disabled selected>— Elige el rol —</option>

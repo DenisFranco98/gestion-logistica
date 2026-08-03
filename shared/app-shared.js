@@ -569,6 +569,71 @@ window._auditGD = function(nombreTienda, mes){
   }).catch(e=>console.error('[AUDIT GD] falló (¿sesión de admin?):',e));
 };
 
+// La pertenencia de un asesor a una tienda vive en dos índices espejo:
+//   empresa_asesores/{empresaId}/{uid}   ← lo lee el panel de admin
+//   user_tiendas/{uid}/{empresaId}       ← lo lee el login
+// Si solo está uno, el asesor entra pero no aparece en el panel (o al revés), y
+// sin user_tiendas entra SIN empresaId: sus datos se guardan en las rutas viejas
+// por nombre de tienda. El alta ya escribe ambos, esto repara lo anterior.
+// Además detecta membresías a empresas que no existen — típicamente el nodo
+// basura 'empresa_asesores/__todas__' que creaba el alta vieja.
+//
+// Ejecutar desde la consola como admin:
+//   _auditMembresias()                  → simulación, no escribe nada
+//   _auditMembresias({aplicar:true})    → completa el índice que falte
+window._auditMembresias = function(opts){
+  const aplicar=!!(opts||{}).aplicar;
+  console.log('%c[MEMBRESÍAS] leyendo...'+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
+  Promise.all([
+    _db.ref('empresa_asesores').once('value'),
+    _db.ref('user_tiendas').once('value'),
+    _db.ref('empresas').once('value'),
+    _db.ref('users').once('value')
+  ]).then(([sea,sut,se,su])=>{
+    const ea=sea.val()||{}, ut=sut.val()||{}, empresas=se.val()||{}, users=su.val()||{};
+    const nombreEmp=id=>(empresas[id]||{}).nombre||'(no existe)';
+    const quien=uid=>{const u=users[uid]||{};return (u.asesor||u.email||uid);};
+    const faltaUT=[], faltaEA=[], huerfanos=[];
+    Object.entries(ea).forEach(([empId,uids])=>{
+      Object.keys(uids||{}).forEach(uid=>{
+        if(!empresas[empId]){ huerfanos.push({indice:'empresa_asesores',empresaId:empId,uid,asesor:quien(uid)}); return; }
+        if(!((ut[uid]||{})[empId])) faltaUT.push({asesor:quien(uid),uid,tienda:nombreEmp(empId),empresaId:empId,
+          _path:'user_tiendas/'+uid+'/'+empId});
+      });
+    });
+    Object.entries(ut).forEach(([uid,emps])=>{
+      Object.keys(emps||{}).forEach(empId=>{
+        if(!empresas[empId]){ huerfanos.push({indice:'user_tiendas',empresaId:empId,uid,asesor:quien(uid)}); return; }
+        if(!((ea[empId]||{})[uid])) faltaEA.push({asesor:quien(uid),uid,tienda:nombreEmp(empId),empresaId:empId,
+          _path:'empresa_asesores/'+empId+'/'+uid});
+      });
+    });
+    if(faltaEA.length){
+      console.group('%c⚠ INVISIBLES EN EL PANEL — están en user_tiendas pero no en empresa_asesores ('+faltaEA.length+')','color:#b91c1c;font-weight:bold');
+      console.table(faltaEA.map(({asesor,tienda,uid})=>({asesor,tienda,uid}))); console.groupEnd();
+    }
+    if(faltaUT.length){
+      console.group('%c⚠ ENTRAN SIN empresaId — están en empresa_asesores pero no en user_tiendas ('+faltaUT.length+')','color:#b45309;font-weight:bold');
+      console.table(faltaUT.map(({asesor,tienda,uid})=>({asesor,tienda,uid})));
+      console.log('Sus datos se están guardando en las rutas viejas por nombre de tienda.');
+      console.groupEnd();
+    }
+    if(huerfanos.length){
+      console.group('%c⚠ Membresías a empresas que no existen ('+huerfanos.length+')','color:#b91c1c;font-weight:bold');
+      console.table(huerfanos);
+      console.log('Si el empresaId es "__todas__" viene del alta vieja. Estas NO se reparan solas: hay que reasignar a mano la tienda correcta.');
+      console.groupEnd();
+    }
+    const arreglos=[...faltaEA,...faltaUT];
+    if(!arreglos.length){ console.log('%c✔ Los dos índices están parejos.','color:#15803d;font-weight:bold'); return; }
+    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para reparar: _auditMembresias({aplicar:true})','font-weight:bold'); return; }
+    const updates={}; arreglos.forEach(x=>{ updates[x._path]=true; });
+    _db.ref().update(updates)
+      .then(()=>console.log('%c[MEMBRESÍAS] listo: '+arreglos.length+' reparadas. Los huérfanos siguen pendientes de reasignar a mano.','font-weight:bold;color:#15803d'))
+      .catch(e=>console.error('  ✗',e));
+  }).catch(e=>console.error('[MEMBRESÍAS] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
@@ -586,6 +651,27 @@ function _gsKey(){
 // undefined y el botón desaparecía para el resto de la sesión. Con la lista en
 // localStorage el selector puede pintarse bien de entrada, sin esperar a
 // Firebase; la relectura posterior la corrige si cambió.
+// ── Presencia: criterio único de "está en línea" ─────────────────────────
+// `lastSeen` se escribe con la hora del SERVIDOR y se compara contra la hora del
+// servidor, no contra el reloj local. Antes se guardaba Date.now() del asesor y
+// se comparaba contra Date.now() del admin: con un reloj desfasado más de 2
+// minutos —cosa común en equipos sin sincronizar— el asesor no aparecía nunca
+// en línea, o aparecía siempre. Firebase publica el desfase en
+// .info/serverTimeOffset, así que ambos extremos quedan en la misma referencia.
+const PRESENCIA_VENTANA_MS = 120000;   // 2 min = 4 heartbeats perdidos
+window._serverTimeOffset = 0;
+function _iniciarOffsetServidor(){
+  if(typeof _db==='undefined'||window._offsetListo) return;
+  window._offsetListo = true;
+  _db.ref('.info/serverTimeOffset').on('value', s=>{ window._serverTimeOffset = s.val()||0; });
+}
+function _ahoraServidor(){ return Date.now() + (window._serverTimeOffset||0); }
+// Criterio único, antes repetido con la misma fórmula en ~10 lugares.
+function _estaOnline(p){
+  if(!p||!p.online) return false;
+  return (_ahoraServidor() - (p.lastSeen||0)) < PRESENCIA_VENTANA_MS;
+}
+
 const TIENDAS_KEY = 'lgs_tiendas';
 // Mismo problema con "← Volver al Panel Admin": window._cameFromAdmin vivía solo
 // en memoria, así que un admin que entraba a una tienda, abría un módulo y
@@ -650,10 +736,23 @@ function _initLogin(){
     window._currentUsername = username;
     _cachedLoginTime = Date.now(); // cachear loginTime localmente para evitar lectura Firebase por acción
     const ref = _db.ref('presence/' + username);
-    ref.set({ online: true, lastSeen: Date.now(), loginTime: _cachedLoginTime, tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0, force_logout: false });
-    ref.onDisconnect().update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    _iniciarOffsetServidor();
+    const AHORA = firebase.database.ServerValue.TIMESTAMP;
+    // lastSeen SIEMPRE con hora del servidor: con Date.now() del cliente, un
+    // reloj desfasado más de 2 minutos dejaba al asesor permanentemente fuera
+    // de "en línea" en el panel (o permanentemente dentro).
+    ref.set({ online: true, lastSeen: AHORA, loginTime: _cachedLoginTime, tienda: tienda||'', asesor: asesor||'', sessionGestiones: 0, force_logout: false });
+    ref.onDisconnect().update({ online: false, lastSeen: AHORA });
     if(_heartbeatInterval){clearInterval(_heartbeatInterval);_heartbeatInterval=null;}
-    _heartbeatInterval = setInterval(()=>{ if(_currentUsername===username) ref.update({ lastSeen: Date.now(), online: true }); }, 30000);
+    const _latir = ()=>{ if(_currentUsername===username) ref.update({ lastSeen: firebase.database.ServerValue.TIMESTAMP, online: true }); };
+    _heartbeatInterval = setInterval(_latir, 30000);
+    // Chrome frena los setInterval de las pestañas en segundo plano, así que al
+    // volver a primer plano se late de inmediato en vez de esperar hasta 30s —
+    // si no, un asesor que vuelve a la pestaña puede verse offline un rato.
+    if(!window._presVisListo){
+      window._presVisListo = true;
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) _latir(); });
+    }
     // Registrar inicio de sesión en historial (en try-catch para no afectar presencia)
     try{
       const _sesRef = _db.ref('session_hist/'+username).push({ start: Date.now(), tienda: tienda||'', asesor: asesor||'' });
@@ -1564,7 +1663,7 @@ function _superAdmCargar(){
     const users          = snapUsers.val()||{};
     const presencia      = snapPresence.val()||{};
 
-    const totalOnline = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
+    const totalOnline = Object.values(presencia).filter(_estaOnline).length;
     document.getElementById('sa-stat-admins').textContent  = Object.keys(admins).length;
     document.getElementById('sa-stat-empresas').textContent = Object.keys(empresas).length;
     document.getElementById('sa-stat-asesores').textContent = Object.keys(users).length;
@@ -1581,7 +1680,7 @@ function _superAdmCargar(){
         const asesorKeys = Object.keys(empresaAsesores[empId]||{});
         const asesores = asesorKeys.map(ukey=>{
           const u = usersArr.find(x=>x.uid===ukey);
-          const online = !!(presencia[ukey]||{}).online && (Date.now()-((presencia[ukey]||{}).lastSeen||0))<120000;
+          const online = _estaOnline(presencia[ukey]);
           return { nombre: u?(u.asesor||u.email||ukey):ukey, user: ukey, online };
         });
         totalAsesores += asesores.length;
@@ -2099,6 +2198,9 @@ let _admPresenceListener = null;
 let _admPresenciaCache = {};
 let _admAsesorUidsCache = null;
 let _admPresenceRenderTimer = null;
+// Tick que reevalúa el "en línea" contra el reloj, aunque no llegue nada nuevo
+// de Firebase (ver _admRepintarPresencia).
+let _admPresenceTick = null;
 
 function _admTab(tab){
   ['enlive','ranking','equipo','analitica','empresas','buscar','gdconsolid','auditoria','reportes','negocio'].forEach(t=>{
@@ -2252,6 +2354,10 @@ function _audFiltrar(){
 
 function _admCargarDashboard(){
   const adminId = localStorage.getItem('lgs_admin_id');
+  // El panel compara lastSeen (hora del servidor) contra su propio reloj: sin el
+  // offset, un admin con la hora corrida vería a todos desconectados o a todos
+  // conectados. Lo necesita igual que el cliente del asesor.
+  _iniciarOffsetServidor();
   _admCargarNegocio(); // refresca nombre/logo del negocio en el encabezado
 
   if(!adminId){
@@ -2290,21 +2396,27 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
   const esTodas = empresaActualId==='__todas__';
   Promise.all([
     _db.ref('empresas').once('value'),
-    esTodas ? _db.ref('empresa_asesores').once('value') : _db.ref('empresa_asesores/'+empresaActualId).once('value'),
+    _db.ref('empresa_asesores').once('value'),
     _db.ref('users').once('value'),
-    _db.ref('presence').once('value')
-  ]).then(([snapEmpresas, snapAsesores, snapUsers, snapPresence])=>{
+    _db.ref('presence').once('value'),
+    _db.ref('user_tiendas').once('value')
+  ]).then(([snapEmpresas, snapAsesores, snapUsers, snapPresence, snapUserTiendas])=>{
     const todasEmpresas = snapEmpresas.val()||{};
-    let asesorUids;
-    if(esTodas){
-      // Unir los asesores de todas las tiendas del admin (sin duplicados)
-      const porEmpresa = snapAsesores.val()||{};
-      const set = new Set();
-      empresasIds.forEach(empId=>Object.keys(porEmpresa[empId]||{}).forEach(uid=>set.add(uid)));
-      asesorUids = [...set];
-    } else {
-      asesorUids = Object.keys(snapAsesores.val()||{});
-    }
+    // La pertenencia de un asesor a una tienda vive en DOS índices espejo que
+    // se desincronizan: empresa_asesores/{empId}/{uid} (el que miraba este
+    // panel) y user_tiendas/{uid}/{empId} (el que usa el login). Un asesor que
+    // solo estaba en el segundo trabajaba normal pero era invisible acá — de
+    // ahí el "no me salen todos los asesores en vivo". Se toma la UNIÓN para
+    // que nadie quede fuera; _auditMembresias() lista y repara los desparejos.
+    const porEmpresa = snapAsesores.val()||{};
+    const porUsuario = snapUserTiendas.val()||{};
+    const idsObjetivo = esTodas ? empresasIds : [empresaActualId];
+    const set = new Set();
+    idsObjetivo.forEach(empId=>Object.keys(porEmpresa[empId]||{}).forEach(uid=>set.add(uid)));
+    Object.entries(porUsuario).forEach(([uid,emps])=>{
+      if(idsObjetivo.some(empId=>(emps||{})[empId])) set.add(uid);
+    });
+    const asesorUids = [...set];
     const todosUsers = Object.entries(snapUsers.val()||{}).map(([uid,d])=>({uid,...d}));
     const presencia = snapPresence.val()||{};
 
@@ -2315,19 +2427,13 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
 
     _admActualizarSelectorEmpresa(adminId, empresasIds, todasEmpresas, empresaActualId);
 
-    const online = usuarios.filter(u=>(presencia[u.uid]||{}).online&&(Date.now()-((presencia[u.uid]||{}).lastSeen||0))<120000).length;
-    const totalGest = usuarios.reduce((s,u)=>s+(presencia[u.uid]?.sessionGestiones||0),0);
-    const totalFin = usuarios.reduce((s,u)=>s+(presencia[u.uid]?.finalizados||0),0);
-    const totalTP = usuarios.reduce((s,u)=>s+(presencia[u.uid]?.totalPedidos||0),0);
-    document.getElementById('adm-stat-total').textContent = usuarios.length;
-    document.getElementById('adm-stat-online').textContent = online;
-    document.getElementById('adm-stat-gest').textContent = totalGest;
-    document.getElementById('adm-stat-fin').textContent = totalFin;
-    document.getElementById('adm-stat-tp').textContent = totalTP || '—';
+    // Las tarjetas ya no salen de presence: los dos números de arriba vienen del
+    // último Excel cargado y el resumen del día, de Gestiones Diarias.
+    _admCargarTarjetas(esTodas?empresasIds:[empresaActualId]);
 
     usuarios.sort((a,b)=>{
-      const ao=!!(presencia[a.uid]||{}).online&&(Date.now()-((presencia[a.uid]||{}).lastSeen||0))<120000;
-      const bo=!!(presencia[b.uid]||{}).online&&(Date.now()-((presencia[b.uid]||{}).lastSeen||0))<120000;
+      const ao=_estaOnline(presencia[a.uid]);
+      const bo=_estaOnline(presencia[b.uid]);
       if(ao!==bo) return bo-ao;
       return ((presencia[b.uid]||{}).lastSeen||0)-((presencia[a.uid]||{}).lastSeen||0);
     });
@@ -2345,24 +2451,85 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
       _admPresenciaCache = snapP.val()||{};
       // Debounce: agrupar actualizaciones (con 10 asesores hay heartbeats cada ~3s)
       if(_admPresenceRenderTimer) clearTimeout(_admPresenceRenderTimer);
-      _admPresenceRenderTimer = setTimeout(()=>{
-        const uids = _admAsesorUidsCache;
-        if(uids){
-          const usrs = _admUsuariosCache.filter(u=>uids.includes(u.uid));
-          _buildEnliveCards(usrs, _admPresenciaCache);
-          // Actualizar stats
-          const online=usrs.filter(u=>((_admPresenciaCache[u.uid]||{}).online)&&(Date.now()-((_admPresenciaCache[u.uid]||{}).lastSeen||0))<120000).length;
-          const totalGest=usrs.reduce((s,u)=>s+(_admPresenciaCache[u.uid]?.sessionGestiones||0),0);
-          const totalFin=usrs.reduce((s,u)=>s+(_admPresenciaCache[u.uid]?.finalizados||0),0);
-          const totalTP=usrs.reduce((s,u)=>s+(_admPresenciaCache[u.uid]?.totalPedidos||0),0);
-          document.getElementById('adm-stat-online').textContent=online;
-          document.getElementById('adm-stat-gest').textContent=totalGest;
-          document.getElementById('adm-stat-fin').textContent=totalFin;
-          document.getElementById('adm-stat-tp').textContent=totalTP||'—';
-        }
-      }, 5000); // 5s debounce: agrupa todos los heartbeats del periodo
+      _admPresenceRenderTimer = setTimeout(_admRepintarPresencia, 5000);
     });
+    // Estar "en línea" depende del tiempo transcurrido, no solo de lo que llega
+    // de Firebase: si un asesor cierra de golpe y el onDisconnect no alcanza a
+    // dispararse, su lastSeen se queda viejo y nadie lo vuelve a evaluar — el
+    // panel lo mostraba conectado indefinidamente. Este tick relee el reloj.
+    if(_admPresenceTick) clearInterval(_admPresenceTick);
+    _admPresenceTick = setInterval(_admRepintarPresencia, 30000);
   });
+}
+
+// ── Tarjetas del Centro de Operaciones ───────────────────────────────────
+// Dos fuentes distintas y a propósito:
+//   · Pendientes de confirmación y Pedidos en novedad → logistica_live/{empId},
+//     el pulso del último Excel cargado. Como el Excel es de toda la tienda, la
+//     última carga reemplaza a la anterior; entre tiendas sí se suma.
+//   · El resumen del día → gestiones_diarias, sumando a TODOS los asesores de
+//     la tienda para el día de hoy. Es lo que el equipo carga a mano más lo que
+//     se deriva de las novedades.
+let _admTarjetasTick = null;
+function _admCargarTarjetas(empresaIds){
+  const ids=(empresaIds||[]).filter(x=>x&&x!=='__todas__');
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  if(!ids.length){ ['adm-stat-pendconf','adm-stat-novedad'].forEach(i=>set(i,'—')); return; }
+
+  // 1. Pulso del Excel
+  Promise.all(ids.map(id=>_db.ref('logistica_live/'+id).once('value')))
+    .then(snaps=>{
+      let pend=0, nov=0, hubo=false, masReciente=0, quien='';
+      snaps.forEach(s=>{
+        const d=s.val(); if(!d) return;
+        hubo=true; pend+=d.pendConfirmacion||0; nov+=d.enNovedad||0;
+        if((d.ts||0)>masReciente){ masReciente=d.ts||0; quien=d.porAsesor||''; }
+      });
+      set('adm-stat-pendconf', hubo?pend:'—');
+      set('adm-stat-novedad',  hubo?nov:'—');
+      // Sin saber cuándo se cargó, un número viejo se lee como si fuera de ahora.
+      const lbl=document.getElementById('adm-stat-pendconf-sub');
+      if(lbl) lbl.textContent = hubo ? ('Excel de '+_fmtTiempo(masReciente)+(quien?' · '+quien.split(' ')[0]:'')) : 'Sin Excel cargado hoy';
+    })
+    .catch(()=>{ ['adm-stat-pendconf','adm-stat-novedad'].forEach(i=>set(i,'—')); });
+
+  // 2. Resumen del día desde Gestiones Diarias
+  const hoy=new Date();
+  const mes=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
+  const dia=String(hoy.getDate());
+  Promise.all(ids.map(id=>_db.ref('gestiones_diarias/'+id+'/'+mes).once('value')))
+    .then(snaps=>{
+      let conf=0,soluc=0,carri=0,wpp=0,cancel=0;
+      snaps.forEach(s=>{
+        // Un nivel por asesor; de cada uno se toma solo el día de hoy.
+        Object.values(s.val()||{}).forEach(nodo=>{
+          const d=((nodo||{}).dias||{})[dia]; if(!d) return;
+          conf+=d.conf||0; soluc+=d.soluc||0; carri+=d.recupCarri||0;
+          wpp+=d.ventasWpp||0; cancel+=d.cancel||0;
+        });
+      });
+      set('adm-res-conf',conf); set('adm-res-soluc',soluc); set('adm-res-carri',carri);
+      set('adm-res-wpp',wpp); set('adm-res-cancel',cancel);
+    })
+    .catch(()=>{});
+
+  // Refresco periódico: estos números los mueven los asesores mientras trabajan,
+  // y no hay listener sobre esas rutas (serían lecturas de todo el mes).
+  if(_admTarjetasTick) clearInterval(_admTarjetasTick);
+  _admTarjetasTick = setInterval(()=>{
+    const panel=document.getElementById('admin-panel');
+    if(panel && panel.classList.contains('visible')) _admCargarTarjetas(ids);
+  }, 60000);
+}
+
+function _admRepintarPresencia(){
+  const uids = _admAsesorUidsCache;
+  if(!uids) return;
+  const panel = document.getElementById('admin-panel');
+  if(!panel || !panel.classList.contains('visible')) return;   // no gastar render si no se ve
+  const usrs = _admUsuariosCache.filter(u=>uids.includes(u.uid));
+  // Solo las tarjetas de asesor: las del command bar ya no salen de presence.
+  _buildEnliveCards(usrs, _admPresenciaCache);
 }
 
 function _admActualizarSelectorEmpresa(adminId, empresasIds, todasEmpresas, empresaActualId){
@@ -2404,11 +2571,9 @@ window._admCambiarEmpresa = function(empresaId){
 function _admMostrarSinEmpresas(){
   const list = document.getElementById('adm-users-list');
   if(list) list.innerHTML = '<div class="adm-empty" style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div>No tienes empresas creadas aún.</div><button onclick="_admAbrirCrearEmpresa()" style="background:#131920;color:white;border:none;padding:8px 20px;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;">+ Crear mi primera empresa</button></div>';
-  document.getElementById('adm-stat-total').textContent='0';
-  document.getElementById('adm-stat-online').textContent='0';
-  document.getElementById('adm-stat-gest').textContent='0';
-  document.getElementById('adm-stat-fin').textContent='0';
-  document.getElementById('adm-stat-tp').textContent='—';
+  _admCargarTarjetas([]);   // deja las tarjetas en "—"
+  ['adm-res-conf','adm-res-soluc','adm-res-carri','adm-res-wpp','adm-res-cancel']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='0'; });
 }
 
 function _admCargarDashboardLegacy(){
@@ -2417,18 +2582,11 @@ function _admCargarDashboardLegacy(){
     _admPresenciaCache = presencia;
     // Legacy: fallback user no aplica con Firebase Auth
     _admUsuariosCache = usuarios;
-    const online = Object.values(presencia).filter(p=>p.online&&(Date.now()-(p.lastSeen||0))<120000).length;
-    const totalGest = Object.values(presencia).reduce((s,p)=>s+(p.sessionGestiones||0),0);
-    const totalFin = Object.values(presencia).reduce((s,p)=>s+(p.finalizados||0),0);
-    const totalTP = Object.values(presencia).reduce((s,p)=>s+(p.totalPedidos||0),0);
-    document.getElementById('adm-stat-total').textContent = usuarios.length;
-    document.getElementById('adm-stat-online').textContent = online;
-    document.getElementById('adm-stat-gest').textContent = totalGest;
-    document.getElementById('adm-stat-fin').textContent = totalFin;
-    document.getElementById('adm-stat-tp').textContent = totalTP || '—';
+    // Camino legacy (admin sin admin_empresas): no hay tienda con la que
+    // resolver las tarjetas del command bar, así que solo se pintan los asesores.
     usuarios.sort((a,b)=>{
-      const ao=!!(presencia[a.uid]||{}).online&&(Date.now()-((presencia[a.uid]||{}).lastSeen||0))<120000;
-      const bo=!!(presencia[b.uid]||{}).online&&(Date.now()-((presencia[b.uid]||{}).lastSeen||0))<120000;
+      const ao=_estaOnline(presencia[a.uid]);
+      const bo=_estaOnline(presencia[b.uid]);
       if(ao!==bo) return bo-ao;
       return ((presencia[b.uid]||{}).lastSeen||0)-((presencia[a.uid]||{}).lastSeen||0);
     });
@@ -2478,7 +2636,7 @@ function _buildEnliveCards(usuarios, presencia){
   usuarios.forEach(u=>{
     if(!u.uid) return;
     const p=presencia[u.uid]||{};
-    const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
+    const isOnline=_estaOnline(p);
     if(isOnline) on.push({u,p}); else off.push({u,p});
   });
   if(!on.length) grid.innerHTML='<div class="adm-empty" style="grid-column:1/-1;border:1px dashed #d6d2cc;border-radius:10px;">Ningún asesor conectado en este momento</div>';
@@ -2609,8 +2767,8 @@ function _buildEquipoList(){
   if(!todos.length){ list.innerHTML='<div class="adm-empty">No hay usuarios registrados</div>'; return; }
   const sorted = [...todos].sort((a,b)=>{
     const pa=presencia[a.uid]||{}, pb=presencia[b.uid]||{};
-    const ao=!!pa.online&&(Date.now()-(pa.lastSeen||0))<120000;
-    const bo=!!pb.online&&(Date.now()-(pb.lastSeen||0))<120000;
+    const ao=_estaOnline(pa);
+    const bo=_estaOnline(pb);
     if(ao!==bo) return bo-ao;
     return (pb.lastSeen||0)-(pa.lastSeen||0);
   });
@@ -2618,7 +2776,7 @@ function _buildEquipoList(){
   let visible=0;
   sorted.forEach(u=>{
     const p=presencia[u.uid]||{};
-    const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
+    const isOnline=_estaOnline(p);
     const name=isOnline&&p.asesor?p.asesor:u.asesor;
     if(fTienda && u.tiendaId!==fTienda) return;
     if(fRol && u.rol!==fRol) return;
@@ -3177,7 +3335,31 @@ function _fmtTiempo(ts){ if(!ts)return'—'; const d=new Date(ts); return d.toLo
 function _fmtDuracion(ms){ const m=Math.floor(ms/60000); if(m<1)return'<1m'; if(m<60)return m+'m'; return Math.floor(m/60)+'h '+(m%60)+'m'; }
 
 function _admAbrirAgregar(){
-  ['adm-new-user','adm-new-pass','adm-new-asesor','adm-new-tienda'].forEach(id=>document.getElementById(id).value='');
+  ['adm-new-user','adm-new-pass','adm-new-asesor'].forEach(id=>document.getElementById(id).value='');
+  // El selector de tienda se llena con las empresas del admin. La empresa
+  // elegida acá es la que define la pertenencia en los dos índices.
+  const selT=document.getElementById('adm-new-tienda');
+  if(selT){
+    selT.innerHTML='<option value="" disabled selected>Selecciona la tienda…</option>';
+    const adminId=localStorage.getItem('lgs_admin_id');
+    const actual=localStorage.getItem('lgs_empresa_actual');
+    if(adminId){
+      Promise.all([
+        _db.ref('admin_empresas/'+adminId).once('value'),
+        _db.ref('empresas').once('value')
+      ]).then(([snapAE,snapE])=>{
+        const mias=Object.keys(snapAE.val()||{}), todas=snapE.val()||{};
+        mias.forEach(empId=>{
+          const e=todas[empId]; if(!e) return;
+          const o=document.createElement('option');
+          o.value=empId; o.textContent=e.nombre||empId;
+          // Preselecciona la tienda que se está viendo, salvo "todas".
+          if(empId===actual) o.selected=true;
+          selT.appendChild(o);
+        });
+      });
+    }
+  }
   // Sin rol preseleccionado: el default en 'asesor' hizo que se crearan dueños
   // marcados como asesores, y el rol no se puede corregir después desde el panel.
   document.getElementById('adm-new-rol').value='';
@@ -3190,14 +3372,16 @@ function _admGuardarUsuario(){
   const email=document.getElementById('adm-new-user').value.trim();
   const p=document.getElementById('adm-new-pass').value.trim();
   const a=document.getElementById('adm-new-asesor').value.trim();
-  const t=document.getElementById('adm-new-tienda').value.trim();
+  const selT=document.getElementById('adm-new-tienda');
+  const empresaId=selT?selT.value:'';                       // ahora es el empresaId, no texto libre
+  const t=(selT&&selT.selectedIndex>=0)?(selT.options[selT.selectedIndex].textContent||'').trim():'';
   const rol=document.getElementById('adm-new-rol').value;
   const err=document.getElementById('adm-add-error');
   err.style.display='none';
   if(!email||!p){ err.textContent='Correo y contraseña son obligatorios'; err.style.display='block'; return; }
   if(!email.includes('@')){ err.textContent='Ingresa un correo válido'; err.style.display='block'; return; }
   if(!a){ err.textContent='El nombre completo es obligatorio'; err.style.display='block'; return; }
-  if(!t){ err.textContent='La tienda es obligatoria'; err.style.display='block'; return; }
+  if(!empresaId||empresaId==='__todas__'){ err.textContent='Elige la tienda a la que pertenece'; err.style.display='block'; return; }
   // El rol define permisos (notas del coordinador, Control Financiero) y hoy no
   // se puede corregir desde el panel: hay que elegirlo a conciencia al crear.
   if(rol!=='asesor'&&rol!=='dueno'){ err.textContent='Elige si es Asesor o Dueño de tienda'; err.style.display='block'; return; }
@@ -3207,11 +3391,17 @@ function _admGuardarUsuario(){
     .then(cred=>{
       const uid=cred.user.uid;
       secAuth.signOut();
-      return _db.ref('users/'+uid).set({email, username:email, asesor:a, tienda:t, rol, createdAt:Date.now()})
-        .then(()=>{
-          const empresaActual=localStorage.getItem('lgs_empresa_actual');
-          if(empresaActual) _db.ref('empresa_asesores/'+empresaActual+'/'+uid).set(true);
-        });
+      // Los tres nodos en un update atómico. Antes solo se escribía
+      // empresa_asesores (y con la empresa del selector del encabezado, que
+      // puede ser "__todas__"): sin user_tiendas el asesor entraba SIN
+      // empresaId, así que sus datos caían en las rutas viejas por nombre de
+      // tienda y el panel no lo mostraba. Los dos índices se escriben juntos o
+      // no se escribe ninguno.
+      return _db.ref().update({
+        ['users/'+uid]: {email, username:email, asesor:a, tienda:t, rol, empresaId, createdAt:Date.now()},
+        ['empresa_asesores/'+empresaId+'/'+uid]: true,
+        ['user_tiendas/'+uid+'/'+empresaId]: true
+      });
     })
     .then(()=>{ _admCerrarAgregar(); _admCargarDashboard(); toast('✅ Usuario creado'); })
     .catch(e=>{
@@ -4139,7 +4329,7 @@ function _malVerInforme(){
 
     // Si el asesor está en vivo, agregar sesión actual al principio
     const p=_malPresData||{};
-    const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
+    const isOnline=_estaOnline(p);
     if(isOnline&&p.loginTime){
       saved.unshift({
         _live:true,ts:Date.now(),asesorNombre:p.asesor||'',tienda:p.tienda||'',
@@ -4237,7 +4427,7 @@ function _iadmDetalle(idx){
 
 function _malRender(){
   const p=_malPresData; if(!p) return;
-  const isOnline=!!p.online&&(Date.now()-(p.lastSeen||0))<120000;
+  const isOnline=_estaOnline(p);
   const name=p.asesor||_malUsername||'—';
   const color=_avatarColor(name);
   const initials=_avatarInitials(name);
