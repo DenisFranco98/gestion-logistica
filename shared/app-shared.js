@@ -2423,7 +2423,12 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
     const todosUsers = Object.entries(snapUsers.val()||{}).map(([uid,d])=>({uid,...d}));
     const presencia = snapPresence.val()||{};
 
-    const usuarios = todosUsers.filter(u=>asesorUids.includes(u.uid));
+    // En Vivo es un tablero de operación y solo se mide a los asesores: los
+    // dueños entran a revisar, no a gestionar, y ensuciaban la lista. El filtro
+    // excluye rol 'dueno' en vez de exigir rol 'asesor' a propósito — hay
+    // cuentas viejas sin rol guardado, y ocultar a alguien que sí trabaja es
+    // peor que mostrar de más. Equipo sigue listando a todos, que para eso es.
+    const usuarios = todosUsers.filter(u=>asesorUids.includes(u.uid) && u.rol!=='dueno');
 
     _admPresenciaCache = presencia;
     _admUsuariosCache = usuarios;
@@ -2590,8 +2595,10 @@ function _admMostrarSinEmpresas(){
 
 function _admCargarDashboardLegacy(){
   if(_admPresenceListener){ _db.ref('presence').off('value', _admPresenceListener); _admPresenceListener = null; }
-  function _procesarDatos(presencia, usuarios){
+  function _procesarDatos(presencia, usuariosTodos){
     _admPresenciaCache = presencia;
+    // Solo asesores, igual que en el camino normal: el tablero mide operación.
+    const usuarios = (usuariosTodos||[]).filter(u=>u && u.rol!=='dueno');
     // Legacy: fallback user no aplica con Firebase Auth
     _admUsuariosCache = usuarios;
     // Camino legacy (admin sin admin_empresas): no hay tienda con la que
