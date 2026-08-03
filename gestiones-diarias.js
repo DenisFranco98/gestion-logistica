@@ -26,7 +26,9 @@ function _gdCargar(){
   document.getElementById('gd-mes-label').textContent=label.charAt(0).toUpperCase()+label.slice(1);
   document.getElementById('gd-save-st').textContent='';
   if(typeof _db==='undefined'||!window._currentUsername){_gdData={};_gdRenderTabla();_gdRenderResumen();return;}
-  _leerTienda(_gdBase).then(snap=>{
+  // _leerGD y no _leerTienda: acá cambiaron DOS claves (la tienda por empresaId
+  // y el asesor por uid), y hay que probar las combinaciones viejas.
+  _leerGD(_gdBase).then(snap=>{
     const d=snap.val()||{};
     _gdData=d.dias||{};
     _gdNotaEditando=null; // cambiar de mes cancela cualquier edición en curso
@@ -532,7 +534,10 @@ function _consoSetDia(dia){
 
 function _consoCargar(){
   if(typeof _db==='undefined'||!window._currentUsername){_consoData={};_consoRender();return;}
-  _leerTienda(tk=>_gdBase(tk)+'/consolidado/'+_consoDia).then(snap=>{
+  // Primero se migra el nodo del mes completo y recién después se lee el
+  // subnodo: leer /consolidado/{dia} con la lectura tolerante habría copiado
+  // ese día suelto a la clave nueva y dejado el resto del historial atrás.
+  _leerGD(_gdBase).then(()=>_db.ref(_gdBasePath()+'/consolidado/'+_consoDia).once('value')).then(snap=>{
     _consoData=snap.val()||{};
     _consoRender();
   });
@@ -934,8 +939,10 @@ function _novEditar(id){
 // novedad. Se leen ANTES de borrar, porque después el registro ya no está.
 function _novGestionBorrada(n, sol){
   const keyDe=typeof _gdKey==='function'?_gdKey:_gdKeyFallback;
+  // Mismo criterio que _novGestionesDe: uid si está, si no el slug del nombre.
+  const ak=(sol&&sol.asesorUid)||keyDe((sol&&sol.asesor)||(n&&n.asesor)||'');
   return { dia: (sol&&sol.dia)||(n&&n.dia)||new Date().getDate(),
-           ak: keyDe((sol&&sol.asesor)||(n&&n.asesor)||'') || _gdAK() };
+           ak: ak && ak!=='_' ? ak : _gdAK() };
 }
 async function _novDelSol(id, solKey){
   if(!await _mConfirmP('¿Eliminar esta evidencia?','La gestión deja de contar para el asesor que la registró. Esta acción no se puede deshacer.','danger'))return;
@@ -1011,7 +1018,10 @@ async function _novGuardar(){
     // una evidencia la mueva de fila. Nunca toISOString: acá son fechas locales.
     const gestorNom=window.getLoginAsesor?window.getLoginAsesor():'';
     const solMes=fechaBase.getFullYear()+'-'+String(fechaBase.getMonth()+1).padStart(2,'0');
-    const meta={asesor:gestorNom, dia:fechaBase.getDate(), mes:solMes};
+    // asesorUid es la identidad real: el nombre puede cambiar y entonces la
+    // gestión dejaría de atribuirse a la misma persona. El nombre se guarda
+    // igual para poder mostrarlo sin tener que resolver el uid.
+    const meta={asesor:gestorNom, asesorUid:_gdAK(), dia:fechaBase.getDate(), mes:solMes};
     // Build solution object
     let solObj=null;
     if(_novTipoActivo==='img'){
@@ -1105,9 +1115,10 @@ async function _novSyncGD(dia, asesorKey){
   // _leerTienda sobre el nodo completo primero: si el mes aún vive en la clave
   // vieja, lo migra entero — leer solo /dias/{dia} habría copiado ese día suelto
   // y dejado el resto del historial atrás.
-  const rutaAsesor=tk=>_gdBase(tk, ak);
-  const base=rutaAsesor();
-  await _leerTienda(rutaAsesor);
+  const base=_gdBase(undefined, ak);
+  // Solo se migra cuando es el nodo propio: _leerGD resuelve las claves de la
+  // sesión actual y no sabría cuál era el nombre viejo de otro asesor.
+  if(esPropio) await _leerGD(_gdBase);
   const snap=await _db.ref(base+'/dias/'+dia).once('value');
   const dayData=snap.val()||{};
   dayData.soluc=soluc; dayData.devuelt=devuelt;

@@ -690,6 +690,89 @@ window._migrarAsesor = function(nombreTienda, nombreViejo, nombreNuevo, opts){
   }).catch(e=>console.error('[MIGRAR asesor] falló (¿sesión de admin?):',e));
 };
 
+// Pasa las Gestiones Diarias de la clave por nombre a la clave por uid.
+// Antes la carpeta de cada asesor era _gdKey(su nombre): renombrarlo partía su
+// historial, y dos homónimos en la misma tienda compartían carpeta sin aviso.
+// El uid no cambia nunca, aunque cambien nombre, correo o contraseña.
+//
+// La correspondencia nombre → uid se resuelve cruzando contra users/. Si dos
+// cuentas comparten el mismo nombre, la carpeta es ambigua (sus datos ya venían
+// mezclados) y NO se migra: se reporta para resolverla a mano.
+//
+// Nunca pisa un día que ya exista en el destino, y no borra el origen.
+//
+// Ejecutar desde la consola como admin:
+//   _migrarAsesoresAUid()                 → simulación, no escribe nada
+//   _migrarAsesoresAUid({aplicar:true})   → aplica
+window._migrarAsesoresAUid = function(opts){
+  const aplicar=!!(opts||{}).aplicar;
+  console.log('%c[MIGRAR a uid] leyendo...'+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
+  Promise.all([
+    _db.ref('users').once('value'),
+    _db.ref('empresas').once('value'),
+    _db.ref('gestiones_diarias').once('value')
+  ]).then(([su,se,sg])=>{
+    const users=su.val()||{}, empresas=se.val()||{}, gd=sg.val()||{};
+    // slug del nombre → uids que lo producen
+    const porSlug={};
+    Object.entries(users).forEach(([uid,u])=>{
+      const k=_gdKey((u||{}).asesor||'');
+      if(!k||k==='_') return;
+      (porSlug[k]=porSlug[k]||[]).push(uid);
+    });
+    const mover=[], ambiguos=[], sinDuenio=[], conflictos=[];
+    Object.entries(gd).forEach(([tid,meses])=>{
+      const tNombre=(empresas[tid]||{}).nombre||tid;
+      Object.entries(meses||{}).forEach(([mes,asesores])=>{
+        Object.entries(asesores||{}).forEach(([clave,nodo])=>{
+          if(users[clave]) return;                       // ya es un uid: nada que hacer
+          const cands=porSlug[clave]||[];
+          const dias=Object.keys((nodo||{}).dias||{}).length;
+          if(!cands.length){ sinDuenio.push({tienda:tNombre,mes,carpeta:clave,dias,nombreGuardado:(nodo||{})._nombre||''}); return; }
+          if(cands.length>1){ ambiguos.push({tienda:tNombre,mes,carpeta:clave,dias,
+            cuentas:cands.map(x=>(users[x]||{}).email||x).join(' · ')}); return; }
+          const uid=cands[0];
+          const destino=(asesores||{})[uid]||{};
+          Object.entries((nodo||{}).dias||{}).forEach(([dia,d])=>{
+            if((destino.dias||{})[dia]) conflictos.push({tienda:tNombre,mes,dia:+dia,carpeta:clave});
+            else mover.push({tienda:tNombre,mes,dia:+dia,de:clave,a:uid,
+              asesor:(users[uid]||{}).asesor||uid,
+              _path:'gestiones_diarias/'+tid+'/'+mes+'/'+uid+'/dias/'+dia,_val:d});
+          });
+          if(!destino._nombre) mover.push({tienda:tNombre,mes,dia:'—',de:clave,a:uid,
+            asesor:(users[uid]||{}).asesor||uid,
+            _path:'gestiones_diarias/'+tid+'/'+mes+'/'+uid+'/_nombre',_val:(users[uid]||{}).asesor||''});
+        });
+      });
+    });
+    if(ambiguos.length){
+      console.group('%c⚠ Carpetas de nombre compartido por varias cuentas ('+ambiguos.length+') — NO se migran','color:#b91c1c;font-weight:bold');
+      console.table(ambiguos);
+      console.log('Sus gestiones ya venían mezcladas entre esas personas. Hay que repartirlas a mano antes de migrar.');
+      console.groupEnd();
+    }
+    if(sinDuenio.length){
+      console.group('%c⚠ Carpetas sin cuenta que las reclame ('+sinDuenio.length+')','color:#b45309;font-weight:bold');
+      console.table(sinDuenio);
+      console.log('El asesor fue renombrado o eliminado. Si sabés de quién son, usá _migrarAsesor().');
+      console.groupEnd();
+    }
+    if(conflictos.length){
+      console.group('%c⚠ Días que ya existen bajo el uid ('+conflictos.length+') — no se tocan','color:#b45309;font-weight:bold');
+      console.table(conflictos); console.groupEnd();
+    }
+    if(!mover.length){ console.log('%cNada que migrar.','color:#15803d;font-weight:bold'); return; }
+    console.group('%cDías a migrar ('+mover.filter(m=>m.dia!=='—').length+')','color:#0e7490;font-weight:bold');
+    console.table(mover.filter(m=>m.dia!=='—').map(({tienda,mes,dia,asesor,de})=>({tienda,mes,dia,asesor,carpetaVieja:de})));
+    console.groupEnd();
+    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para aplicar: _migrarAsesoresAUid({aplicar:true})','font-weight:bold'); return; }
+    const updates={}; mover.forEach(m=>{ updates[m._path]=m._val; });
+    _db.ref().update(updates)
+      .then(()=>console.log('%c[MIGRAR a uid] listo: '+mover.length+' nodos copiados. Las carpetas viejas quedan intactas.','font-weight:bold;color:#15803d'))
+      .catch(e=>console.error('  ✗',e));
+  }).catch(e=>console.error('[MIGRAR a uid] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
@@ -2772,8 +2855,16 @@ function _mkEnliveCard(u, p, isOnline){
   // Antes la tarjeta salía de presence (solo se escribe al gestionar en el
   // kanban de Gestión Logística), así que a quien trabaja en Gestiones Diarias
   // le aparecía todo en cero aunque llevara el día entero trabajando.
+  // El nodo de gestiones puede estar bajo el uid (clave nueva) o bajo el slug
+  // del nombre (lo anterior a la migración): se suman las dos, porque un asesor
+  // puede tener parte del mes en cada una hasta que se corra _migrarAsesoresAUid.
   const keyDe=typeof _gdKey==='function'?_gdKey:_gdKeyFallback;
-  const g=(_admGDHoy||{})[keyDe(u.asesor||p.asesor||'')]||{};
+  const gNuevo=(_admGDHoy||{})[u.uid]||{};
+  const gViejo=(_admGDHoy||{})[keyDe(u.asesor||p.asesor||'')]||{};
+  const g={};
+  ['conf','soluc','devuelt','carri','noRecup','wpp','cancel','total'].forEach(k=>{
+    g[k]=(gNuevo[k]||0)+(u.uid!==keyDe(u.asesor||p.asesor||'')?(gViejo[k]||0):0);
+  });
   const gConf=g.conf||0, gSoluc=g.soluc||0, gCarri=g.carri||0, gWpp=g.wpp||0, gCancel=g.cancel||0;
   // Avance sobre el kanban de Gestión Logística: cuántos pedidos del Excel le
   // faltan y cuántos cerró. Vienen de presence, que los actualiza en vivo.
@@ -5234,7 +5325,21 @@ function _gdTKLegacy(){ return _gdKey(window.getLoginTienda?window.getLoginTiend
 function _gdTK(){
   return window._currentTiendaId || localStorage.getItem('lgs_empresa_id') || _gdTKLegacy();
 }
-function _gdAK(){ return _gdKey(window.getLoginAsesor?window.getLoginAsesor():'_'); }
+// Misma historia que con las tiendas, ahora con las personas. La carpeta del
+// asesor era _gdKey(su nombre), así que:
+//   · renombrarlo partía su historial en dos (y en el consolidado aparecía
+//     como dos personas con la mitad de los números cada una);
+//   · dos personas homónimas en la misma tienda COMPARTÍAN carpeta y sus
+//     gestiones se sumaban entre sí, sin ningún aviso.
+// La clave canónica pasa a ser el uid de Firebase Auth, que no cambia nunca
+// aunque cambien nombre, correo o contraseña.
+//   _gdAK()       → clave de ESCRITURA (uid; cae al slug del nombre si aún no
+//                   hay sesión resuelta, para no escribir en un nodo suelto)
+//   _gdAKLegacy() → clave vieja por nombre, solo para leer/migrar lo anterior
+function _gdAKLegacy(){ return _gdKey(window.getLoginAsesor?window.getLoginAsesor():'_'); }
+function _gdAK(){
+  return window._currentUsername || localStorage.getItem('lgs_user') || _gdAKLegacy();
+}
 
 // Guard de escritura. Sin tienda resuelta, _gdTK() cae en '_' (el valor que
 // devuelve _gdKey('')) y los datos terminan en un nodo que ninguna tienda puede
@@ -5270,6 +5375,38 @@ function _leerTienda(rutaFn, q){
     });
   });
 }
+// Igual que _leerTienda pero para nodos que además cuelgan del asesor, o sea
+// gestiones_diarias. Hay dos claves que cambiaron en momentos distintos (la
+// tienda por empresaId, el asesor por uid), así que se prueban en orden de más
+// nuevo a más viejo y se copia al destino nuevo lo primero que aparezca:
+//   1. tienda nueva + asesor nuevo   ← donde se escribe siempre
+//   2. tienda nueva + asesor viejo   ← ya migró la tienda, falta la persona
+//   3. tienda vieja + asesor viejo   ← no migró ninguna de las dos
+// La copia es obligatoria: sin ella, la primera escritura crearía la ruta nueva
+// con un solo día y el resto del historial dejaría de verse. El origen no se
+// borra, así que se puede revisar y revertir.
+//   rutaFn: (tk, ak) => 'gestiones_diarias/'+tk+'/'+mes+'/'+ak
+function _leerGD(rutaFn){
+  const tkN=_gdTK(), tkV=_gdTKLegacy(), akN=_gdAK(), akV=_gdAKLegacy();
+  const destino=rutaFn(tkN, akN);
+  const alternativas=[rutaFn(tkN, akV), rutaFn(tkV, akV)].filter(r=>r!==destino);
+  return _db.ref(destino).once('value').then(sn=>{
+    if(sn.exists()||!alternativas.length) return sn;
+    // Probar las viejas en orden hasta encontrar una con datos.
+    const probar=i=>{
+      if(i>=alternativas.length) return Promise.resolve(sn);
+      return _db.ref(alternativas[i]).once('value').then(sv=>{
+        if(!sv.exists()) return probar(i+1);
+        console.log('[GD] migrando '+alternativas[i]+' → '+destino);
+        return _db.ref(destino).set(sv.val())
+          .then(()=>_db.ref(destino).once('value'))
+          .catch(e=>{ console.warn('[GD] no se pudo migrar '+alternativas[i]+' → '+destino, e); return sv; });
+      });
+    };
+    return probar(0);
+  });
+}
+
 // Lee las evidencias/soluciones de un registro de novedad (esquema nuevo
 // soluciones/{key} o el viejo sol1/2/3) — usada por Gestión Logística y GD.
 function _novGetSols(n){
@@ -5303,7 +5440,10 @@ function _novGestionesDe(n, mes){
     .filter(s=>!mes || !s.mes || s.mes===mes)
     .map(s=>({
       estado: s.estado,
-      asesorKey: keyDe(s.asesor || (n||{}).asesor || ''),
+      // El uid manda: es lo único que no cambia si renombran a la persona. Las
+      // evidencias anteriores a este cambio no lo traen y caen al slug del
+      // nombre, que es la clave con la que se guardaron en su momento.
+      asesorKey: s.asesorUid || keyDe(s.asesor || (n||{}).asesor || ''),
       dia: s.dia || (n||{}).dia || 0
     }));
 }
