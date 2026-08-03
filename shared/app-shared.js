@@ -2748,14 +2748,24 @@ function _cargarEquipoGlobal(){
     const empresaAsesores = snapEAse.val()||{};
     const users = snapUsers.val()||{};
     _admPresenciaCache = snapPresence.val()||{};
-    const todos = [];
+    // Una entrada POR PERSONA, con la lista de sus tiendas. Antes se generaba
+    // una por cada par (usuario × tienda), así que alguien con 3 tiendas salía
+    // 3 veces con el mismo correo y parecían cuentas distintas.
+    const porUid = new Map();
     empresasIds.forEach(empId=>{
       const emp = empresas[empId]; if(!emp) return;
       Object.keys(empresaAsesores[empId]||{}).forEach(uid=>{
         const u = users[uid]||{};
-        todos.push({ uid, asesor:u.asesor||u.email||uid, email:u.email||'', rol:u.rol||'asesor', tiendaId:empId, tiendaNombre:emp.nombre||empId });
+        if(!porUid.has(uid)){
+          porUid.set(uid, { uid, asesor:u.asesor||u.email||uid, email:u.email||'',
+                            rol:u.rol||'asesor', tiendaTexto:u.tienda||'',
+                            tiendaIds:[], tiendaNombres:[] });
+        }
+        const e = porUid.get(uid);
+        if(!e.tiendaIds.includes(empId)){ e.tiendaIds.push(empId); e.tiendaNombres.push(emp.nombre||empId); }
       });
     });
+    const todos = [...porUid.values()];
     window._admEquipoTodos = todos;
     // Poblar selector de tienda
     const sel = document.getElementById('equipo-filter-tienda');
@@ -2797,27 +2807,39 @@ function _buildEquipoList(){
     const p=presencia[u.uid]||{};
     const isOnline=_estaOnline(p);
     const name=isOnline&&p.asesor?p.asesor:u.asesor;
-    if(fTienda && u.tiendaId!==fTienda) return;
+    // Los filtros y la búsqueda miran TODAS sus tiendas, no una sola.
+    if(fTienda && !u.tiendaIds.includes(fTienda)) return;
     if(fRol && u.rol!==fRol) return;
     if(fEstado==='online'&&!isOnline) return;
     if(fEstado==='offline'&&isOnline) return;
-    if(q&&!name.toLowerCase().includes(q)&&!u.email.toLowerCase().includes(q)&&!u.tiendaNombre.toLowerCase().includes(q)) return;
+    const tiendasTxt=u.tiendaNombres.join(', ');
+    if(q&&!name.toLowerCase().includes(q)&&!u.email.toLowerCase().includes(q)&&!tiendasTxt.toLowerCase().includes(q)) return;
     visible++;
     const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
     const cont=p.contestaron||0,noCont=p.noContestaron||0,wa=p.waEnviados||0,fin=p.finalizados||0;
-    const statsHtml=isOnline
-      ?'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">'+
-        (cont?'<span style="background:#1e40af15;color:#60a5fa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">✅ '+cont+'</span>':'')+
-        (noCont?'<span style="background:#7f1d1d15;color:#f87171;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">❌ '+noCont+'</span>':'')+
-        (wa?'<span style="background:#4c1d9515;color:#a78bfa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">📱 '+wa+'</span>':'')+
-        (fin?'<span style="background:#14532d15;color:#4ade80;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">🏁 '+fin+'</span>':'')+
-        (!cont&&!noCont&&!wa&&!fin?'<span style="color:var(--text-3);font-size:.6rem;">Sin gestiones</span>':'')+
-        '</div>':''
-    ;
+    // Sin el "Sin gestiones": ocupaba una línea para decir que no hay nada.
+    const chips=[
+      cont?'<span style="background:#1e40af15;color:#60a5fa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">✅ '+cont+'</span>':'',
+      noCont?'<span style="background:#7f1d1d15;color:#f87171;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">❌ '+noCont+'</span>':'',
+      wa?'<span style="background:#4c1d9515;color:#a78bfa;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">📱 '+wa+'</span>':'',
+      fin?'<span style="background:#14532d15;color:#4ade80;border-radius:5px;padding:1px 7px;font-size:.6rem;font-weight:700;">🏁 '+fin+'</span>':''
+    ].filter(Boolean).join('');
+    const statsHtml=(isOnline&&chips)
+      ?'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">'+chips+'</div>':'';
+    // Tiendas separadas por comas. Si está conectado, la de su sesión va
+    // primero y resaltada: es donde está trabajando ahora, y con varias
+    // asignadas es el dato que importa de un vistazo.
+    const activa=isOnline?(p.tienda||''):'';
+    const resto=u.tiendaNombres.filter(n=>norm(n)!==norm(activa));
+    const tiendasHtml=activa
+      ? '<b style="color:#10b981;font-weight:800;">'+esc(activa)+'</b>'+(resto.length?'<span style="opacity:.7;">, '+esc(resto.join(', '))+'</span>':'')
+      : esc(u.tiendaNombres.join(', ')||u.tiendaTexto||'—');
     const safeU=u.uid.replace(/'/g,"\\'");
     const safeEmail=u.email.replace(/'/g,"\\'");
     const safeA=u.asesor.replace(/'/g,"\\'");
-    const safeT=u.tiendaNombre.replace(/'/g,"\\'");
+    // El modal de edición resuelve las tiendas con checkboxes desde
+    // user_tiendas; este campo es el texto legacy de users/{uid}.tienda.
+    const safeT=(u.tiendaTexto||u.tiendaNombres[0]||'').replace(/'/g,"\\'");
     const row=document.createElement('div');
     row.className='adm-user-row'+(isOnline?' online':'');
     row.innerHTML=
@@ -2826,7 +2848,7 @@ function _buildEquipoList(){
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
           '<div>'+
             '<div class="adm-user-row-name">'+name+(u.email&&name!==u.email?'<span style="color:var(--text-3);font-size:.65rem;font-weight:400;margin-left:6px;">'+u.email+'</span>':'')+'</div>'+
-            '<div class="adm-user-row-meta">🏪 '+u.tiendaNombre+' · '+(u.rol==='dueno'?'<span style="color:#7c3aed;font-weight:700;">👑 Dueño</span>':'<span style="color:var(--info);font-weight:700;">👤 Asesor</span>')+'</div>'+
+            '<div class="adm-user-row-meta">🏪 '+tiendasHtml+' · '+(u.rol==='dueno'?'<span style="color:#7c3aed;font-weight:700;">👑 Dueño</span>':'<span style="color:var(--info);font-weight:700;">👤 Asesor</span>')+'</div>'+
           '</div>'+
           '<div style="font-size:.63rem;font-weight:600;color:'+(isOnline?'#10b981':'#94a3b8')+'">'+
             (isOnline?'🟢 En línea'+(tiempoActivo?' · '+tiempoActivo:''):(p.lastSeen?'⚫ '+_fmtTiempo(p.lastSeen):'Sin conexión'))+
