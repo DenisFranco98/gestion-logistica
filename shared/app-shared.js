@@ -2209,6 +2209,9 @@ function _admTab(tab){
     const btn = document.getElementById('tab-btn-'+t);
     if(btn) btn.classList.toggle('active', t===tab);
   });
+  // Al volver a En Vivo se refresca en el acto: mientras estuvo oculto los ticks
+  // no corrieron, así que sin esto se vería el pulso de cuando se salió del tab.
+  if(tab==='enlive'){ _admRepintarPresencia(); if(_admTarjetasIds.length) _admCargarTarjetas(_admTarjetasIds); }
   if(tab==='equipo') _cargarEquipoGlobal();
   if(tab==='analitica') _anlInicializar();
   if(tab==='ranking') _rnkInicializar();
@@ -2471,8 +2474,19 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
 //     la tienda para el día de hoy. Es lo que el equipo carga a mano más lo que
 //     se deriva de las novedades.
 let _admTarjetasTick = null;
+let _admTarjetasIds = [];
+// El tab En Vivo es el único que muestra estas tarjetas y las de asesores: si
+// está oculto no hay nada que pintar, y refrescarlo sería gastar lecturas de
+// Firebase para nadie.
+function _admEnliveVisible(){
+  const panel=document.getElementById('admin-panel');
+  if(!panel || !panel.classList.contains('visible')) return false;
+  const tab=document.getElementById('adm-tab-enlive');
+  return !!tab && tab.style.display!=='none';
+}
 function _admCargarTarjetas(empresaIds){
   const ids=(empresaIds||[]).filter(x=>x&&x!=='__todas__');
+  _admTarjetasIds = ids;   // para poder refrescar al volver al tab
   const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
   if(!ids.length){ ['adm-stat-pendconf','adm-stat-novedad'].forEach(i=>set(i,'—')); return; }
 
@@ -2517,16 +2531,14 @@ function _admCargarTarjetas(empresaIds){
   // y no hay listener sobre esas rutas (serían lecturas de todo el mes).
   if(_admTarjetasTick) clearInterval(_admTarjetasTick);
   _admTarjetasTick = setInterval(()=>{
-    const panel=document.getElementById('admin-panel');
-    if(panel && panel.classList.contains('visible')) _admCargarTarjetas(ids);
+    if(_admEnliveVisible()) _admCargarTarjetas(ids);
   }, 60000);
 }
 
 function _admRepintarPresencia(){
   const uids = _admAsesorUidsCache;
   if(!uids) return;
-  const panel = document.getElementById('admin-panel');
-  if(!panel || !panel.classList.contains('visible')) return;   // no gastar render si no se ve
+  if(!_admEnliveVisible()) return;   // no gastar render si el tab no se ve
   const usrs = _admUsuariosCache.filter(u=>uids.includes(u.uid));
   // Solo las tarjetas de asesor: las del command bar ya no salen de presence.
   _buildEnliveCards(usrs, _admPresenciaCache);
