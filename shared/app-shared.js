@@ -502,6 +502,73 @@ window._recontarNovedades = function(opts){
   }).catch(e=>console.error('[RECONTAR novedades] falló (¿sesión de admin?):',e));
 };
 
+// Audita de quién son realmente los números de la tabla de Gestión de una
+// tienda. Responde a "¿estas confirmaciones son de esta asesora o de alguien
+// más?", que tiene dos formas posibles de mezclarse:
+//   1. La clave del nodo sale del NOMBRE del asesor (_gdKey), no del uid ni del
+//      correo: dos personas con el mismo nombre comparten fila, y un nombre
+//      vacío cae en la clave '_' donde se acumula todo.
+//   2. _leerTienda copia el nodo entero desde la ruta vieja por nombre de
+//      tienda cuando la nueva (por empresaId) está vacía. Si dos negocios
+//      tienen una tienda con el mismo nombre, una puede heredar el histórico
+//      de la otra.
+// Solo lee, no escribe nada.
+// Ejecutar desde la consola como admin:
+//   _auditGD('PAQUETIN')            → mes actual
+//   _auditGD('PAQUETIN','2026-07')  → un mes concreto
+window._auditGD = function(nombreTienda, mes){
+  const hoy=new Date();
+  const m=mes||(hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0'));
+  const buscado=_gdKey(nombreTienda||'');
+  if(!buscado||buscado==='_'){ console.error('Pasá el nombre de la tienda: _auditGD("PAQUETIN")'); return; }
+  console.log('%c[AUDIT GD] '+nombreTienda+' · '+m,'font-weight:bold');
+  Promise.all([_db.ref('empresas').once('value'),_db.ref('gestiones_diarias').once('value'),_db.ref('users').once('value')])
+  .then(([se,sg,su])=>{
+    const empresas=se.val()||{}, gd=sg.val()||{}, users=su.val()||{};
+    // 1. ¿Cuántas empresas se llaman así?
+    const mismas=Object.entries(empresas).filter(([,e])=>_gdKey((e||{}).nombre||'')===buscado);
+    if(!mismas.length){ console.error('No hay ninguna empresa con ese nombre.'); return; }
+    if(mismas.length>1){
+      console.group('%c⚠ '+mismas.length+' negocios distintos tienen una tienda llamada así','color:#b91c1c;font-weight:bold');
+      console.table(mismas.map(([id,e])=>({empresaId:id,nombre:e.nombre})));
+      console.log('Comparten la ruta vieja gestiones_diarias/'+buscado+'/ — de ahí se pudo copiar historial ajeno.');
+      console.groupEnd();
+    }
+    // 2. Nodos de asesor, en la ruta nueva de cada empresa y en la vieja
+    const suma=d=>{let c=0,t=0;Object.values(d||{}).forEach(x=>{c+=(x.conf||0);
+      t+=(x.conf||0)+(x.cancel||0)+(x.soluc||0)+(x.devuelt||0)+(x.recupCarri||0)+(x.contNoRecup||0)+(x.ventasWpp||0);});return{conf:c,total:t};};
+    const filas=[];
+    const push=(ruta,ak,nodo)=>{
+      const s=suma((nodo||{}).dias);
+      filas.push({ruta, claveAsesor:ak, nombreGuardado:(nodo||{})._nombre||'—', conf:s.conf, totalGestiones:s.total,
+                  dias:Object.keys((nodo||{}).dias||{}).length});
+    };
+    mismas.forEach(([id,e])=>Object.entries(((gd[id]||{})[m])||{}).forEach(([ak,nodo])=>push('nueva · '+(e.nombre||id),ak,nodo)));
+    Object.entries(((gd[buscado]||{})[m])||{}).forEach(([ak,nodo])=>push('VIEJA · '+buscado,ak,nodo));
+    if(!filas.length){ console.log('Sin datos de ese mes.'); return; }
+    console.group('%cNodos de asesor y sus números','color:#0e7490;font-weight:bold');
+    console.table(filas);
+    console.groupEnd();
+    // 3. Personas cuyo nombre colapsa en la misma clave
+    const porClave={};
+    Object.entries(users).forEach(([uid,u])=>{
+      const ak=_gdKey((u||{}).asesor||'');
+      (porClave[ak]=porClave[ak]||[]).push({uid, asesor:(u||{}).asesor||'(vacío)', email:(u||{}).email||'', rol:(u||{}).rol||''});
+    });
+    const claves=new Set(filas.map(f=>f.claveAsesor));
+    const choques=[...claves].filter(ak=>(porClave[ak]||[]).length>1);
+    if(choques.length){
+      console.group('%c⚠ Personas distintas que comparten la misma clave de asesor','color:#b91c1c;font-weight:bold');
+      choques.forEach(ak=>{ console.log('clave "'+ak+'":'); console.table(porClave[ak]); });
+      console.log('Todas escriben en el MISMO nodo: sus números están sumados entre sí.');
+      console.groupEnd();
+    } else {
+      console.log('%c✔ Ninguna clave de asesor de esta tienda la comparten dos personas.','color:#15803d;font-weight:bold');
+    }
+    if(claves.has('_')) console.warn('Hay un nodo con clave "_": son gestiones guardadas sin nombre de asesor en sesión.');
+  }).catch(e=>console.error('[AUDIT GD] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
