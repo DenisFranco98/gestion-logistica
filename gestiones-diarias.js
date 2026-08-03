@@ -937,8 +937,8 @@ function _novGestionBorrada(n, sol){
   return { dia: (sol&&sol.dia)||(n&&n.dia)||new Date().getDate(),
            ak: keyDe((sol&&sol.asesor)||(n&&n.asesor)||'') || _gdAK() };
 }
-function _novDelSol(id, solKey){
-  if(!confirm('¿Eliminar esta evidencia?'))return;
+async function _novDelSol(id, solKey){
+  if(!await _mConfirmP('¿Eliminar esta evidencia?','La gestión deja de contar para el asesor que la registró. Esta acción no se puede deshacer.','danger'))return;
   const n=_novData[id]||{};
   const {dia, ak}=_novGestionBorrada(n, (n.soluciones||{})[solKey]);
   _db.ref(_novBasePath()+'/'+id+'/soluciones/'+solKey).remove().then(()=>{
@@ -946,8 +946,8 @@ function _novDelSol(id, solKey){
     _novRender(); _novSyncGD(dia, ak);
   });
 }
-function _novClearSol(id,num){
-  if(!confirm('¿Eliminar evidencia '+num+'?'))return;
+async function _novClearSol(id,num){
+  if(!await _mConfirmP('¿Eliminar evidencia '+num+'?','La gestión deja de contar para el asesor que la registró. Esta acción no se puede deshacer.','danger'))return;
   const n=_novData[id]||{};
   const {dia, ak}=_novGestionBorrada(n, n['sol'+num]);
   _db.ref(_novBasePath()+'/'+id+'/sol'+num).remove().then(()=>{
@@ -956,10 +956,10 @@ function _novClearSol(id,num){
   });
 }
 
-function _novEliminar(id){
+async function _novEliminar(id){
   const n=_novData[id];
   const guia=n?n.guia:'esta novedad';
-  if(!confirm('¿Eliminar la novedad de guía '+guia+'?\nEsta acción no se puede deshacer.'))return;
+  if(!await _mConfirmP('¿Eliminar la novedad de guía '+guia+'?','Se borra el registro con todas sus evidencias, y esas gestiones dejan de contar. Esta acción no se puede deshacer.','danger'))return;
   // Borrar la novedad borra TODAS sus gestiones: hay que recalcular cada par
   // (asesor, día) que tenía alguna, no solo el día en que se registró.
   const afectados=[];
@@ -1024,7 +1024,7 @@ async function _novGuardar(){
     const _fmtFecha=v=>{if(!v)return'';const d=new Date(v+'T12:00:00');return isNaN(d)?v:d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});};
     if(state.mode==='new'){
       const guia=document.getElementById('nov-m-guia').value.trim();
-      if(!guia){ alert('Ingresa el número de guía'); btn.textContent='Guardar'; btn.disabled=false; return; }
+      if(!guia){ _mAlert('Falta el número de guía','Ingresá el número de guía para registrar la novedad.'); btn.textContent='Guardar'; btn.disabled=false; return; }
       // Una guía = una novedad. Si ya existe, esto no es una novedad nueva sino
       // otra gestión sobre la misma: se cuelga como evidencia del registro que
       // ya está y el historial de esa guía queda completo en un solo lugar. El
@@ -1032,7 +1032,7 @@ async function _novGuardar(){
       const existente=_novBuscarPorGuia(guia);
       if(existente){
         if(!solObj){
-          alert('La guía '+guia+' ya tiene una novedad registrada.\n\nPara sumarle una gestión, adjuntá una imagen o un texto de evidencia.');
+          _mAlert('Esta guía ya tiene una novedad','Para sumarle una gestión a la guía '+guia+', adjuntá una imagen o un texto de evidencia.');
           btn.textContent='Guardar'; btn.disabled=false; return;
         }
         const nEvid=_novGetSols(existente.nov).length+1;
@@ -1058,7 +1058,7 @@ async function _novGuardar(){
       }
     } else if(state.mode==='edit'){
       const guia=document.getElementById('nov-m-guia').value.trim();
-      if(!guia){ alert('Ingresa el número de guía'); btn.textContent='Actualizar'; btn.disabled=false; return; }
+      if(!guia){ _mAlert('Falta el número de guía','Ingresá el número de guía para actualizar la novedad.'); btn.textContent='Actualizar'; btn.disabled=false; return; }
       const fechaValE=document.getElementById('nov-m-fecha').value.trim();
       const updates={
         guia, fecha:_fmtFecha(fechaValE)||fechaValE,
@@ -1068,7 +1068,7 @@ async function _novGuardar(){
       Object.assign(_novData[state.id], updates);
     } else {
       // Agregar nueva evidencia → siempre push a soluciones/
-      if(!solObj){ alert('Agrega una imagen o texto de evidencia'); btn.textContent='Guardar'; btn.disabled=false; return; }
+      if(!solObj){ _mAlert('Falta la evidencia','Adjuntá una imagen o escribí un texto para registrar la gestión.'); btn.textContent='Guardar'; btn.disabled=false; return; }
       const solRef=await _db.ref(_novBasePath()+'/'+state.id+'/soluciones').push(solObj);
       if(!_novData[state.id]) _novData[state.id]={};
       if(!_novData[state.id].soluciones) _novData[state.id].soluciones={};
@@ -1080,7 +1080,7 @@ async function _novGuardar(){
     // evidencia a una novedad de la semana pasada, lo que cambia es mi fila de
     // hoy. Sin evidencia nueva no hubo gestión y no hay nada que recontar.
     if(solObj) _novSyncGD(solObj.dia);
-  } catch(e){ alert('Error al guardar: '+e.message); }
+  } catch(e){ _mAlert('No se pudo guardar', e.message); }
   btn.textContent='Guardar'; btn.disabled=false;
 }
 
@@ -1393,8 +1393,8 @@ function _roAgregar(){
   setTimeout(()=>{ const w=document.getElementById('ro-table-wrap'); if(w)w.scrollTop=w.scrollHeight; },50);
 }
 
-function _roEliminar(id){
-  if(!confirm('¿Eliminar este registro de R.O.?'))return;
+async function _roEliminar(id){
+  if(!await _mConfirmP('¿Eliminar este registro de R.O.?','Esta acción no se puede deshacer.','danger'))return;
   if(typeof _db!=='undefined') _db.ref(_roPath()+'/'+id).remove();
   delete _roData[id];
   _roRender();
@@ -1507,8 +1507,8 @@ function _antSubirComp(id){
   inp.click();
 }
 
-function _antDelComp(id){
-  if(!confirm('¿Quitar el comprobante de pago?'))return;
+async function _antDelComp(id){
+  if(!await _mConfirmP('¿Quitar el comprobante de pago?','Se elimina el archivo adjunto de este anticipo.','danger'))return;
   delete _antData['con'][id].comprobante;
   if(typeof _db!=='undefined')
     _db.ref(_antPath('con')+'/'+id).update({comprobante:null});
@@ -1544,8 +1544,8 @@ function _antAgregar(tipo){
   if(wrap) wrap.scrollTop=wrap.scrollHeight;
 }
 
-function _antEliminar(tipo,id){
-  if(!confirm('¿Eliminar este registro?'))return;
+async function _antEliminar(tipo,id){
+  if(!await _mConfirmP('¿Eliminar este anticipo?','Esta acción no se puede deshacer.','danger'))return;
   if(typeof _db!=='undefined') _db.ref(_antPath(tipo)+'/'+id).remove();
   delete _antData[tipo][id];
   _antRender(tipo);

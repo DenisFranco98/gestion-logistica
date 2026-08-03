@@ -548,7 +548,7 @@ window._sbEstadosToggle=function(){
     <h3 id="modal-confirm-title">¿Confirmar acción?</h3>
     <p id="modal-confirm-msg" style="color:var(--text-2);font-size:.82rem;line-height:1.6;margin-bottom:4px;"></p>
     <div class="adm-modal-btns" style="margin-top:18px;">
-      <button class="adm-modal-btn cancel" onclick="_mConfirmCancel()">Cancelar</button>
+      <button class="adm-modal-btn cancel" id="modal-confirm-cancel" onclick="_mConfirmCancel()">Cancelar</button>
       <button class="adm-modal-btn primary" id="modal-confirm-ok" onclick="_mConfirmOk()">Confirmar</button>
     </div>
   </div>
@@ -1397,8 +1397,11 @@ window._sbEstadosToggle=function(){
 window._PAGINA_MODULO = 'Control Financiero';
 window._gdMostrarModeSelect = function(asesor){
   if(window._currentRol==='asesor'){
-    alert('No tienes acceso a Control Financiero con este perfil.');
-    irAPagina('/');
+    // Se espera a que cierre el aviso antes de navegar: _mAlert no bloquea el
+    // hilo como el alert() del navegador, así que sin el .then() la página se
+    // iría antes de que llegue a leerlo.
+    _mAlert('Sin acceso a Control Financiero','Tu perfil de asesor no tiene acceso a este módulo. Te llevamos al menú principal.')
+      .then(()=>irAPagina('/'));
     return;
   }
   document.getElementById('cf-panel').style.display='flex';

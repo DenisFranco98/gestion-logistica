@@ -1354,7 +1354,7 @@ window._migRecuperar = async function(){
   const oldKey = (document.getElementById('mig-rec-oldkey').value||'').trim();
   const newUid = (document.getElementById('mig-rec-newuid').value||'').trim();
   const log = document.getElementById('mig-rec-log');
-  if(!oldKey||!newUid){ alert('Ingresa la clave antigua y el UID nuevo'); return; }
+  if(!oldKey||!newUid){ _mAlert('Faltan datos','Ingresá la clave antigua y el UID nuevo.'); return; }
   log.style.display='block';
   log.innerHTML = '';
   const _log = msg=>{ log.innerHTML += '• '+msg+'<br>'; log.scrollTop=9999; };
@@ -1420,7 +1420,7 @@ window._migRecuperar = async function(){
   if(Object.keys(eaUpdates).length){ await _db.ref().update(eaUpdates); _log('✅ empresa_asesores actualizado'); }
 
   _log('🎉 Recuperación completada. Datos de "'+oldKey+'" movidos a UID '+newUid);
-  alert('✅ Recuperación completada correctamente');
+  _mAlert('✅ Recuperación completada','Los datos se movieron correctamente al UID nuevo.');
   } catch(err){
     console.error('_migRecuperar error:', err);
     _log('❌ Error: '+(err.message||err));
@@ -1454,12 +1454,13 @@ window._saDesignarSuperAdmin = function(){
 };
 
 window._saQuitarSuperAdmin = function(){
-  if(!confirm('¿Quitar la cuenta Gmail de Super Admin?')) return;
-  _db.ref('config/superAdminUid').remove().then(()=>{
-    toast('✅ Vinculación de Super Admin eliminada');
-    document.getElementById('sa-superadmin-actual').textContent='Sin cuenta Gmail vinculada como Super Admin';
-    document.getElementById('sa-superadmin-email').value='';
-  });
+  _mConfirm('¿Quitar la cuenta Gmail de Super Admin?','Esa cuenta dejará de tener acceso al panel de Super Admin.',()=>{
+    _db.ref('config/superAdminUid').remove().then(()=>{
+      toast('✅ Vinculación de Super Admin eliminada');
+      document.getElementById('sa-superadmin-actual').textContent='Sin cuenta Gmail vinculada como Super Admin';
+      document.getElementById('sa-superadmin-email').value='';
+    });
+  },'danger');
 };
 
 function _superAdmCargar(){
@@ -3456,13 +3457,14 @@ function _admAgregarCoadmin(uid){
 }
 
 function _admQuitarCoadmin(uid){
-  if(!confirm('¿Quitar el acceso de este administrador a tus tiendas?'))return;
-  const updates={};
-  _admCoadminMisIds.forEach(empId=>{ updates['admin_empresas/'+uid+'/'+empId]=null; });
-  _db.ref().update(updates).then(()=>{
-    toast('↩️ Acceso removido');
-    _admCargarCoadmins();
-  }).catch(e=>toast('⚠️ Error: '+e.message));
+  _mConfirm('¿Quitar el acceso de este administrador?','Dejará de ver todas tus tiendas. Podés volver a darle acceso después.',()=>{
+    const updates={};
+    _admCoadminMisIds.forEach(empId=>{ updates['admin_empresas/'+uid+'/'+empId]=null; });
+    _db.ref().update(updates).then(()=>{
+      toast('↩️ Acceso removido');
+      _admCargarCoadmins();
+    }).catch(e=>toast('⚠️ Error: '+e.message));
+  },'danger');
 }
 
 function _admNegocioAplicarHeader(n){
@@ -3949,23 +3951,60 @@ window._cambiarEmpresa = function(empresaId){
 };
 
 // ===== MODALES UNIVERSALES =====
-let _mConfirmCallback = null;
-window._mConfirm = function(titulo, msg, cb, tipo){
-  _mConfirmCallback = cb;
+// Reemplazan a confirm()/alert() del navegador, que rompen la estética de la
+// app (el cuadro gris del sistema con "redking-tulogistica.com dice") y además
+// bloquean el hilo. Usar SIEMPRE estos, nunca los nativos.
+let _mConfirmCallback = null, _mCancelCallback = null;
+window._mConfirm = function(titulo, msg, cb, tipo, onCancel){
+  _mConfirmCallback = cb; _mCancelCallback = onCancel||null;
   document.getElementById('modal-confirm-title').textContent = titulo;
   document.getElementById('modal-confirm-msg').textContent = msg;
   const btn = document.getElementById('modal-confirm-ok');
+  const btnCancel = document.getElementById('modal-confirm-cancel');
   btn.style.background = tipo==='danger' ? '#dc2626' : '#1e293b';
   btn.textContent = tipo==='danger' ? 'Eliminar' : 'Confirmar';
+  // 'aviso' = un solo botón, el equivalente de alert()
+  if(btnCancel) btnCancel.style.display = tipo==='aviso' ? 'none' : '';
+  if(tipo==='aviso') btn.textContent = 'Entendido';
   document.getElementById('modal-confirm').classList.add('open');
+  // El foco arranca en Cancelar cuando la acción es destructiva, para que un
+  // Enter de más no borre nada; en los avisos y confirmaciones normales va al
+  // botón principal. Sin esto el teclado quedaba fuera del diálogo.
+  setTimeout(()=>{ const f = (tipo==='danger' && btnCancel && btnCancel.style.display!=='none') ? btnCancel : btn; if(f) f.focus(); },30);
 };
+// Escape cancela y el clic en el fondo también, como en cualquier diálogo — y
+// como hacía el confirm() del navegador. Se registra una sola vez.
+if(!window._mConfirmKeysReady){
+  window._mConfirmKeysReady = true;
+  document.addEventListener('keydown', e=>{
+    const m = document.getElementById('modal-confirm');
+    if(!m || !m.classList.contains('open')) return;
+    if(e.key==='Escape'){ e.preventDefault(); window._mConfirmCancel(); }
+  });
+  document.addEventListener('click', e=>{
+    const m = document.getElementById('modal-confirm');
+    if(!m || !m.classList.contains('open')) return;
+    if(e.target===m) window._mConfirmCancel();   // solo el backdrop, no la tarjeta
+  });
+}
 window._mConfirmOk = function(){
   document.getElementById('modal-confirm').classList.remove('open');
+  _mCancelCallback = null;
   if(_mConfirmCallback){ _mConfirmCallback(); _mConfirmCallback=null; }
 };
 window._mConfirmCancel = function(){
   document.getElementById('modal-confirm').classList.remove('open');
   _mConfirmCallback = null;
+  if(_mCancelCallback){ _mCancelCallback(); _mCancelCallback=null; }
+};
+// Versiones con Promise: dejan reemplazar confirm()/alert() sin dar vuelta la
+// función que los llama —  if(!await _mConfirmP(...)) return;  se lee igual que
+// el  if(!confirm(...)) return;  que había antes.
+window._mConfirmP = function(titulo, msg, tipo){
+  return new Promise(res=>_mConfirm(titulo, msg, ()=>res(true), tipo, ()=>res(false)));
+};
+window._mAlert = function(titulo, msg){
+  return new Promise(res=>_mConfirm(titulo, msg, ()=>res(), 'aviso', ()=>res()));
 };
 
 // ===== MODAL DETALLE ASESOR EN VIVO =====
@@ -4313,7 +4352,7 @@ window._bordVerDetalle = function(key){
   try{
     const mapa = window._bordResultadosMapa||{};
     const r = mapa[key];
-    if(!r){alert('No se encontró la orden: '+key);return;}
+    if(!r){_mAlert('Orden no encontrada','No se encontró la orden: '+key);return;}
     const modal = document.getElementById('bord-modal');
     const body = document.getElementById('bord-modal-body');
     document.getElementById('bord-modal-title').textContent = '📦 '+(r.guia||key);
@@ -4321,7 +4360,7 @@ window._bordVerDetalle = function(key){
     modal.style.display = 'flex';
     try{ body.innerHTML = _bordRenderDetalle(r); }
     catch(e2){ body.innerHTML='<div style="color:var(--danger);padding:16px;font-size:.82rem;">❌ Error al renderizar: '+e2.message+'<br><pre style="margin-top:8px;font-size:.7rem;color:var(--text-3);white-space:pre-wrap;">'+e2.stack+'</pre></div>'; }
-  }catch(e){alert('Error abriendo detalle: '+e.message);}
+  }catch(e){_mAlert('No se pudo abrir el detalle', e.message);}
 };
 
 function _bordRenderDetalle(r){
@@ -4560,7 +4599,7 @@ function _gdadmActualizarLabel(){
 function _gdadmCargar(){
   const mes=document.getElementById('gdadm-mes').value;
   const tiendas=_gdadmTiendasDisponibles.filter(t=>_gdadmTiendasSel.has(t.key));
-  if(!tiendas.length||!mes){alert('Selecciona al menos una tienda y un mes');return;}
+  if(!tiendas.length||!mes){_mAlert('Faltan filtros','Seleccioná al menos una tienda y un mes.');return;}
   const el=document.getElementById('gdadm-content');
   el.innerHTML='<div style="padding:20px;color:var(--text-3);font-size:.78rem;">Cargando...</div>';
   Promise.all(tiendas.map(t=>

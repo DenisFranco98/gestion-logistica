@@ -1122,6 +1122,16 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 /* Modales */
 .adm-modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10001;align-items:center;justify-content:center;backdrop-filter:blur(8px);}
 .adm-modal-bg.open{display:flex;}
+/* El confirm/alert de la plataforma reemplaza a los nativos del navegador, así
+   que tiene que poder salir por encima de CUALQUIER cosa: se dispara desde
+   dentro del modal de novedades (99999) y del visor de evidencias (999999). Con
+   el z-index de .adm-modal-bg (10001) quedaba tapado y parecía que el botón no
+   hacía nada. */
+#modal-confirm{z-index:1000001;}
+/* Varios mensajes traen saltos de línea (venían de textos escritos para el
+   confirm() nativo, que sí los respeta). Con textContent y sin esto se veían
+   como un párrafo corrido. */
+#modal-confirm-msg{white-space:pre-line;}
 .adm-modal{background:var(--bg-card);border-radius:var(--radius-lg);padding:26px;width:100%;max-width:380px;border:1.5px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.15);}
 .adm-modal h3{color:var(--text-1);font-size:.95rem;font-weight:800;margin-bottom:18px;}
 .adm-field{margin-bottom:13px;}

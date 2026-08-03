@@ -1948,7 +1948,7 @@ function _cfSetCogsUsar(fuente){
 }
 
 function _cfAplicarTodo(btn){
-  if(!_cfExtracted){alert('Primero analiza los archivos.');return;}
+  if(!_cfExtracted){_mAlert('Falta analizar','Primero analizá los archivos para poder aplicar los datos.');return;}
   if(!btn)btn=document.getElementById('cf-aplicar-btn');
   const btnHTMLOrig=btn?btn.innerHTML:'';
   if(btn){
@@ -2050,8 +2050,8 @@ function _cfLimpiarOrd(){
   const r=document.getElementById('cf-ord-result');if(r)r.innerHTML='';
   _cfRenderOrdenes();
 }
-function _cfResetCodCostos(){
-  if(!confirm('¿Limpiar COD y Fletes/COGS del Excel? Solo se borran esos valores. ChateaPro y Otros Costos se conservan.'))return;
+async function _cfResetCodCostos(){
+  if(!await _mConfirmP('¿Limpiar COD y Fletes/COGS del Excel?','Solo se borran esos valores. ChateaPro y Otros Costos se conservan.','danger'))return;
   _cfMD.cod={entregados:{num:0,monto:0},enProceso:{num:0,monto:0},devueltos:{num:0,monto:0},cancelados:{num:0}};
   if(!_cfMD.costos)_cfMD.costos={};
   _cfMD.costos.fleteEntregados=0;_cfMD.costos.fleteEnProceso=0;
