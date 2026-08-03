@@ -2826,14 +2826,14 @@ function _buildEquipoList(){
     ].filter(Boolean).join('');
     const statsHtml=(isOnline&&chips)
       ?'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;">'+chips+'</div>':'';
-    // Tiendas separadas por comas. Si está conectado, la de su sesión va
-    // primero y resaltada: es donde está trabajando ahora, y con varias
-    // asignadas es el dato que importa de un vistazo.
-    const activa=isOnline?(p.tienda||''):'';
-    const resto=u.tiendaNombres.filter(n=>norm(n)!==norm(activa));
-    const tiendasHtml=activa
-      ? '<b style="color:#10b981;font-weight:800;">'+esc(activa)+'</b>'+(resto.length?'<span style="opacity:.7;">, '+esc(resto.join(', '))+'</span>':'')
-      : esc(u.tiendaNombres.join(', ')||u.tiendaTexto||'—');
+    // Solo la tienda donde está trabajando ahora. Listar también las otras
+    // asignadas era ruido: lo que importa es dónde está, no dónde podría estar.
+    // Desconectado se muestra la última donde estuvo, atenuada — presence.tienda
+    // no se borra al cerrar sesión, así que el dato sigue disponible.
+    const activa=p.tienda||'';
+    const tiendasHtml=isOnline&&activa
+      ? '<b style="color:#10b981;font-weight:800;">'+esc(activa)+'</b>'
+      : '<span style="opacity:.6;">'+esc(activa||u.tiendaTexto||'—')+'</span>';
     const safeU=u.uid.replace(/'/g,"\\'");
     const safeEmail=u.email.replace(/'/g,"\\'");
     const safeA=u.asesor.replace(/'/g,"\\'");
