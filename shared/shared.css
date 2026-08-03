@@ -1039,6 +1039,14 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 .enlive-time{font-size:.58rem;color:var(--text-3);text-align:right;}
 .enlive-score{font-size:1.2rem;font-weight:900;line-height:1;text-align:right;}
 .enlive-score-lbl{font-size:.52rem;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
+/* Gestiones del día por asesor. Reemplazan a las cajas de métricas del kanban,
+   que quedaban en cero para quien trabaja desde Gestiones Diarias. Como fila con
+   etiqueta y número: son cinco conceptos que hay que poder leer sin adivinar. */
+.enlive-gd{display:flex;flex-direction:column;margin-bottom:10px;}
+.enlive-gd-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);}
+.enlive-gd-row:last-child{border-bottom:none;}
+.enlive-gd-row span{font-size:.66rem;color:var(--text-2);font-weight:600;}
+.enlive-gd-row b{font-size:.95rem;font-weight:900;font-family:var(--f-mono);letter-spacing:-.5px;}
 .enlive-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;}
 .enlive-metric{background:var(--bg-hover);border-radius:7px;padding:7px 4px;text-align:center;border:1px solid var(--border);}
 .enlive-metric-val{font-size:1rem;font-weight:800;color:var(--text-1);line-height:1;}

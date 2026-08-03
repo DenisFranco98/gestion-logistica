@@ -2480,6 +2480,9 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
 //     se deriva de las novedades.
 let _admTarjetasTick = null;
 let _admTarjetasIds = [];
+// Gestiones de HOY por clave de asesor, para las tarjetas de En Vivo.
+// Clave = _gdKey(nombre), igual que el nodo de gestiones_diarias.
+let _admGDHoy = {};
 // El tab En Vivo es el único que muestra estas tarjetas y las de asesores: si
 // está oculto no hay nada que pintar, y refrescarlo sería gastar lecturas de
 // Firebase para nadie.
@@ -2512,23 +2515,38 @@ function _admCargarTarjetas(empresaIds){
     })
     .catch(()=>{ ['adm-stat-pendconf','adm-stat-novedad'].forEach(i=>set(i,'—')); });
 
-  // 2. Resumen del día desde Gestiones Diarias
+  // 2. Resumen del día desde Gestiones Diarias. La misma lectura alimenta el
+  // desglose por asesor que usan las tarjetas de En Vivo (_admGDHoy), así se
+  // recorre el mes una sola vez.
   const hoy=new Date();
   const mes=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
   const dia=String(hoy.getDate());
   Promise.all(ids.map(id=>_db.ref('gestiones_diarias/'+id+'/'+mes).once('value')))
     .then(snaps=>{
       let conf=0,soluc=0,carri=0,wpp=0,cancel=0;
+      const porAsesor={};
       snaps.forEach(s=>{
         // Un nivel por asesor; de cada uno se toma solo el día de hoy.
-        Object.values(s.val()||{}).forEach(nodo=>{
+        Object.entries(s.val()||{}).forEach(([ak,nodo])=>{
           const d=((nodo||{}).dias||{})[dia]; if(!d) return;
           conf+=d.conf||0; soluc+=d.soluc||0; carri+=d.recupCarri||0;
           wpp+=d.ventasWpp||0; cancel+=d.cancel||0;
+          // Un asesor puede trabajar en varias tiendas del admin: se acumula.
+          const a=porAsesor[ak]||(porAsesor[ak]={conf:0,soluc:0,devuelt:0,carri:0,noRecup:0,wpp:0,cancel:0,total:0});
+          a.conf+=d.conf||0; a.soluc+=d.soluc||0; a.devuelt+=d.devuelt||0;
+          a.carri+=d.recupCarri||0; a.noRecup+=d.contNoRecup||0;
+          a.wpp+=d.ventasWpp||0; a.cancel+=d.cancel||0;
         });
       });
+      // Total de gestiones del día, misma fórmula que _gdCalc y el consolidado.
+      Object.values(porAsesor).forEach(a=>{
+        a.total=a.conf+a.cancel+a.soluc+a.devuelt+a.carri+a.noRecup+a.wpp;
+      });
+      _admGDHoy=porAsesor;
       set('adm-res-conf',conf); set('adm-res-soluc',soluc); set('adm-res-carri',carri);
       set('adm-res-wpp',wpp); set('adm-res-cancel',cancel);
+      // Los datos llegaron después del primer render de las tarjetas.
+      _admRepintarPresencia();
     })
     .catch(()=>{});
 
@@ -2669,22 +2687,20 @@ function _mkEnliveCard(u, p, isOnline){
   const tienda=isOnline&&p.tienda?p.tienda:(u.tienda||'—');
   const color=_avatarColor(name);
   const initials=_avatarInitials(name);
-  const cont=p.contestaron||0, noCont=p.noContestaron||0, wa=p.waEnviados||0;
-  const fin=p.finalizados||0, dev=p.devoluciones||0;
-  const total=cont+noCont+wa;
-  const tp=p.totalPedidos||0;
-  const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):Math.min(100,Math.round(fin/Math.max(total,fin,1)*100));
-  const tContacto=tp>0?Math.min(100,Math.round(cont/tp*100)):(total>0?Math.round(cont/total*100):0);
-  const min=isOnline&&p.loginTime?Math.max(1,(Date.now()-p.loginTime)/60000):0;
-  const gpm=min>0?fin/min:0;
-  const score=Math.max(0,Math.round(fin*5+tCierre*1-dev*4+Math.min(gpm*15,20)));
-  const scoreColor=score>=80?'#4ade80':score>=40?'#fbbf24':'#f87171';
+  // Trabajo del día desde Gestiones Diarias, que es lo que el equipo carga.
+  // Antes la tarjeta salía de presence (solo se escribe al gestionar en el
+  // kanban de Gestión Logística), así que a quien trabaja en Gestiones Diarias
+  // le aparecía todo en cero aunque llevara el día entero trabajando.
+  const keyDe=typeof _gdKey==='function'?_gdKey:_gdKeyFallback;
+  const g=(_admGDHoy||{})[keyDe(u.asesor||p.asesor||'')]||{};
+  const gConf=g.conf||0, gSoluc=g.soluc||0, gCarri=g.carri||0, gWpp=g.wpp||0, gCancel=g.cancel||0;
+  // El score ES el total de gestiones del día: la misma suma que el Consolidado
+  // y el Ranking, así el número es verificable y comparable entre asesores.
+  // La fórmula anterior (fin*5 + tasaCierre − devoluciones*4 + ritmo/minuto) no
+  // tenía tope, sumaba cantidades con porcentajes y premiaba cerrar rápido.
+  const score=g.total||0;
+  const scoreColor=score>=40?'#4ade80':score>=15?'#fbbf24':'#f87171';
   const tiempoActivo=isOnline&&p.loginTime?_fmtDuracion(Date.now()-p.loginTime):null;
-  const barCont=Math.min(100,tContacto), barCierre=Math.min(100,tCierre);
-  const barDev=fin>0?Math.min(100,Math.round(dev/fin*100)):0;
-  const cC=tContacto>=70?'#3b82f6':tContacto>=50?'#f59e0b':'#ef4444';
-  const cCi=tCierre>=60?'#10b981':tCierre>=40?'#f59e0b':'#ef4444';
-  const cDev=barDev<=5?'#10b981':barDev<=15?'#f59e0b':'#ef4444';
   const card=document.createElement('div');
   card.className='enlive-card'+(isOnline?' online':'');
   card.style.cursor='pointer';
@@ -2705,20 +2721,16 @@ function _mkEnliveCard(u, p, isOnline){
           ? '<div class="enlive-online-pill"><span class="adm-live-dot"></span>EN VIVO</div>'
           : '<div class="enlive-offline-pill">Offline</div>')+
         (tiempoActivo?'<div class="enlive-time">'+tiempoActivo+'</div>':(p.lastSeen?'<div class="enlive-time">'+_fmtTiempo(p.lastSeen)+'</div>':''))+
-        (isOnline?'<div class="enlive-score" style="color:'+scoreColor+'">'+score+'</div><div class="enlive-score-lbl">score</div>':'')+
+        (isOnline?'<div class="enlive-score" style="color:'+scoreColor+'" title="Total de gestiones de hoy (confirmadas + canceladas + novedades + carritos + ventas WPP)">'+score+'</div><div class="enlive-score-lbl">gestiones hoy</div>':'')+
       '</div>'+
     '</div>'+
     (isOnline
-      ? '<div class="enlive-metrics" style="grid-template-columns:repeat(4,1fr)">'+
-          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:var(--text-3);font-size:.82rem">'+(tp||'—')+'</div><div class="enlive-metric-lbl">Total ped.</div></div>'+
-          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#4ade80">'+fin+'</div><div class="enlive-metric-lbl">Final.</div></div>'+
-          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#60a5fa">'+cont+'</div><div class="enlive-metric-lbl">Cont.</div></div>'+
-          '<div class="enlive-metric"><div class="enlive-metric-val" style="color:#a78bfa">'+wa+'</div><div class="enlive-metric-lbl">WA</div></div>'+
-        '</div>'+
-        '<div class="enlive-bars">'+
-          '<div class="enlive-bar-row"><div class="enlive-bar-lbl">Tasa contacto</div><div class="enlive-bar-track"><div class="enlive-bar-fill" style="width:'+barCont+'%;background:'+cC+'"></div></div><div class="enlive-bar-val" style="color:'+cC+'">'+tContacto+'%</div></div>'+
-          '<div class="enlive-bar-row"><div class="enlive-bar-lbl">Tasa cierre</div><div class="enlive-bar-track"><div class="enlive-bar-fill" style="width:'+barCierre+'%;background:'+cCi+'"></div></div><div class="enlive-bar-val" style="color:'+cCi+'">'+tCierre+'%</div></div>'+
-          (fin>0?'<div class="enlive-bar-row"><div class="enlive-bar-lbl">Dev.</div><div class="enlive-bar-track"><div class="enlive-bar-fill" style="width:'+barDev+'%;background:'+cDev+'"></div></div><div class="enlive-bar-val" style="color:'+cDev+'">'+barDev+'%</div></div>':'')+
+      ? '<div class="enlive-gd">'+
+          '<div class="enlive-gd-row"><span>Órdenes confirmadas</span><b style="color:#4ade80">'+gConf+'</b></div>'+
+          '<div class="enlive-gd-row"><span>Novedades solucionadas</span><b style="color:#60a5fa">'+gSoluc+'</b></div>'+
+          '<div class="enlive-gd-row"><span>Carritos recuperados</span><b style="color:#a78bfa">'+gCarri+'</b></div>'+
+          '<div class="enlive-gd-row"><span>Ventas WPP a Dropi</span><b style="color:#fb923c">'+gWpp+'</b></div>'+
+          '<div class="enlive-gd-row"><span>Órdenes canceladas</span><b style="color:#f87171">'+gCancel+'</b></div>'+
         '</div>'
       : '')+
     '<div class="enlive-actions">'+
