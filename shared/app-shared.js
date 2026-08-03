@@ -403,6 +403,105 @@ window._fusionarAnticipos = function(){
   }).catch(e=>console.error('[FUSIONAR anticipos] falló (¿sesión de admin?):',e));
 };
 
+// Recalcula los contadores soluc/devuelt de Gestiones Diarias a partir de la
+// fuente de verdad, que son las novedades mismas (novedades/{tienda}/{mes}).
+// Los contadores son un dato DERIVADO: si quedaron mal, se reconstruyen sin
+// perder nada, porque las evidencias y sus estados están intactos.
+//
+// Hizo falta porque la extensión de Dropi estuvo mandando a `gestion` (bucket
+// retirado, que ya nadie suma) todo lo marcado solucionada desde la app, y como
+// escribe el día entero con un PUT, además pisaba lo que el panel había contado
+// bien.
+//
+// Misma regla que _novSyncGD: devuelta gana sobre solucionada, y una novedad sin
+// ninguna evidencia queda pendiente y no suma en ninguna columna.
+//
+// Solo corrige nodos de asesor que YA tienen registro de ese día: el contador se
+// escribe bajo el asesor que estaba logueado, así que no hay forma de deducir a
+// quién le tocaría un día que nadie registró. Nunca crea nodos nuevos.
+//
+// Ejecutar desde la consola como admin:
+//   _recontarNovedades()                    → simulación, no escribe nada
+//   _recontarNovedades({aplicar:true})      → aplica las correcciones
+//   _recontarNovedades({mes:'2026-08'})     → limita a un mes
+window._recontarNovedades = function(opts){
+  const o=opts||{}, aplicar=!!o.aplicar, mesFiltro=o.mes||null;
+  console.log('%c[RECONTAR novedades] leyendo...'+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
+  Promise.all([
+    _db.ref('empresas').once('value'),
+    _db.ref('novedades').once('value'),
+    _db.ref('gestiones_diarias').once('value')
+  ]).then(([se,sn,sg])=>{
+    const empresas=se.val()||{}, nov=sn.val()||{}, gd=sg.val()||{};
+    const nombreDe=k=>(empresas[k]&&empresas[k].nombre)||k;
+    const cambios=[], duplicados=[];
+    Object.entries(nov).forEach(([tk,meses])=>{
+      if(!meses||typeof meses!=='object') return;
+      Object.entries(meses).forEach(([mes,regs])=>{
+        if(mesFiltro&&mes!==mesFiltro) return;
+        if(!regs||typeof regs!=='object') return;
+        // Conteo correcto por (asesor, día): cada evidencia es una gestión y
+        // suma a quien la hizo, el día que la hizo.
+        const esperado={};   // esperado[asesorKey][dia] = {soluc,devuelt}
+        Object.values(regs).forEach(n=>{
+          _novGestionesDe(n, mes).forEach(g=>{
+            if(!g.dia||!g.asesorKey) return;
+            if(!esperado[g.asesorKey]) esperado[g.asesorKey]={};
+            if(!esperado[g.asesorKey][g.dia]) esperado[g.asesorKey][g.dia]={soluc:0,devuelt:0};
+            if(g.estado==='devuelta') esperado[g.asesorKey][g.dia].devuelt++;
+            else esperado[g.asesorKey][g.dia].soluc++;
+          });
+        });
+        const asesores=((gd[tk]||{})[mes])||{};
+        // Gestiones cuyo asesor no tiene nodo en gestiones_diarias: no se les
+        // puede acreditar nada. Suele ser el campo 'asesor' escrito distinto.
+        Object.keys(esperado).forEach(ak=>{
+          if(!asesores[ak]) duplicados.push({tienda:nombreDe(tk),mes,asesorSinNodo:ak,
+            gestiones:Object.values(esperado[ak]).reduce((a,d)=>a+d.soluc+d.devuelt,0)});
+        });
+        Object.entries(asesores).forEach(([ak,nodo])=>{
+          const dias=(nodo||{}).dias||{};
+          // Días con gestiones que el asesor todavía no tiene registrados: hay
+          // que crearlos, si no esas gestiones no aparecerían en ninguna fila.
+          const todosLosDias=new Set([...Object.keys(dias), ...Object.keys(esperado[ak]||{})]);
+          todosLosDias.forEach(dia=>{
+            const d=dias[dia]||{};
+            const exp=(esperado[ak]||{})[dia]||{soluc:0,devuelt:0};
+            const actSol=d.soluc||0, actDev=d.devuelt||0;
+            const tieneLegacy=d.gestion!==undefined;
+            if(actSol===exp.soluc&&actDev===exp.devuelt&&!tieneLegacy) return;
+            cambios.push({
+              tienda:nombreDe(tk), asesor:ak, mes, dia:+dia,
+              soluc:actSol+' → '+exp.soluc, devuelt:actDev+' → '+exp.devuelt,
+              gestionLegacy:tieneLegacy?(d.gestion||0):'',
+              _path:'gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias/'+dia,
+              _upd:{soluc:exp.soluc,devuelt:exp.devuelt,gestion:null}
+            });
+          });
+        });
+      });
+    });
+    if(duplicados.length){
+      console.group('%c⚠ Gestiones que no se le pueden acreditar a nadie ('+duplicados.length+')','color:#b45309;font-weight:bold');
+      console.table(duplicados);
+      console.log('El nombre del asesor de esas gestiones no coincide con ningún nodo de gestiones_diarias — casi siempre es el campo "asesor" escrito distinto (tildes, apellido, mayúsculas). Corregí el nombre en la novedad y volvé a correr esto.');
+      console.groupEnd();
+    }
+    if(!cambios.length){ console.log('%cContadores al día: no hay nada que corregir.','color:#15803d;font-weight:bold'); return; }
+    console.group('%cDías a corregir ('+cambios.length+')','color:#0e7490;font-weight:bold');
+    console.table(cambios.map(({tienda,asesor,mes,dia,soluc,devuelt,gestionLegacy})=>({tienda,asesor,mes,dia,soluc,devuelt,gestionLegacy})));
+    console.groupEnd();
+    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para aplicar: _recontarNovedades({aplicar:true})','font-weight:bold'); return; }
+    let n=0,f=0;
+    cambios.reduce((p,x)=>p.then(()=>
+      _db.ref(x._path).update(x._upd).then(()=>{n++;}).catch(e=>{f++;console.error('  ✗',x._path,e);})
+    ),Promise.resolve()).then(()=>{
+      console.log('%c[RECONTAR novedades] listo: '+n+' días corregidos, '+f+' con error.','font-weight:bold;color:'+(f?'#b91c1c':'#15803d'));
+      console.log('Solo se tocaron soluc/devuelt y se limpió el campo gestion. Las novedades no se modificaron.');
+    });
+  }).catch(e=>console.error('[RECONTAR novedades] falló (¿sesión de admin?):',e));
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
@@ -411,6 +510,43 @@ function _gsKey(){
     console.warn('[SYNC] Sin empresaId — gestiones_sync se guardará bajo el username "'+window._currentUsername+'". El admin no verá estas gestiones al filtrar por tienda.');
   }
   return window._currentTiendaId || window._currentUsername;
+}
+
+// ── Tiendas del usuario (para "🏪 Cambiar tienda" del selector de módulo) ──
+// Se persiste porque window._currentTiendaIds solo se poblaba en el login
+// fresco: al restaurar sesión —recargar la página, o volver al menú desde un
+// módulo, que es un irAPagina('/') y por lo tanto una carga nueva— quedaba
+// undefined y el botón desaparecía para el resto de la sesión. Con la lista en
+// localStorage el selector puede pintarse bien de entrada, sin esperar a
+// Firebase; la relectura posterior la corrige si cambió.
+const TIENDAS_KEY = 'lgs_tiendas';
+// Mismo problema con "← Volver al Panel Admin": window._cameFromAdmin vivía solo
+// en memoria, así que un admin que entraba a una tienda, abría un módulo y
+// volvía al menú perdía el botón en la recarga y se quedaba sin camino de vuelta
+// al Panel Admin salvo cerrando sesión.
+const FROM_ADMIN_KEY = 'lgs_from_admin';
+function _setCameFromAdmin(v){
+  window._cameFromAdmin = !!v;
+  try{ v ? localStorage.setItem(FROM_ADMIN_KEY,'1') : localStorage.removeItem(FROM_ADMIN_KEY); }catch(e){}
+}
+function _getCameFromAdmin(){
+  if(window._cameFromAdmin) return true;
+  try{ if(localStorage.getItem(FROM_ADMIN_KEY)==='1'){ window._cameFromAdmin = true; return true; } }catch(e){}
+  return false;
+}
+function _setTiendaIds(ids){
+  const arr = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  window._currentTiendaIds = arr;
+  try{ localStorage.setItem(TIENDAS_KEY, JSON.stringify(arr)); }catch(e){}
+  return arr;
+}
+function _getTiendaIds(){
+  if(Array.isArray(window._currentTiendaIds) && window._currentTiendaIds.length) return window._currentTiendaIds;
+  try{
+    const arr = JSON.parse(localStorage.getItem(TIENDAS_KEY) || '[]');
+    if(Array.isArray(arr)){ window._currentTiendaIds = arr; return arr; }
+  }catch(e){}
+  return [];
 }
 
 // ===== LOGIN =====
@@ -474,7 +610,8 @@ function _initLogin(){
         if(_heartbeatInterval){ clearInterval(_heartbeatInterval); _heartbeatInterval=null; }
         ref.child('force_logout').set(false);
         _limpiarPresencia();
-        [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY].forEach(k=>localStorage.removeItem(k));
+        [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY,TIENDAS_KEY,FROM_ADMIN_KEY].forEach(k=>localStorage.removeItem(k));
+        window._currentTiendaIds=null; window._cameFromAdmin=false;
         ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>{ const el=document.getElementById(id); if(el)el.value=''; });
         // Cerrar cualquier modal abierto
         ['logout-modal','nuevo-modal','reset-modal'].forEach(id=>{ const el=document.getElementById(id); if(el){el.classList.remove('open');el.style.display='none';} });
@@ -652,8 +789,7 @@ function _initLogin(){
       window._currentRol = d.rol||'dueno';
       const nombreAsesor = d.asesor||email;
       const _resolverTiendas = snapT=>{
-        const tiendaIds = Object.keys(snapT.val()||{});
-        window._currentTiendaIds = tiendaIds;
+        const tiendaIds = _setTiendaIds(Object.keys(snapT.val()||{}));
         console.log('[LOGIN] tiendas:', tiendaIds, '| asesor:', d.asesor, '| tienda:', d.tienda);
         toast('🔍 tiendas:'+tiendaIds.length+' | asesor:"'+(d.asesor||'')+ '" | tienda:"'+(d.tienda||'')+'"', 8000);
         if(!tiendaIds.length){
@@ -704,20 +840,27 @@ function _initLogin(){
     document.getElementById('rol-select-screen').style.display='flex';
   }
 
-  window._volverSelectorRol = function(){
-    const p = window._rolPendiente;
-    if(p && p.roles && p.roles.length > 1){
-      document.getElementById('super-admin-panel').style.display='none';
-      document.getElementById('admin-panel').classList.remove('visible');
-      localStorage.removeItem(LOGIN_KEY);
-      _mostrarSelectorRol(p.uid, p.email, p.roles, p.admData, p.userData);
-      return;
-    }
-    // Si no hay caché (sesión restaurada directo), re-consultar Firebase
-    const user = firebase.auth().currentUser;
-    if(!user) return;
-    const uid = user.uid; const email = user.email;
-    Promise.all([
+  // Deja la pantalla y el estado limpios antes de mostrar el selector de perfil.
+  // Antes solo se ocultaban los paneles de admin/super-admin: el mode-select y
+  // los paneles de módulo quedaban con display puesto por detrás (no se veía
+  // porque el selector va en z-index 9999) y reaparecían al salir del panel
+  // siguiente.
+  function _prepararSelectorRol(){
+    const sp=document.getElementById('super-admin-panel'); if(sp) sp.style.display='none';
+    const ap=document.getElementById('admin-panel'); if(ap) ap.classList.remove('visible');
+    const ms=document.getElementById('mode-select-screen'); if(ms) ms.style.display='none';
+    const ts=document.getElementById('tienda-select-screen'); if(ts) ts.style.display='none';
+    if(typeof _ocultarTodosModos==='function') _ocultarTodosModos();
+    // Elegir perfil abandona el contexto del anterior. Sin esto, un admin que
+    // entró a una tienda y después cambia a "dueño" se llevaba el flag puesto y
+    // el selector de módulo le seguía ofreciendo "← Volver al Panel Admin".
+    _setCameFromAdmin(false);
+  }
+
+  // Lee los roles reales de la cuenta. Es la fuente de verdad cuando no hay
+  // caché en memoria — que es lo normal tras cualquier navegación entre páginas.
+  function _leerRoles(uid){
+    return Promise.all([
       _db.ref('config/superAdminUid').once('value'),
       _db.ref('admins/'+uid).once('value'),
       _db.ref('users/'+uid).once('value'),
@@ -728,16 +871,41 @@ function _initLogin(){
       if(snapAdm.exists()) roles.push('admin');
       const hasTiendas = snapTiendas.exists() && Object.keys(snapTiendas.val()||{}).length > 0;
       if(snapUser.exists()||hasTiendas) roles.push(((snapUser.val()||{}).rol||'dueno')==='dueno'?'dueno':'asesor');
+      return { roles, admData:snapAdm.val(), userData:snapUser.val(), tiendas:snapTiendas.val() };
+    });
+  }
+
+  window._volverSelectorRol = function(){
+    const p = window._rolPendiente;
+    if(p && p.roles && p.roles.length > 1){
+      _prepararSelectorRol();
+      _marcarEnSelectorRol();
+      _mostrarSelectorRol(p.uid, p.email, p.roles, p.admData, p.userData);
+      return;
+    }
+    // Si no hay caché (sesión restaurada directo), re-consultar Firebase
+    const user = firebase.auth().currentUser;
+    if(!user) return;
+    const uid = user.uid; const email = user.email;
+    _leerRoles(uid).then(({roles, admData, userData})=>{
       if(roles.length<=1){ toast('Solo tienes un perfil disponible'); return; }
-      document.getElementById('super-admin-panel').style.display='none';
-      document.getElementById('admin-panel').classList.remove('visible');
-      localStorage.removeItem(LOGIN_KEY);
-      _mostrarSelectorRol(uid, email, roles, snapAdm.val(), snapUser.val());
+      _prepararSelectorRol();
+      _marcarEnSelectorRol();
+      _mostrarSelectorRol(uid, email, roles, admData, userData);
     });
   };
 
+  // Estar en el selector de perfil es un estado propio de la sesión, no "sin
+  // sesión". Antes se borraba LOGIN_KEY acá: si el usuario recargaba, cerraba la
+  // pestaña o el navegador mientras elegía perfil, la app lo mandaba al login a
+  // escribir usuario y contraseña de nuevo, aunque su sesión de Firebase Auth
+  // siguiera perfectamente viva. Con este valor, onAuthStateChanged lo devuelve
+  // al selector — cambiar de perfil nunca obliga a volver a autenticarse.
+  function _marcarEnSelectorRol(){ localStorage.setItem(LOGIN_KEY,'rolselect'); }
+
   window._cerrarSesionRol = function(){
     document.getElementById('rol-select-screen').style.display='none';
+    localStorage.removeItem(LOGIN_KEY);
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
 
@@ -841,20 +1009,23 @@ function _initLogin(){
   window._logoutConfirmar = function(){
     document.getElementById('logout-modal').classList.remove('open');
     _limpiarPresencia();
-    [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY,'lgs_rol'].forEach(k=>localStorage.removeItem(k));
+    // TIENDAS_KEY va acá también: sin borrarla, el próximo usuario en este
+    // navegador heredaría la lista de tiendas del anterior.
+    [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY,'lgs_rol',TIENDAS_KEY,FROM_ADMIN_KEY].forEach(k=>localStorage.removeItem(k));
     window._currentRol=null;
+    window._currentTiendaIds=null;
+    window._cameFromAdmin=false;
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
   window._admLogout = function(){
-    localStorage.removeItem(LOGIN_KEY);
-    localStorage.removeItem('lgs_admin_id');
-    localStorage.removeItem('lgs_admin_user');
-    localStorage.removeItem('lgs_empresa_actual');
+    [LOGIN_KEY,'lgs_admin_id','lgs_admin_user','lgs_empresa_actual',TIENDAS_KEY,FROM_ADMIN_KEY].forEach(k=>localStorage.removeItem(k));
+    window._currentTiendaIds=null; window._cameFromAdmin=false;
     document.getElementById('admin-panel').classList.remove('visible');
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
   window._superAdmLogout = function(){
-    localStorage.removeItem(LOGIN_KEY);
+    [LOGIN_KEY,TIENDAS_KEY,FROM_ADMIN_KEY].forEach(k=>localStorage.removeItem(k));
+    window._currentTiendaIds=null; window._cameFromAdmin=false;
     document.getElementById('super-admin-panel').style.display='none';
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
@@ -893,23 +1064,22 @@ function _initLogin(){
   // si la cuenta tiene varios roles disponibles.
   function _refrescarBotonCambiarPerfil(uid, email){
     if(!uid) return;
-    Promise.all([
-      _db.ref('config/superAdminUid').once('value'),
-      _db.ref('admins/'+uid).once('value'),
-      _db.ref('users/'+uid).once('value'),
-      _db.ref('user_tiendas/'+uid).once('value')
-    ]).then(([snapSA, snapAdm, snapUser, snapTiendas])=>{
-      const roles = [];
-      if(snapSA.val()===uid) roles.push('superadmin');
-      if(snapAdm.exists()) roles.push('admin');
-      const hasTiendas = snapTiendas.exists() && Object.keys(snapTiendas.val()||{}).length > 0;
-      if(snapUser.exists()||hasTiendas) roles.push(((snapUser.val()||{}).rol||'dueno')==='dueno'?'dueno':'asesor');
+    // Misma lectura que usa el selector (_leerRoles): si acá se calculara el
+    // multi-rol con otro criterio, el botón podría ofrecer cambiar de perfil a
+    // una cuenta que después el selector rechaza por tener un solo rol.
+    _leerRoles(uid).then(({roles, admData, userData, tiendas})=>{
       const tieneMultiRol = roles.length > 1;
       ['btn-volver-roles-sa','btn-volver-roles-adm','btn-volver-roles-topnav','btn-volver-roles-tienda','btn-volver-roles-modeselect'].forEach(id=>{
         const b = document.getElementById(id);
         if(b) b.style.display = tieneMultiRol ? 'inline-block' : 'none';
       });
-      if(tieneMultiRol) window._rolPendiente = { uid, email, roles, admData: snapAdm.val(), userData: snapUser.val() };
+      if(tieneMultiRol) window._rolPendiente = { uid, email, roles, admData, userData };
+      // Esta lectura ya traía user_tiendas y no se estaba aprovechando: es la
+      // que repuebla la lista al restaurar sesión, y además capta una tienda
+      // asignada mientras la sesión seguía viva. Se llama en las ramas de
+      // onAuthStateChanged, así que el selector siempre termina bien pintado.
+      _setTiendaIds(Object.keys(tiendas||{}));
+      if(typeof window._refrescarBtnCambiarTienda==='function') window._refrescarBtnCambiarTienda();
     });
   }
 
@@ -918,6 +1088,25 @@ function _initLogin(){
     _hideSplash();
     const savedSession = localStorage.getItem(LOGIN_KEY);
     if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); return; }
+    // El usuario estaba eligiendo perfil cuando la página se recargó (o navegó).
+    // Se le devuelve el selector en vez de mandarlo al login: la sesión de
+    // Firebase Auth sigue viva, no hay nada que volver a autenticar.
+    if(savedSession==='rolselect'){
+      if(!user){ localStorage.removeItem(LOGIN_KEY); _loginShow(); document.getElementById('login-user').focus(); return; }
+      _loginHide();
+      _leerRoles(user.uid).then(({roles, admData, userData})=>{
+        if(roles.length<=1){
+          // Perdió el multi-rol mientras tanto: no dejarlo encerrado en un
+          // selector de una sola opción.
+          localStorage.removeItem(LOGIN_KEY);
+          _loginShow(); document.getElementById('login-user').focus();
+          return;
+        }
+        _prepararSelectorRol();
+        _mostrarSelectorRol(user.uid, user.email||'', roles, admData, userData);
+      }).catch(()=>{ localStorage.removeItem(LOGIN_KEY); _loginShow(); });
+      return;
+    }
     if(savedSession==='superadmin'){ _showSuperAdmin(); _superAdmCargar(); if(user)_refrescarBotonCambiarPerfil(user.uid,user.email||''); return; }
     if(savedSession==='admin'){
       // Un admin en una página de módulo (las 3 declaran _PAGINA_MODULO en su
@@ -3594,7 +3783,7 @@ window._admEntrarTienda = function(empId, empNombre){
     window._currentRol = u.rol||'dueno';
     // Ocultar panel admin y entrar a la tienda
     document.getElementById('admin-panel').classList.remove('visible');
-    window._cameFromAdmin = true;
+    _setCameFromAdmin(true);
     const btnV = document.getElementById('mss-btn-volver-admin');
     if(btnV) btnV.style.display = 'block';
     _entrarApp(adminId, empNombre, nombreAsesor, empId);
@@ -3606,9 +3795,9 @@ window._volverAlAdmin = function(){
   if(btnV) btnV.style.display = 'none';
   _ocultarTodosModos();
   document.getElementById('mode-select-screen').style.display = 'none';
-  if(window._cameFromAdmin){
+  if(_getCameFromAdmin()){
     // Se entró viendo una empresa puntual desde el Panel Admin: volver ahí
-    window._cameFromAdmin = false;
+    _setCameFromAdmin(false);
     localStorage.setItem('lgs_auth','admin');
     _showAdminGlobal();
     _admCargarDashboard();
@@ -4419,15 +4608,29 @@ function _gdadmSubtab(t){
 }
 
 // ── helpers ──────────────────────────────────────────────
+// Total de gestiones de UN día. Tiene que dar lo mismo que _gdCalc() en
+// gestiones-diarias.js: el total cuenta todo el trabajo del día, con resultado
+// positivo o no, así que las devoluciones y los carritos no recuperados también
+// suman. Estaban faltando las dos y el admin veía menos gestiones que el propio
+// asesor en su tabla.
+// `recupNov` es un campo muerto (ningún módulo lo escribe ya) pero se sigue
+// sumando para no bajar las cifras de los meses viejos que lo tengan.
+// Punto único de cálculo a propósito: antes la fórmula estaba repetida en cuatro
+// lugares de este panel y se desincronizaron.
+function _gdadmGralDia(d){
+  d=d||{};
+  return (d.conf||0)+(d.cancel||0)+(d.soluc||0)+(d.devuelt||0)
+       +(d.recupCarri||0)+(d.contNoRecup||0)+(d.recupNov||0)+(d.ventasWpp||0);
+}
 function _gdadmDayTotals(dias){
-  // Returns {conf,cancel,soluc,devuelt,recupNov,recupCarri,ventasWpp,gral} summed over all days
-  let c={conf:0,cancel:0,soluc:0,devuelt:0,recupNov:0,recupCarri:0,ventasWpp:0,gral:0};
+  // Returns {conf,cancel,soluc,devuelt,recupNov,recupCarri,contNoRecup,ventasWpp,gral} summed over all days
+  let c={conf:0,cancel:0,soluc:0,devuelt:0,recupNov:0,recupCarri:0,contNoRecup:0,ventasWpp:0,gral:0};
   Object.values(dias).forEach(d=>{
     c.conf+=d.conf||0; c.cancel+=d.cancel||0; c.soluc+=d.soluc||0;
     c.devuelt+=d.devuelt||0; c.recupNov+=d.recupNov||0;
-    c.recupCarri+=d.recupCarri||0; c.ventasWpp+=d.ventasWpp||0;
-    const g=(d.conf||0)+(d.cancel||0)+(d.soluc||0)+(d.recupNov||0)+(d.recupCarri||0)+(d.ventasWpp||0);
-    c.gral+=g;
+    c.recupCarri+=d.recupCarri||0; c.contNoRecup+=d.contNoRecup||0;
+    c.ventasWpp+=d.ventasWpp||0;
+    c.gral+=_gdadmGralDia(d);
   });
   return c;
 }
@@ -4440,8 +4643,10 @@ function _gdadmRenderRanking(){
   let rows='', totals={conf:0,cancel:0,soluc:0,recupNov:0,recupCarri:0,ventasWpp:0,gral:0};
   _gdadmAsesores.forEach((a,i)=>{
     const t=_gdadmDayTotals(a.dias);
+    // La columna NOVEDADES muestra solucionadas + devueltas, y CARRITOS
+    // recuperados + no recuperados: ambas son gestiones hechas.
     totals.conf+=t.conf; totals.cancel+=t.cancel; totals.soluc+=t.soluc+t.devuelt;
-    totals.recupNov+=t.recupNov+t.recupCarri; totals.ventasWpp+=t.ventasWpp; totals.gral+=t.gral;
+    totals.recupNov+=t.recupNov+t.recupCarri+t.contNoRecup; totals.ventasWpp+=t.ventasWpp; totals.gral+=t.gral;
     const prom=_avg(t.gral,_gdadmDias);
     const efect=_pct(t.conf,t.gral);
     const bg=i===0?'style="background:var(--warning-soft);"':i===1?'style="background:var(--success-soft);"':i===2?'style="background:var(--warning-soft);"':'';
@@ -4453,7 +4658,7 @@ function _gdadmRenderRanking(){
       <td>${t.conf}</td>
       <td>${t.cancel}</td>
       <td>${t.soluc+t.devuelt}</td>
-      <td>${t.recupNov+t.recupCarri}</td>
+      <td>${t.recupNov+t.recupCarri+t.contNoRecup}</td>
       <td>${t.ventasWpp}</td>
       <td>${prom}</td>
       <td class="${parseInt(efect)>=50?'hi':'warn'}">${efect}</td>
@@ -4486,8 +4691,7 @@ function _gdadmRenderCollab(){
   for(let d=1;d<=_gdadmDias;d++){
     let rowTotal=0;
     let cells=_gdadmAsesores.map((a,i)=>{
-      const day=a.dias[d]||{};
-      const g=(day.conf||0)+(day.cancel||0)+(day.soluc||0)+(day.recupNov||0)+(day.recupCarri||0)+(day.ventasWpp||0);
+      const g=_gdadmGralDia(a.dias[d]);
       mesTotals[i]+=g; rowTotal+=g; return `<td>${g||''}</td>`;
     }).join('');
     diasTotalArr.push(rowTotal);
@@ -4520,7 +4724,7 @@ function _gdadmRenderTipo(){
       const day=a.dias[d]||{};
       conf+=day.conf||0; cancel+=day.cancel||0;
       soluc+=(day.soluc||0)+(day.devuelt||0);
-      recup+=(day.recupNov||0)+(day.recupCarri||0);
+      recup+=(day.recupNov||0)+(day.recupCarri||0)+(day.contNoRecup||0);
       vwpp+=day.ventasWpp||0;
     });
     const total=conf+cancel+soluc+recup+vwpp;
@@ -4539,15 +4743,17 @@ function _gdadmRenderTipo(){
   // KPIs
   let maxDia=0,minDia=Infinity;
   for(let i=1;i<=_gdadmDias;i++){
-    let t=0; _gdadmAsesores.forEach(a=>{const d=a.dias[i]||{};t+=(d.conf||0)+(d.cancel||0)+(d.soluc||0)+(d.recupNov||0)+(d.recupCarri||0)+(d.ventasWpp||0);});
+    let t=0; _gdadmAsesores.forEach(a=>{t+=_gdadmGralDia(a.dias[i]);});
     if(t>maxDia)maxDia=t; if(t<minDia)minDia=t;
   }
   if(minDia===Infinity)minDia=0;
   el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO POR TIPO DE GESTIÓN</div>
   <div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr>
-      <th>DÍA</th><th>CONFIRM.</th><th>CANCELADAS</th><th>NOVEDADES SOLUC.</th>
-      <th>CARRITOS RECUP.</th><th>VENTAS WPP</th><th>TOTAL</th><th>% EFECT.</th><th>% CANCELADO</th>
+      <th>DÍA</th><th>CONFIRM.</th><th>CANCELADAS</th>
+      <th title="Solucionadas + devueltas">NOVEDADES</th>
+      <th title="Recuperados + no recuperados">CARRITOS</th>
+      <th>VENTAS WPP</th><th>TOTAL</th><th>% EFECT.</th><th>% CANCELADO</th>
     </tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr class="total-row">
@@ -4622,6 +4828,48 @@ function _novGetSols(n){
     return Object.entries(n.soluciones).sort((a,b)=>(a[1].ts||0)-(b[1].ts||0)).map(([k,s])=>({...s,_key:k}));
   }
   return [n.sol1,n.sol2,n.sol3].filter(Boolean).map((s,i)=>({...s,_legacyNum:i+1}));
+}
+
+// ── Gestiones de novedades: la unidad que suma en Gestiones Diarias ──────
+// Regla de negocio (confirmada 2026-08-03): **cada evidencia es una gestión y
+// suma al asesor que la hizo, el día que la hizo**. Una novedad trabajada por
+// dos personas cuenta dos veces, una para cada una — a propósito: la tabla mide
+// trabajo hecho, no novedades cerradas. Antes se contaba una vez por novedad y,
+// peor, sin filtrar por asesor: cada asesor de una tienda veía en su fila el
+// total de TODA la tienda en vez de lo suyo.
+//
+// Compatibilidad: las evidencias viejas no guardan `asesor` ni `dia` (se empezó
+// a guardar con este cambio). Para no borrar historial al recalcular un día
+// viejo, caen al asesor y al día de la novedad, que es la mejor aproximación
+// disponible. Por eso el conteo de un día anterior al cambio sigue dando algo
+// parecido a lo que ya mostraba, en vez de cero.
+//
+// Devuelve [{estado, asesorKey, dia}] solo de las evidencias que definen
+// resultado; las que no lo tienen (estado vacío) no son gestiones y no suman.
+function _novGestionesDe(n, mes){
+  const keyDe = typeof _gdKey==='function' ? _gdKey : _gdKeyFallback;
+  return _novGetSols(n||{})
+    .filter(s=>s && (s.estado==='solucionada' || s.estado==='devuelta'))
+    // Una evidencia de otro mes no suma en este (el nodo de GD es por mes).
+    .filter(s=>!mes || !s.mes || s.mes===mes)
+    .map(s=>({
+      estado: s.estado,
+      asesorKey: keyDe(s.asesor || (n||{}).asesor || ''),
+      dia: s.dia || (n||{}).dia || 0
+    }));
+}
+
+// Cuenta las gestiones de un asesor en un día concreto, sobre todas las
+// novedades del mes. `novs` es el objeto crudo de novedades/{tienda}/{mes}.
+function _novContarDia(novs, asesorKey, dia, mes){
+  let soluc=0, devuelt=0;
+  Object.values(novs||{}).forEach(n=>{
+    _novGestionesDe(n, mes).forEach(g=>{
+      if(g.dia!==dia || g.asesorKey!==asesorKey) return;
+      if(g.estado==='devuelta') devuelt++; else soluc++;
+    });
+  });
+  return {soluc, devuelt};
 }
 // _roAutoSync/_roSyncFromGestion: sincroniza el tracking de "Reclamo en Oficina"
 // a Firebase desde Gestión Logística en cada guardado de gestión — llamada de
@@ -4718,7 +4966,7 @@ window._gdMostrarModeSelect = function(asesor){
   // desde ahí, o al selector de perfil si la cuenta tiene varios roles
   const btnVolver = document.getElementById('mss-btn-volver-admin');
   if(btnVolver){
-    if(window._cameFromAdmin){
+    if(_getCameFromAdmin()){
       btnVolver.textContent = '← Volver al Panel Admin';
       btnVolver.style.display = 'block';
     } else if(window._rolPendiente?.roles?.length > 1){
@@ -4732,14 +4980,21 @@ window._gdMostrarModeSelect = function(asesor){
   const rol=window._currentRol||localStorage.getItem('lgs_rol')||'dueno';
   const btnCF=document.querySelector('#mode-select-screen .mss-btn[onclick="_modoFinanciero()"]');
   if(btnCF) btnCF.style.display=rol==='asesor'?'none':'flex';
-  // Mostrar "Cambiar tienda" solo si el usuario tiene más de una tienda
-  const btnCambiarTienda = document.getElementById('mss-btn-cambiar-tienda');
-  if(btnCambiarTienda) btnCambiarTienda.style.display = (window._currentTiendaIds && window._currentTiendaIds.length > 1) ? 'block' : 'none';
+  window._refrescarBtnCambiarTienda();
+};
+// Visibilidad de "🏪 Cambiar tienda". Aparte de _gdMostrarModeSelect porque la
+// lista de tiendas puede llegar después (la relectura de user_tiendas es
+// asíncrona) y entonces hay que repintar el botón sin rearmar todo el selector.
+window._refrescarBtnCambiarTienda = function(){
+  const btn = document.getElementById('mss-btn-cambiar-tienda');
+  if(!btn) return;
+  btn.style.display = _getTiendaIds().length > 1 ? 'block' : 'none';
 };
 window._cambiarTienda = function(){
   const uid = localStorage.getItem('lgs_user');
   const asesor = localStorage.getItem('lgs_asesor');
-  if(!uid || !window._currentTiendaIds || !window._currentTiendaIds.length) return;
+  const ids = _getTiendaIds();
+  if(!uid || !ids.length) return;
   document.getElementById('mode-select-screen').style.display='none';
-  _mostrarSelectorTienda(uid, asesor, window._currentTiendaIds);
+  _mostrarSelectorTienda(uid, asesor, ids);
 };

@@ -782,6 +782,11 @@ window._sbEstadosToggle=function(){
       <span id="cf-mes-lbl" style="font-size:.72rem;font-weight:700;min-width:80px;text-align:center;"></span>
       <button onclick="_cfNextMes()" style="background:rgba(255,255,255,.1);border:none;color:white;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.8rem;">&#8250;</button>
       <button onclick="_cfVolver()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.72rem;font-weight:700;">← Menú principal</button>
+      <!-- Mismo id que en gestion-logistica.html: _refrescarBotonCambiarPerfil
+           ya lo tiene en su lista, así que se muestra solo si la cuenta tiene
+           más de un perfil. Faltaba acá, y desde este módulo no había forma de
+           cambiar de perfil sin pasar antes por el menú principal. -->
+      <button id="btn-volver-roles-topnav" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.1);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.72rem;font-weight:700;">🎭 Cambiar perfil</button>
     </div>
   </div>
   <!-- Cuerpo: sidebar de funciones + contenido (estructura Centro de Operaciones) -->

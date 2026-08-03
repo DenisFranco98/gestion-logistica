@@ -3326,24 +3326,23 @@ function marcarDevolucion(id){
   animarCompletado(id,()=>_completarYLimpiar(id),'🔄');
 }
 
-// Recuenta las novedades de un día y actualiza la fila de Gestiones Diarias.
-// Misma regla que _novSyncGD en gestiones-diarias.js: solucionada o devuelta,
-// devuelta gana si hay de ambas, y las que no tienen ninguna solución quedan
-// pendientes sin sumar.
-async function _novRecontarDiaGD(dia){
+// Recuenta las gestiones de novedades de UN asesor en UN día y actualiza su fila
+// de Gestiones Diarias. Misma regla que _novSyncGD: cada evidencia es una
+// gestión y suma a quien la hizo, el día que la hizo (ver _novGestionesDe en
+// app-shared.js). `ak` por defecto es el asesor de la sesión.
+//
+// Ya no se puede filtrar la consulta por `dia` de la novedad: la gestión puede
+// ser de otro día que aquel en que se registró, así que hay que mirar el mes
+// completo y agrupar por las evidencias.
+async function _novRecontarDiaGD(dia, asesorKey){
   if(typeof _db==='undefined'||!dia) return;
   const mes=_getMesCargado();
-  const ak=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
+  const ak=asesorKey||(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
   const novBasePath=_novGDBasePath();
   const gdDiasPath='gestiones_diarias/'+_gdTK()+'/'+mes+'/'+ak+'/dias';
 
-  const diaNovsSnap=await _db.ref(novBasePath).orderByChild('dia').equalTo(dia).once('value');
-  let soluc=0, devuelt=0;
-  (diaNovsSnap.val()?Object.values(diaNovsSnap.val()):[]).forEach(n=>{
-    const sols=_novGetSols(n);
-    if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
-    else if(n.solucionadaDropi||sols.some(s=>s.estado==='solucionada')){ soluc++; }
-  });
+  const mesNovsSnap=await _db.ref(novBasePath).once('value');
+  const {soluc, devuelt}=_novContarDia(mesNovsSnap.val()||{}, ak, dia, mes);
 
   // Leer el día actual de GD para no pisar las otras columnas
   const diaSnap=await _db.ref(gdDiasPath+'/'+dia).once('value');
@@ -3352,8 +3351,11 @@ async function _novRecontarDiaGD(dia){
   delete diaData.gestion; // campo retirado: se limpia al recalcular el día
   await _db.ref(gdDiasPath+'/'+dia).set(diaData);
 
-  // Si Gestiones Diarias está cargado en memoria, refrescar también su UI
-  if(typeof _gdData!=='undefined'&&_gdData){
+  // Si Gestiones Diarias está cargado en memoria, refrescar también su UI.
+  // Solo cuando se recalculó el nodo del asesor de la sesión: la tabla en
+  // pantalla es la suya, y pintarle ahí el conteo de otro sería mentirle.
+  const akSesion=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
+  if(ak===akSesion && typeof _gdData!=='undefined'&&_gdData){
     if(!_gdData[dia]) _gdData[dia]={};
     Object.assign(_gdData[dia],{soluc,devuelt});
     delete _gdData[dia].gestion;
@@ -3383,18 +3385,27 @@ async function _novMarcarDevueltaGD(id, razon){
     const nov=novSnap.val();
     if(!nov) return; // la novedad ya no existe
     const yaDevuelta=Object.values(nov.soluciones||{}).some(s=>s&&s.estado==='devuelta');
+    // Devolver el pedido es una gestión, y suma a quien la hace hoy — aunque la
+    // novedad la haya registrado otro asesor otro día. Por eso la evidencia
+    // lleva su propio asesor/dia/mes (fecha local, nunca toISOString).
+    const hoy=new Date();
+    const gestorNom=window.getLoginAsesor?window.getLoginAsesor():'';
+    const akGestor=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(gestorNom||'_');
+    const diaGestion=hoy.getDate();
+    const mesGestion=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
     if(!yaDevuelta){
       await _db.ref(base+'/'+g.gdNovKey+'/soluciones').push({
         estado:'devuelta', tipo:'txt',
         val: razon||'Producto devuelto',
-        fechaLabel: new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'}),
-        ts: Date.now(), fromLogistica:true
+        fechaLabel: hoy.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'}),
+        ts: Date.now(), fromLogistica:true,
+        asesor: gestorNom, dia: diaGestion, mes: mesGestion
       });
     }
     // Una novedad devuelta ya no está solucionada en Dropi
     await _db.ref(base+'/'+g.gdNovKey+'/solucionadaDropi').remove();
     gestiones[id].gdTieneSols=true;
-    await _novRecontarDiaGD(nov.dia);
+    await _novRecontarDiaGD(diaGestion, akGestor);
   }catch(e){ console.warn('[NOV] no se pudo marcar la devolución en GD',e); }
 }
 

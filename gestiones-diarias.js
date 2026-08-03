@@ -15,7 +15,9 @@ function _gdInit(){
 // _gdBase(tk) permite construir la ruta con cualquier clave de tienda: la nueva
 // (por empresaId) para escribir, la vieja (por nombre) para el fallback de
 // lectura. _gdBasePath() es siempre la de escritura.
-function _gdBase(tk){ return 'gestiones_diarias/'+(tk||_gdTK())+'/'+_gdMes+'/'+_gdAK(); }
+// `ak` (clave del asesor) es parametrizable por la misma razón que `tk`: al
+// borrar la evidencia de otro asesor hay que recalcular SU nodo, no el propio.
+function _gdBase(tk, ak){ return 'gestiones_diarias/'+(tk||_gdTK())+'/'+_gdMes+'/'+(ak||_gdAK()); }
 function _gdBasePath(){ return _gdBase(); }
 
 function _gdCargar(){
@@ -441,6 +443,12 @@ function _gdTab(tab){
     if(c) c.style.display=t===tab?(t==='gestion'?'flex':'block'):'none';
     if(b) b.classList.toggle('active',t===tab);
   });
+  // Gestión se repinta desde _gdData al volver: mientras el tab está oculto,
+  // _novSyncGD actualiza la caché y Firebase pero no el DOM (su guard exige que
+  // el tab esté visible). Sin este repintado, el asesor registraba una novedad y
+  // al volver seguía viendo el número viejo hasta recargar la página. Es render
+  // en memoria, sin lecturas extra a Firebase.
+  if(tab==='gestion'){ _gdRenderTabla(); _gdRenderResumen(); }
   if(tab==='consolidado') _consoInit();
   if(tab==='novedades') _novInit();
   if(tab==='anticipos') _antInit();
@@ -668,6 +676,23 @@ let _novData={}, _novModalState={mode:'new',id:null,solNum:1}, _novTipoActivo='i
 function _novBase(tk){ return 'novedades/'+(tk||_gdTK())+'/'+_gdMes; }
 function _novBasePath(){ return _novBase(); }
 
+// La guía se escribe a mano o se pega desde Dropi, así que para comparar se
+// ignoran espacios, guiones y mayúsculas: "ABC 123" y "abc-123" son la misma.
+function _novNormGuia(g){ return String(g||'').replace(/[\s-]+/g,'').toLowerCase(); }
+// Busca la novedad ya registrada de una guía, dentro del mes que se está viendo
+// (_novData solo tiene ese mes; una guía del mes anterior no se encuentra y se
+// registra como novedad nueva de este mes).
+function _novBuscarPorGuia(guia){
+  const k=_novNormGuia(guia);
+  if(!k) return null;
+  const hits=Object.entries(_novData).filter(([,n])=>_novNormGuia(n&&n.guia)===k);
+  if(!hits.length) return null;
+  // Si quedaron duplicados de antes de este cambio, se continúa el historial del
+  // registro más reciente.
+  hits.sort((a,b)=>((b[1]||{}).ts||0)-((a[1]||{}).ts||0));
+  return {id:hits[0][0], nov:hits[0][1]||{}};
+}
+
 function _novInit(){
   document.getElementById('nov-table-wrap').innerHTML='<div style="padding:20px;color:var(--text-3);font-size:.78rem;text-align:center;">Cargando...</div>';
   if(typeof _db==='undefined'){ _novData={}; _novRender(); return; }
@@ -847,7 +872,22 @@ function _novNuevo(){
   document.getElementById('nov-m-img').value='';
   document.getElementById('nov-m-txt').value='';
   _novSetEstado('solucionada');
+  _novAvisoGuia();
   document.getElementById('nov-modal').classList.add('open');
+}
+
+// Aviso en vivo bajo el campo de guía (solo al registrar una novedad nueva).
+function _novAvisoGuia(){
+  const el=document.getElementById('nov-m-guia-aviso');
+  if(!el) return;
+  if(_novModalState.mode!=='new'){ el.style.display='none'; return; }
+  const val=(document.getElementById('nov-m-guia')||{}).value||'';
+  const hit=_novBuscarPorGuia(val);
+  if(!hit){ el.style.display='none'; return; }
+  const nEvid=_novGetSols(hit.nov).length+1;
+  el.innerHTML='⚠️ Esta guía ya tiene una novedad registrada'+(hit.nov.asesor?' por <b>'+esc(hit.nov.asesor)+'</b>':'')+
+    '. Al guardar, la evidencia se agrega como <b>evidencia '+nEvid+'</b> de ese registro — no se crea una novedad nueva.';
+  el.style.display='block';
 }
 
 function _novAbrirSol(id){
@@ -863,6 +903,7 @@ function _novAbrirSol(id){
   const hoy=_hoyLocal();
   document.getElementById('nov-sol-fecha').value=hoy;
   _novSetEstado('solucionada');
+  _novAvisoGuia();
   document.getElementById('nov-modal').classList.add('open');
 }
 
@@ -884,23 +925,34 @@ function _novEditar(id){
   document.getElementById('nov-m-guia').value=n.guia||'';
   document.getElementById('nov-m-asesor').value=n.asesor||'';
   document.getElementById('nov-m-save-btn').textContent='Actualizar';
+  _novAvisoGuia();
   document.getElementById('nov-modal').classList.add('open');
 }
 
+// Al borrar una gestión hay que descontarla de quien la hizo y del día en que la
+// hizo — que no tienen por qué ser el asesor de la sesión ni el día de la
+// novedad. Se leen ANTES de borrar, porque después el registro ya no está.
+function _novGestionBorrada(n, sol){
+  const keyDe=typeof _gdKey==='function'?_gdKey:_gdKeyFallback;
+  return { dia: (sol&&sol.dia)||(n&&n.dia)||new Date().getDate(),
+           ak: keyDe((sol&&sol.asesor)||(n&&n.asesor)||'') || _gdAK() };
+}
 function _novDelSol(id, solKey){
   if(!confirm('¿Eliminar esta evidencia?'))return;
+  const n=_novData[id]||{};
+  const {dia, ak}=_novGestionBorrada(n, (n.soluciones||{})[solKey]);
   _db.ref(_novBasePath()+'/'+id+'/soluciones/'+solKey).remove().then(()=>{
-    const dia=_novData[id]?.dia||new Date().getDate();
     if(_novData[id]?.soluciones) delete _novData[id].soluciones[solKey];
-    _novRender(); _novSyncGD(dia);
+    _novRender(); _novSyncGD(dia, ak);
   });
 }
 function _novClearSol(id,num){
   if(!confirm('¿Eliminar evidencia '+num+'?'))return;
+  const n=_novData[id]||{};
+  const {dia, ak}=_novGestionBorrada(n, n['sol'+num]);
   _db.ref(_novBasePath()+'/'+id+'/sol'+num).remove().then(()=>{
-    const dia=_novData[id]?.dia||new Date().getDate();
     if(_novData[id]) _novData[id]['sol'+num]=null;
-    _novRender(); _novSyncGD(dia);
+    _novRender(); _novSyncGD(dia, ak);
   });
 }
 
@@ -908,11 +960,17 @@ function _novEliminar(id){
   const n=_novData[id];
   const guia=n?n.guia:'esta novedad';
   if(!confirm('¿Eliminar la novedad de guía '+guia+'?\nEsta acción no se puede deshacer.'))return;
-  const dia=n?.dia||new Date().getDate();
+  // Borrar la novedad borra TODAS sus gestiones: hay que recalcular cada par
+  // (asesor, día) que tenía alguna, no solo el día en que se registró.
+  const afectados=[];
+  _novGestionesDe(n||{}, _gdMes).forEach(g=>{
+    if(!afectados.some(a=>a.dia===g.dia&&a.ak===g.asesorKey)) afectados.push({dia:g.dia, ak:g.asesorKey});
+  });
+  if(!afectados.length) afectados.push({dia:(n&&n.dia)||new Date().getDate(), ak:_gdAK()});
   _db.ref(_novBasePath()+'/'+id).remove().then(()=>{
     delete _novData[id];
     _novRender();
-    _novSyncGD(dia);
+    afectados.forEach(a=>_novSyncGD(a.dia, a.ak));
   });
 }
 
@@ -946,32 +1004,57 @@ async function _novGuardar(){
     const fechaInput=document.getElementById('nov-sol-fecha')?.value;
     const fechaBase=fechaInput?new Date(fechaInput+'T12:00:00'):new Date();
     const fechaLabel=fechaBase.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+    // Cada evidencia es una gestión y suma al asesor que la hizo, el día que la
+    // hizo: por eso lleva su propio asesor/dia/mes y no se deduce de la novedad
+    // (que puede haberla registrado otra persona, otro día). El día sale de la
+    // fecha elegida en el modal, no de Date.now(), para que corregir la fecha de
+    // una evidencia la mueva de fila. Nunca toISOString: acá son fechas locales.
+    const gestorNom=window.getLoginAsesor?window.getLoginAsesor():'';
+    const solMes=fechaBase.getFullYear()+'-'+String(fechaBase.getMonth()+1).padStart(2,'0');
+    const meta={asesor:gestorNom, dia:fechaBase.getDate(), mes:solMes};
     // Build solution object
     let solObj=null;
     if(_novTipoActivo==='img'){
       const fi=document.getElementById('nov-m-img');
-      if(fi.files.length) solObj={estado:_novEstadoActivo,tipo:'img',val:await _novResizeImg(fi.files[0],800,.72),fechaLabel,ts:Date.now()};
+      if(fi.files.length) solObj={estado:_novEstadoActivo,tipo:'img',val:await _novResizeImg(fi.files[0],800,.72),fechaLabel,ts:Date.now(),...meta};
     } else {
       const txt=document.getElementById('nov-m-txt').value.trim();
-      if(txt) solObj={estado:_novEstadoActivo,tipo:'txt',val:txt,fechaLabel,ts:Date.now()};
+      if(txt) solObj={estado:_novEstadoActivo,tipo:'txt',val:txt,fechaLabel,ts:Date.now(),...meta};
     }
     const _fmtFecha=v=>{if(!v)return'';const d=new Date(v+'T12:00:00');return isNaN(d)?v:d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});};
     if(state.mode==='new'){
       const guia=document.getElementById('nov-m-guia').value.trim();
       if(!guia){ alert('Ingresa el número de guía'); btn.textContent='Guardar'; btn.disabled=false; return; }
-      const fechaVal=document.getElementById('nov-m-fecha').value.trim();
-      const novData={
-        guia, fecha:_fmtFecha(fechaVal)||fechaVal,
-        asesor:document.getElementById('nov-m-asesor').value.trim(),
-        dia:new Date().getDate(), ts:Date.now()
-      };
-      // Primera evidencia va en soluciones/ si existe
-      const ref=await _db.ref(_novBasePath()).push(novData);
-      _novData[ref.key]=novData;
-      if(solObj){
-        await _db.ref(_novBasePath()+'/'+ref.key+'/soluciones').push(solObj);
-        if(!_novData[ref.key].soluciones)_novData[ref.key].soluciones={};
-        _novData[ref.key].soluciones[Date.now()]=solObj;
+      // Una guía = una novedad. Si ya existe, esto no es una novedad nueva sino
+      // otra gestión sobre la misma: se cuelga como evidencia del registro que
+      // ya está y el historial de esa guía queda completo en un solo lugar. El
+      // estado se recalcula solo, porque sale de las evidencias.
+      const existente=_novBuscarPorGuia(guia);
+      if(existente){
+        if(!solObj){
+          alert('La guía '+guia+' ya tiene una novedad registrada.\n\nPara sumarle una gestión, adjuntá una imagen o un texto de evidencia.');
+          btn.textContent='Guardar'; btn.disabled=false; return;
+        }
+        const nEvid=_novGetSols(existente.nov).length+1;
+        const solRef=await _db.ref(_novBasePath()+'/'+existente.id+'/soluciones').push(solObj);
+        if(!_novData[existente.id].soluciones) _novData[existente.id].soluciones={};
+        _novData[existente.id].soluciones[solRef.key]=solObj;
+        toast('La guía '+guia+' ya estaba registrada — se agregó como evidencia '+nEvid+' de esa novedad.',5000);
+      } else {
+        const fechaVal=document.getElementById('nov-m-fecha').value.trim();
+        const novData={
+          guia, fecha:_fmtFecha(fechaVal)||fechaVal,
+          asesor:document.getElementById('nov-m-asesor').value.trim(),
+          dia:new Date().getDate(), ts:Date.now()
+        };
+        // Primera evidencia va en soluciones/ si existe
+        const ref=await _db.ref(_novBasePath()).push(novData);
+        _novData[ref.key]=novData;
+        if(solObj){
+          await _db.ref(_novBasePath()+'/'+ref.key+'/soluciones').push(solObj);
+          if(!_novData[ref.key].soluciones)_novData[ref.key].soluciones={};
+          _novData[ref.key].soluciones[Date.now()]=solObj;
+        }
       }
     } else if(state.mode==='edit'){
       const guia=document.getElementById('nov-m-guia').value.trim();
@@ -993,41 +1076,46 @@ async function _novGuardar(){
     }
     _novCerrarModal();
     _novRender();
-    // Sincronizar conteos en tabla GD
-    const diaSync=state.mode==='new'?new Date().getDate():(_novData[state.id]?.dia||new Date().getDate());
-    _novSyncGD(diaSync);
+    // Recalcular el día de la GESTIÓN, no el de la novedad: si hoy adjunto una
+    // evidencia a una novedad de la semana pasada, lo que cambia es mi fila de
+    // hoy. Sin evidencia nueva no hubo gestión y no hay nada que recontar.
+    if(solObj) _novSyncGD(solObj.dia);
   } catch(e){ alert('Error al guardar: '+e.message); }
   btn.textContent='Guardar'; btn.disabled=false;
 }
 
 // _novGetSols vive en shared/app-shared.js (la usa también Gestión Logística)
 
-// Recalcula soluc/devuelt del día en GD a partir de todas las novedades
-async function _novSyncGD(dia){
+// Recalcula soluc/devuelt de un día para UN asesor, a partir de sus gestiones.
+// `asesorKey` por defecto es el asesor de la sesión; se pasa explícito al borrar
+// una evidencia ajena, porque en ese caso el nodo que quedó desactualizado es el
+// del otro asesor, no el propio.
+async function _novSyncGD(dia, asesorKey){
   if(typeof _db==='undefined'||!window._currentUsername||!_gdMes||!dia) return;
-  // Una novedad es solucionada o devuelta, nada más. Devuelta gana si hay de
-  // ambas. Las que no tienen ninguna solución registrada siguen pendientes y no
-  // suman en ninguna de las dos columnas: contarlas como resueltas inflaría el
-  // dato. Antes 'soluc' era solo lo sincronizado a Dropi y todo lo demás caía en
-  // el bucket 'gestion', que ya no existe.
-  let soluc=0, devuelt=0;
-  Object.values(_novData).forEach(n=>{
-    if((n.dia||0)!==dia) return;
-    const sols=_novGetSols(n);
-    if(sols.some(s=>s.estado==='devuelta')){ devuelt++; }
-    else if(n.solucionadaDropi||sols.some(s=>s.estado==='solucionada')){ soluc++; }
-  });
+  // Los contadores son de CADA asesor, no de la tienda: lo que se comparte entre
+  // el equipo son los datos (novedades, R.O., anticipos) para poder validarlos,
+  // pero cada quien lleva sus propias gestiones. Antes esto sumaba todas las
+  // novedades del día sin mirar de quién eran y escribía el total en el nodo del
+  // asesor logueado: con dos asesores en una tienda, los dos veían en su fila el
+  // total de la tienda. Ver _novGestionesDe/_novContarDia en app-shared.js.
+  const ak=asesorKey||_gdAK();
+  const esPropio=ak===_gdAK();
+  const {soluc, devuelt}=_novContarDia(_novData, ak, dia, _gdMes);
   // Leer datos actuales del día en GD (para no pisar otras columnas).
   // _leerTienda sobre el nodo completo primero: si el mes aún vive en la clave
   // vieja, lo migra entero — leer solo /dias/{dia} habría copiado ese día suelto
   // y dejado el resto del historial atrás.
-  const base=_gdBasePath();
-  await _leerTienda(_gdBase);
+  const rutaAsesor=tk=>_gdBase(tk, ak);
+  const base=rutaAsesor();
+  await _leerTienda(rutaAsesor);
   const snap=await _db.ref(base+'/dias/'+dia).once('value');
   const dayData=snap.val()||{};
   dayData.soluc=soluc; dayData.devuelt=devuelt;
   delete dayData.gestion; // campo retirado: se limpia al recalcular el día
   await _db.ref(base+'/dias/'+dia).set(dayData);
+  // La caché y la tabla en pantalla son las del asesor de la sesión: si se
+  // recalculó el nodo de otro, no hay nada que refrescar acá.
+  if(!esPropio) return;
   // Actualizar cache local y UI si la tabla está visible
   if(!_gdData[dia]) _gdData[dia]={};
   Object.assign(_gdData[dia], {soluc, devuelt});

@@ -394,10 +394,15 @@
     try {
       const data = await leerDB('novedades/' + tienda.key, auth);
       const guiaNorm = guia.trim();
+      // Se compara ignorando espacios, guiones y mayúsculas — igual que
+      // _novNormGuia en gestiones-diarias.js. La guía se pega desde Dropi y un
+      // espacio de más creaba un registro duplicado de la misma guía.
+      const norm = g => String(g || '').replace(/[\s-]+/g, '').toLowerCase();
+      const guiaCmp = norm(guiaNorm);
       const encontradas = [];
       Object.entries(data || {}).forEach(([mes, entradas]) => {
         Object.entries(entradas || {}).forEach(([id, n]) => {
-          if ((n.guia || '').trim() === guiaNorm) encontradas.push({ mes, id, ...n });
+          if (norm(n.guia) === guiaCmp) encontradas.push({ mes, id, ...n });
         });
       });
       encontradas.sort((a, b) => (b.ts || 0) - (a.ts || 0));
@@ -513,24 +518,48 @@
     screenResultado.style.display = 'block';
   });
 
-  // Recalcula los contadores diarios (soluc/gestion/devuelt) de Gestiones Diarias
-  // para el asesor actual, igual que _novSyncGD en index.html: cuenta, entre TODAS
-  // las novedades del mes con ese mismo día de creación, cuántas caen en cada bucket.
-  async function sincronizarGD(mes, dia) {
-    const asesorKey = gdKey(asesorNombre);
+  // Recalcula los contadores (soluc/devuelt) de UN asesor en UN día. Tiene que
+  // dar exactamente lo mismo que _novGestionesDe/_novContarDia en
+  // shared/app-shared.js — está duplicado acá porque la extensión no puede
+  // cargar ese archivo. Si cambia la regla allá, cambiala también acá.
+  //
+  // Regla: los contadores son de CADA asesor, no de la tienda. Cada evidencia es
+  // una gestión y suma a quien la hizo, el día que la hizo. Una novedad
+  // trabajada por dos personas cuenta una vez para cada una.
+  //
+  // Compatibilidad: las evidencias viejas no traen asesor/dia, así que caen al
+  // asesor y al día de la novedad — si no, recalcular un día viejo lo dejaría en
+  // cero y borraría historial.
+  //
+  // Esta función ya se desalineó dos veces del panel: primero mandando todo a
+  // `gestion` (bucket retirado que nadie suma), y después contando las novedades
+  // de toda la tienda en la fila de un solo asesor. Como el guardado es un PUT
+  // del día completo, un cálculo mal hecho acá pisa lo que el panel contó bien.
+  function gestionesDe(n, mes) {
+    return obtenerSoluciones(n || {})
+      .filter(s => s && (s.estado === 'solucionada' || s.estado === 'devuelta'))
+      .filter(s => !mes || !s.mes || s.mes === mes)
+      .map(s => ({
+        estado: s.estado,
+        asesorKey: gdKey(s.asesor || (n || {}).asesor || ''),
+        dia: s.dia || (n || {}).dia || 0
+      }));
+  }
+  async function sincronizarGD(mes, dia, asesorKeyForzado) {
+    const asesorKey = asesorKeyForzado || gdKey(asesorNombre);
     const [novedadesMes, dayDataActual] = await Promise.all([
       leerDB('novedades/' + tienda.key + '/' + mes, auth).then(d => d || {}),
       leerDB('gestiones_diarias/' + tienda.key + '/' + mes + '/' + asesorKey + '/dias/' + dia, auth).then(d => d || {})
     ]);
-    let soluc = 0, gestion = 0, devuelt = 0;
+    let soluc = 0, devuelt = 0;
     Object.values(novedadesMes).forEach(n => {
-      if ((n.dia || 0) !== dia) return;
-      const sols = obtenerSoluciones(n);
-      if (n.solucionadaDropi) soluc++;
-      else if (sols.some(s => s.estado === 'devuelta')) devuelt++;
-      else gestion++;
+      gestionesDe(n, mes).forEach(g => {
+        if (g.dia !== dia || g.asesorKey !== asesorKey) return;
+        if (g.estado === 'devuelta') devuelt++; else soluc++;
+      });
     });
-    dayDataActual.soluc = soluc; dayDataActual.gestion = gestion; dayDataActual.devuelt = devuelt;
+    dayDataActual.soluc = soluc; dayDataActual.devuelt = devuelt;
+    delete dayDataActual.gestion; // campo retirado: se limpia al recalcular el día
     await escribirDB('gestiones_diarias/' + tienda.key + '/' + mes + '/' + asesorKey + '/dias/' + dia, auth, dayDataActual);
   }
 
@@ -563,15 +592,24 @@
     guardarBtn.disabled = true; guardarBtn.textContent = 'Guardando...';
     formMsg.textContent = ''; formMsg.className = '';
     try {
-      // Construir la evidencia (opcional si es novedad nueva, obligatoria si es evidencia adicional)
+      // Construir la evidencia (opcional si es novedad nueva, obligatoria si es evidencia adicional).
+      // Cada evidencia es una gestión y suma a quien la hizo, el día que la
+      // hizo: por eso lleva su propio asesor/dia/mes. El día sale de la fecha
+      // elegida en el formulario, no de Date.now(), igual que en el panel.
+      const fSol = solFecha.value ? new Date(solFecha.value + 'T12:00:00') : new Date();
+      const solMeta = {
+        asesor: asesorNombre,
+        dia: fSol.getDate(),
+        mes: fSol.getFullYear() + '-' + String(fSol.getMonth() + 1).padStart(2, '0')
+      };
       let solObj = null;
       if (tipoActivo === 'img') {
         if (imgEvidenciaData) {
-          solObj = { estado: estadoActivo, tipo: 'img', val: imgEvidenciaData, fechaLabel: fmtFecha(solFecha.value), ts: Date.now() };
+          solObj = { estado: estadoActivo, tipo: 'img', val: imgEvidenciaData, fechaLabel: fmtFecha(solFecha.value), ts: Date.now(), ...solMeta };
         }
       } else {
         const txt = mTxt.value.trim();
-        if (txt) solObj = { estado: estadoActivo, tipo: 'txt', val: txt, fechaLabel: fmtFecha(solFecha.value), ts: Date.now() };
+        if (txt) solObj = { estado: estadoActivo, tipo: 'txt', val: txt, fechaLabel: fmtFecha(solFecha.value), ts: Date.now(), ...solMeta };
       }
       const modoSolucion = solModo.value;
       if (solObj && !modoSolucion) throw new Error('Selecciona el modo de solución.');
@@ -585,13 +623,16 @@
         const novData = { guia, fecha: fmtFecha(mFecha.value) || mFecha.value, asesor: mAsesor.value.trim(), dia, ts: Date.now() };
         const id = await agregarDB('novedades/' + tienda.key + '/' + mes, auth, novData);
         if (solObj) await agregarDB('novedades/' + tienda.key + '/' + mes + '/' + id + '/soluciones', auth, solObj);
-        await sincronizarGD(mes, dia);
+        // Día de la GESTIÓN, mes del NODO: las novedades y el contador viven en
+        // 'novedades/{tienda}/{mes}', así que hay que leer ahí para encontrarla.
+        // Sin evidencia no hubo gestión y no hay nada que recontar.
+        if (solObj) await sincronizarGD(mes, solObj.dia);
         guiaActual = guia;
         guiaParaNota = guia;
       } else {
         if (!solObj) throw new Error('Agrega una imagen o un texto de evidencia.');
         await agregarDB('novedades/' + tienda.key + '/' + target.mes + '/' + target.id + '/soluciones', auth, solObj);
-        await sincronizarGD(target.mes, target.dia || new Date().getDate());
+        await sincronizarGD(target.mes, solObj.dia);
       }
 
       // Si hay evidencia, deja constancia del modo de solución en las notas de la

@@ -852,6 +852,11 @@ window._sbEstadosToggle=function(){
       <button onclick="_gdNextMes()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:white;width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:.85rem;">→</button>
       <span id="gd-save-st" style="font-size:.62rem;opacity:.5;margin-left:4px;"></span>
       <button onclick="_gdVolver()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.75);padding:5px 11px;border-radius:7px;font-size:.7rem;cursor:pointer;font-weight:600;margin-left:4px;">← Menú principal</button>
+      <!-- Mismo id que en gestion-logistica.html: _refrescarBotonCambiarPerfil
+           ya lo tiene en su lista, así que se muestra solo si la cuenta tiene
+           más de un perfil. Faltaba acá, y desde este módulo no había forma de
+           cambiar de perfil sin pasar antes por el menú principal. -->
+      <button id="btn-volver-roles-topnav" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.75);padding:5px 11px;border-radius:7px;font-size:.7rem;cursor:pointer;font-weight:600;">🎭 Cambiar perfil</button>
     </div>
   </div>
   <!-- Info strip -->
@@ -1034,7 +1039,11 @@ window._sbEstadosToggle=function(){
       </div>
       <div style="margin-bottom:11px;">
         <label class="nov-form-label">Número de guía</label>
-        <input id="nov-m-guia" class="nov-form-input" type="text" placeholder="64108612927">
+        <input id="nov-m-guia" class="nov-form-input" type="text" placeholder="64108612927" oninput="_novAvisoGuia()">
+        <!-- Avisa que la guía ya tiene novedad: al guardar, la evidencia se
+             suma a ese registro en vez de crear uno nuevo. Así el asesor lo
+             sabe antes de guardar y no después. -->
+        <div id="nov-m-guia-aviso" style="display:none;font-size:.66rem;font-weight:600;color:var(--warning);background:var(--warning-soft);border-radius:6px;padding:6px 9px;margin-top:6px;line-height:1.35;"></div>
       </div>
       <div style="margin-bottom:16px;">
         <label class="nov-form-label">Asesor encargado</label>
