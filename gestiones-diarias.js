@@ -19,6 +19,46 @@ function _gdInit(){
 // borrar la evidencia de otro asesor hay que recalcular SU nodo, no el propio.
 function _gdBase(tk, ak){ return 'gestiones_diarias/'+(tk||_gdTK())+'/'+_gdMes+'/'+(ak||_gdAK()); }
 function _gdBasePath(){ return _gdBase(); }
+// El consolidado es de la TIENDA, no del asesor: en una tienda con tres
+// personas, una carga el corte de las 8, otra el de las 12 y otra el de las 5,
+// y los tres tienen que ver el mismo panorama. Colgaba del nodo del asesor, así
+// que cada uno veía solo lo suyo — el mismo error que ya había pasado con las
+// notas del coordinador.
+function _consoBase(tk){ return 'gestiones_diarias/'+(tk||_gdTK())+'/'+_gdMes+'/consolidado'; }
+function _consoPath(){ return _consoBase(); }
+
+// Totales del día sumando a TODOS los asesores de la tienda. Los alimenta el
+// cierre: carritos recuperados y ventas WPP son de la tienda, no de quien los
+// carga, y las novedades solucionadas salen de las evidencias.
+let _consoTotales={};
+function _consoCargarTotales(){
+  if(typeof _db==='undefined') return Promise.resolve();
+  return Promise.all([
+    _leerTienda(tk=>'gestiones_diarias/'+tk+'/'+_gdMes),
+    _leerTienda(_novBase)
+  ]).then(([sg,sn])=>{
+    const ases=sg.val()||{}, novs=sn.val()||{};
+    const tot={};
+    const suma=(dia,campo,n)=>{ if(!n) return; (tot[dia]=tot[dia]||{}); tot[dia][campo]=(tot[dia][campo]||0)+n; };
+    Object.entries(ases).forEach(([ak,nodo])=>{
+      if(ak==='consolidado'||ak==='notasHist'||!nodo||typeof nodo!=='object') return;
+      Object.entries((nodo||{}).dias||{}).forEach(([dia,d])=>{
+        suma(dia,'recupCarri',d.recupCarri||0);
+        suma(dia,'ventasWpp',d.ventasWpp||0);
+      });
+    });
+    // Novedades solucionadas del día, de toda la tienda: se cuentan las
+    // evidencias marcadas solucionada, sin importar quién las hizo.
+    Object.values(novs||{}).forEach(n=>{
+      _novGestionesDe(n, _gdMes).forEach(g=>{
+        if(g.estado==='solucionada') suma(String(g.dia),'novSoluc',1);
+      });
+    });
+    _consoTotales=tot;
+    // Los totales llegan después del primer pintado; se repinta con los valores.
+    if(document.getElementById('conso-form')) _consoRender();
+  }).catch(()=>{});
+}
 
 function _gdCargar(){
   const [y,m]=_gdMes.split('-').map(Number);
@@ -497,7 +537,7 @@ const _CS={
     // 'carritosRecup' y 'ventasWpp' llevan {desde:...}: no se escriben acá, se
     // leen de las columnas RECUP. y VENTAS WPP de ese día en la tabla de
     // Gestión. Antes el mismo dato se cargaba dos veces y podía discrepar.
-    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.',{desde:'recupCarri'}],['ventasWpp','VENTAS WPP',{desde:'ventasWpp'}]],
+    fields:[['guiasGeneradas','GUÍAS GENERADAS'],['guiasDespachadas','GUÍAS DESPACHADAS'],['guiasPasadasPendiente','GUÍAS PASADAS A PENDIENTE'],['carritosRecup','CARRITOS RECUP.',{desde:'recupCarri'}],['ventasWpp','VENTAS WPP',{desde:'ventasWpp'}],['novSoluc','NOVEDADES SOLUC.',{desde:'novSoluc'}]],
     noTotal:true
   }
 };
@@ -537,10 +577,20 @@ function _consoCargar(){
   // Primero se migra el nodo del mes completo y recién después se lee el
   // subnodo: leer /consolidado/{dia} con la lectura tolerante habría copiado
   // ese día suelto a la clave nueva y dejado el resto del historial atrás.
-  _leerGD(_gdBase).then(()=>_db.ref(_gdBasePath()+'/consolidado/'+_consoDia).once('value')).then(snap=>{
-    _consoData=snap.val()||{};
-    _consoRender();
-  });
+  // Se lee del nodo de la tienda. Si ahí no hay nada, se busca el que quedó
+  // bajo el nodo del asesor (esquema anterior) y se sube, para no perder lo ya
+  // cargado en el mes.
+  _leerTienda(_consoBase).then(snap=>{
+    const todos=snap.val()||{};
+    if(todos[_consoDia]!==undefined){ _consoData=todos[_consoDia]||{}; _consoRender(); return; }
+    return _db.ref(_gdBasePath()+'/consolidado/'+_consoDia).once('value').then(sv=>{
+      const propio=sv.val();
+      _consoData=propio||{};
+      _consoRender();
+      if(propio) return _db.ref(_consoPath()+'/'+_consoDia).set(propio);
+    });
+  }).catch(()=>{ _consoData={}; _consoRender(); });
+  _consoCargarTotales();
 }
 
 // "Viernes, 31 de Julio" para el día del mes que se está viendo. Cae a "DÍA n"
@@ -586,8 +636,10 @@ function _consoRender(){
       def.fields.forEach(([key,lbl,opt])=>{
         if(opt&&opt.desde){
           // Campo derivado de la tabla de Gestión: se muestra bloqueado, con el
-          // valor del día que se esté viendo en el consolidado.
-          const val=(_gdData[_consoDia]||{})[opt.desde]||0;
+          // valor del día que se esté viendo en el consolidado. Suma a TODOS los
+          // asesores de la tienda — el cierre es de la tienda, y antes mostraba
+          // solo lo del asesor que estuviera mirando.
+          const val=(_consoTotales[_consoDia]||{})[opt.desde]||0;
           html+=`<div class="conso-row"><span class="conso-lbl">${lbl} 🔒</span>
             <span class="conso-inp conso-inp-ro" id="ci-${corte.id}-${secId}-${key}"
               title="Se toma de la tabla de Gestión, del día que estás viendo">${val}</span></div>`;
@@ -669,7 +721,7 @@ function _consoCambio(corteId,secId,campo,valor){
 function _consoGuardar(){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   document.getElementById('gd-save-st').textContent='Guardando...';
-  _db.ref(_gdBasePath()+'/consolidado/'+_consoDia).set(_consoData).then(()=>{
+  _db.ref(_consoPath()+'/'+_consoDia).set(_consoData).then(()=>{
     document.getElementById('gd-save-st').textContent='✓ Guardado';
     setTimeout(()=>{const el=document.getElementById('gd-save-st');if(el)el.textContent='';},2000);
   });
