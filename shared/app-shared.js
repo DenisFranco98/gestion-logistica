@@ -5078,6 +5078,49 @@ function _bordIndexarExtras(novTiendas, roTiendas, antTiendas){
     }))));
   return ix;
 }
+// Agrega resultados para clientes que aparecen en novedades, R.O. o anticipos
+// pero no tienen pedido en el kanban. Sin esto, buscar el teléfono de alguien
+// con anticipo y reclamo registrados no devolvía nada.
+function _bordSumarSueltos(mapa, qN, esNumero, novTiendas, roTiendas, antTiendas){
+  const qTel=_bordTel(qN);
+  const yaEsta=(guia,tel)=>Object.values(mapa).some(r=>{
+    if(guia && _bordNorm(r.guia)===_bordNorm(guia)) return true;
+    const g=Object.values(r.asesores).map(a=>a.gestion).find(x=>x)||{};
+    return tel && _bordTel(g._tel)===_bordTel(tel);
+  });
+  const crear=(clave,guia,nombre)=>{
+    if(!mapa[clave]) mapa[clave]={guia:guia||clave, nombre:nombre||'', asesores:{}, sinKanban:true};
+    return mapa[clave];
+  };
+  // R.O.: tiene guía, cliente y teléfono
+  roTiendas.forEach(({val})=>Object.values(val||{}).forEach(regs=>Object.values(regs||{}).forEach(r=>{
+    if(!r) return;
+    const hit = (r.guia && _bordNorm(r.guia).includes(qN)) || (r.cliente && _bordNorm(r.cliente).includes(qN)) ||
+                (esNumero && qTel && _bordTel(r.telefono).includes(qTel));
+    if(!hit || yaEsta(r.guia, r.telefono)) return;
+    const clave = r.guia ? String(r.guia).trim() : 'tel:'+_bordTel(r.telefono);
+    const e=crear(clave, r.guia, r.cliente);
+    e.telSuelto=r.telefono||e.telSuelto;
+  })));
+  // Anticipos: NO tienen guía, se identifican por cliente y teléfono
+  antTiendas.forEach(({val})=>Object.values(val||{}).forEach(tipos=>['con','sin'].forEach(t=>
+    Object.values((tipos||{})[t]||{}).forEach(a=>{
+      if(!a) return;
+      const hit = (a.cliente && _bordNorm(a.cliente).includes(qN)) ||
+                  (esNumero && qTel && _bordTel(a.telefono).includes(qTel));
+      if(!hit || yaEsta(null, a.telefono)) return;
+      const clave='tel:'+_bordTel(a.telefono);
+      const e=crear(clave, null, a.cliente);
+      e.telSuelto=a.telefono||e.telSuelto;
+    }))));
+  // Novedades: solo guía y asesor
+  novTiendas.forEach(({val})=>Object.values(val||{}).forEach(regs=>Object.values(regs||{}).forEach(n=>{
+    if(!n||!n.guia) return;
+    if(!_bordNorm(n.guia).includes(qN) || yaEsta(n.guia, null)) return;
+    crear(String(n.guia).trim(), n.guia, '');
+  })));
+}
+
 // Lo que se sabe de un pedido fuera del kanban.
 function _bordExtrasDe(guia, tel, nombre){
   const g=_bordNorm(guia), t=_bordTel(tel), n=_bordNorm(nombre);
@@ -5155,6 +5198,12 @@ function _admBuscarOrden(){
         if(g.eventos) Object.values(g.eventos).forEach(e=>slot.events.push(e));
       }
     });
+    // Un cliente puede existir en novedades, R.O. o anticipos SIN tener pedido
+    // en el kanban: pasa cuando el pedido no llegó a cargarse en el Excel o es
+    // anterior. Arrancando solo desde gestiones_sync esos quedaban invisibles
+    // aunque tuvieran anticipo y reclamo registrados.
+    _bordSumarSueltos(resultadosPorGuia, qN, esNumero, novTiendas, roTiendas, antTiendas);
+    _debug.gests += 0;
     _bordMostrarResultados(resultadosPorGuia, q, _debug);
   }).catch(e=>{
     document.getElementById('bord-results').innerHTML=
@@ -5196,10 +5245,16 @@ function _bordMostrarResultados(mapa, q, debug){
   keys.forEach(key=>{
     const r=mapa[key];
     const asesoresCount=Object.keys(r.asesores).length;
-    const nombres=Object.values(r.asesores).map(a=>a.nombreAsesor).join(', ');
+    // Sin pedido en el kanban no hay asesores que listar: se dice explícito en
+    // vez de dejar el renglón vacío, que se leería como un dato faltante.
+    const nombres=asesoresCount
+      ? Object.values(r.asesores).map(a=>a.nombreAsesor).join(', ')
+      : 'sin gestión en el kanban';
     const primerG=Object.values(r.asesores).map(a=>a.gestion).find(g=>g)||{};
     const ciudad=primerG._ciudad||'';
-    const tel=primerG._tel||'';
+    // telSuelto: los resultados que salen de R.O. o anticipos no tienen pedido
+    // en el kanban, así que su teléfono viene de ahí.
+    const tel=primerG._tel||r.telSuelto||'';
     const totalEvts=Object.values(r.asesores).reduce((s,a)=>{
       let c=0;
       if(a.gestion){
@@ -5221,6 +5276,7 @@ function _bordMostrarResultados(mapa, q, debug){
               '<span>👥 '+nombres+'</span>'+
             '</div>'+
             _bordChipsExtras(r.guia, tel, r.nombre)+
+            (r.sinKanban?'<div style="font-size:.62rem;color:var(--text-3);margin-top:4px;font-style:italic;">Este pedido no está en el Excel cargado: los datos salen de R.O., novedades o anticipos.</div>':'')+
           '</div>'+
           '<div style="text-align:right;flex-shrink:0;">'+
             '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;font-size:.68rem;font-weight:700;'+
@@ -5388,7 +5444,9 @@ function _bordRenderDetalle(r){
       html+='</div></div>';
     });
   }
-  html += _bordRenderExtras(clienteInfo.guia||r.guia, clienteInfo.tel, clienteInfo.nombre||r.nombre);
+  // El teléfono puede venir del pedido o, si no hay pedido en el kanban, del
+  // R.O. o el anticipo que originó el resultado.
+  html += _bordRenderExtras(clienteInfo.guia||r.guia, clienteInfo.tel||r.telSuelto, clienteInfo.nombre||r.nombre);
   return html;
 }
 
