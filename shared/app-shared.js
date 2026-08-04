@@ -5261,28 +5261,73 @@ window._malAbrir = function(username){
   _malCargarSesiones(username);
 };
 
+// ── Últimas sesiones del asesor ──────────────────────────────────────────
+// Un INGRESO no es un registro de session_hist. Ahí se escribe una entrada por
+// cada carga de página, y saltar de módulo a módulo es una carga completa
+// (irAPagina → location.href), así que una sola jornada deja tres o cuatro
+// registros solapados, de 0 y 1 minuto. Mostrarlos crudos daba una lista que no
+// decía ni cuándo entró ni cuánto trabajó: en un caso real, 16 registros que en
+// verdad eran 6 ingresos, y una jornada de 5h 46m partida en cuatro pedazos.
+//
+// Se unen los registros que se solapan o que arrancan a menos de 5 minutos del
+// anterior: el ingreso queda con la hora del primero y la duración hasta el
+// final del último. La tolerancia cubre el hueco entre que se cierra una página
+// y termina de cargar la siguiente.
+const _SES_UNIR_MS = 5*60000;
+// Pura y aparte para poder probarla: recibe los registros crudos y devuelve los
+// ingresos, del más viejo al más nuevo.
+function _malAgruparSesiones(registros, ahora){
+  const out = [];
+  (registros||[])
+    // typeof y no `r.start` a secas: un 0 es falsy y se colaría como registro
+    // inválido cuando en realidad es un timestamp.
+    .filter(r=>r && typeof r.start==='number')
+    .sort((a,b)=>a.start-b.start)
+    .forEach(r=>{
+      // Sin `end` la sesión sigue viva: se mide hasta ahora. Ese caso es real,
+      // no un dato roto — es justamente quien está trabajando en este momento.
+      const abierta = !r.end;
+      const fin = r.end || ahora;
+      const ultimo = out[out.length-1];
+      if(ultimo && r.start <= ultimo.fin + _SES_UNIR_MS){
+        if(fin > ultimo.fin) ultimo.fin = fin;
+        if(abierta) ultimo.enCurso = true;
+        ultimo.registros++;
+      } else {
+        out.push({inicio:r.start, fin, enCurso:abierta, registros:1});
+      }
+    });
+  return out;
+}
+// "4 ago · 07:58 a. m." — el mes sale de _NOV_MESES y no de toLocaleDateString
+// porque es-CO con month:'short' devuelve "4 de ago" y cambia según el entorno.
+function _malFmtInicio(ts){
+  const d = new Date(ts);
+  return d.getDate()+' '+_NOV_MESES[d.getMonth()]+' · '+
+         d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+}
 function _malCargarSesiones(username){
   const el = document.getElementById('mal-session-hist');
   el.innerHTML = '<div style="font-size:.72rem;color:var(--text-3);">Cargando...</div>';
-  _db.ref('session_hist/'+username).orderByChild('start').limitToLast(3).once('value', snap=>{
-    const sesiones = [];
-    snap.forEach(c=>sesiones.unshift(c.val())); // más reciente primero
-    if(!sesiones.length){
+  // Se leen bastantes más de los 3 que se muestran: hacen falta los registros
+  // crudos para poder unirlos, y cada ingreso se lleva varios por delante.
+  _db.ref('session_hist/'+username).orderByChild('start').limitToLast(60).once('value', snap=>{
+    const crudos = [];
+    snap.forEach(c=>{ crudos.push(c.val()); });
+    const ingresos = _malAgruparSesiones(crudos, _ahoraServidor()).slice(-3);
+    if(!ingresos.length){
       el.innerHTML='<div style="font-size:.72rem;color:var(--text-3);">Sin sesiones registradas aún</div>';
       return;
     }
-    el.innerHTML = sesiones.map((s,i)=>{
-      const inicio = s.start ? _bordFmtTs(s.start) : '—';
-      const fin    = s.end   ? _bordFmtTs(s.end)   : '<span style="color:#10b981;font-weight:700;">En línea ahora</span>';
-      const dur    = (s.start && s.end) ? _fmtDuracion(s.end - s.start) : null;
+    el.innerHTML = ingresos.map(s=>{
+      const dur = s.enCurso
+        ? '<span style="color:#10b981;font-weight:700;">en línea · '+_fmtDuracion(s.fin-s.inicio)+'</span>'
+        : _fmtDuracion(s.fin - s.inicio);
       return (
-        '<div style="background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:9px 12px;">'+
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
-            '<span style="font-size:.7rem;font-weight:700;color:var(--text-1);">'+(i===0?'🕐 Sesión más reciente':'Sesión '+(i+1))+'</span>'+
-            (dur?'<span style="font-size:.68rem;color:var(--text-2);background:var(--bg-inset);padding:1px 7px;border-radius:10px;">'+dur+'</span>':'')+
-          '</div>'+
-          '<div style="font-size:.7rem;color:var(--text-2);">▶ '+inicio+'</div>'+
-          '<div style="font-size:.7rem;color:var(--text-2);margin-top:2px;">⏹ '+fin+'</div>'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;'+
+             'background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:8px 12px;">'+
+          '<span style="font-size:.72rem;color:var(--text-1);font-weight:600;">'+_malFmtInicio(s.inicio)+'</span>'+
+          '<span style="font-size:.7rem;color:var(--text-2);background:var(--bg-inset);padding:2px 9px;border-radius:10px;white-space:nowrap;">'+dur+'</span>'+
         '</div>'
       );
     }).join('');
