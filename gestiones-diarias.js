@@ -583,11 +583,21 @@ function _consoCargar(){
   _leerTienda(_consoBase).then(snap=>{
     const todos=snap.val()||{};
     if(todos[_consoDia]!==undefined){ _consoData=todos[_consoDia]||{}; _consoRender(); return; }
-    return _db.ref(_gdBasePath()+'/consolidado/'+_consoDia).once('value').then(sv=>{
-      const propio=sv.val();
-      _consoData=propio||{};
+    // Rescate del esquema viejo: el consolidado colgaba del asesor, así que hay
+    // que mirar el de TODOS, no solo el propio. Buscando únicamente bajo el
+    // nodo de quien mira, un dueño no veía lo que había cargado su asesora.
+    return _leerTienda(tk=>'gestiones_diarias/'+tk+'/'+_gdMes).then(sm=>{
+      const ases=sm.val()||{};
+      let hallado=null;
+      Object.entries(ases).forEach(([ak,n])=>{
+        if(hallado||ak==='consolidado'||ak==='notasHist'||!n||typeof n!=='object') return;
+        const v=(n.consolidado||{})[_consoDia];
+        if(v!==undefined && v!==null) hallado={ak, v};
+      });
+      _consoData=hallado?hallado.v:{};
       _consoRender();
-      if(propio) return _db.ref(_consoPath()+'/'+_consoDia).set(propio);
+      if(hallado) return _db.ref(_consoPath()+'/'+_consoDia).set(hallado.v)
+        .then(()=>_db.ref(_gdBase(undefined,hallado.ak)+'/consolidado/'+_consoDia).remove().catch(()=>{}));
     });
   }).catch(()=>{ _consoData={}; _consoRender(); });
   _consoCargarTotales();
