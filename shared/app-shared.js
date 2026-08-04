@@ -5088,8 +5088,17 @@ function _bordSumarSueltos(mapa, qN, esNumero, novTiendas, roTiendas, antTiendas
     const g=Object.values(r.asesores).map(a=>a.gestion).find(x=>x)||{};
     return tel && _bordTel(g._tel)===_bordTel(tel);
   });
+  // Los anticipos no tienen guía: solo cliente, teléfono y demás datos. El
+  // resultado se titula con el nombre del cliente y se marca `esCliente`, para
+  // no inventar un número de guía que no existe.
   const crear=(clave,guia,nombre)=>{
-    if(!mapa[clave]) mapa[clave]={guia:guia||clave, nombre:nombre||'', asesores:{}, sinKanban:true};
+    if(!mapa[clave]) mapa[clave]= guia
+      ? {guia:String(guia).trim(), nombre:nombre||'', asesores:{}, sinKanban:true}
+      : {guia:'', nombre:nombre||'', asesores:{}, sinKanban:true, esCliente:true};
+    // Si primero entró por anticipo (sin guía) y después aparece un R.O. con
+    // guía para el mismo teléfono, se completa.
+    if(guia && !mapa[clave].guia){ mapa[clave].guia=String(guia).trim(); mapa[clave].esCliente=false; }
+    if(nombre && !mapa[clave].nombre) mapa[clave].nombre=nombre;
     return mapa[clave];
   };
   // R.O.: tiene guía, cliente y teléfono
@@ -5268,8 +5277,13 @@ function _bordMostrarResultados(mapa, q, debug){
       '<div data-bord-key="'+key.replace(/"/g,'&quot;')+'" class="bord-result-card" style="background:var(--bg-card);border-radius:10px;border:1.5px solid var(--border);padding:14px 16px;cursor:pointer;transition:all .15s;">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
           '<div style="min-width:0;">'+
-            '<div style="font-size:.85rem;font-weight:700;color:var(--text-1);font-family:monospace;">'+r.guia+'</div>'+
-            (r.nombre?'<div style="font-size:.78rem;color:var(--text-2);margin-top:2px;">👤 '+r.nombre+'</div>':'')+
+            // Sin guía (típico de un anticipo) el título es el cliente: poner
+            // ahí el teléfono con formato de guía haría creer que existe una.
+            (r.esCliente
+              ? '<div style="font-size:.85rem;font-weight:700;color:var(--text-1);">👤 '+(r.nombre||tel||'Cliente')+'</div>'+
+                '<div style="font-size:.66rem;color:var(--text-3);margin-top:2px;">Sin número de guía</div>'
+              : '<div style="font-size:.85rem;font-weight:700;color:var(--text-1);font-family:monospace;">'+r.guia+'</div>'+
+                (r.nombre?'<div style="font-size:.78rem;color:var(--text-2);margin-top:2px;">👤 '+r.nombre+'</div>':''))+
             '<div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:.7rem;color:var(--text-3);">'+
               (ciudad?'<span>📍 '+ciudad+'</span>':'')+
               (tel?'<span>📞 '+tel+'</span>':'')+
@@ -5307,8 +5321,14 @@ window._bordVerDetalle = function(key){
     if(!r){_mAlert('Orden no encontrada','No se encontró la orden: '+key);return;}
     const modal = document.getElementById('bord-modal');
     const body = document.getElementById('bord-modal-body');
-    document.getElementById('bord-modal-title').textContent = '📦 '+(r.guia||key);
-    document.getElementById('bord-modal-sub').textContent = r.nombre ? '👤 '+r.nombre : 'Sin nombre registrado';
+    // Sin guía se encabeza con el cliente: 'key' sería la clave interna
+    // ("tel:3208529608") y se leería como un número de guía inventado.
+    document.getElementById('bord-modal-title').textContent = r.esCliente
+      ? '👤 '+(r.nombre||r.telSuelto||'Cliente')
+      : '📦 '+(r.guia||key);
+    document.getElementById('bord-modal-sub').textContent = r.esCliente
+      ? (r.telSuelto? '📞 '+r.telSuelto+' · sin número de guía' : 'Sin número de guía')
+      : (r.nombre ? '👤 '+r.nombre : 'Sin nombre registrado');
     modal.style.display = 'flex';
     try{ body.innerHTML = _bordRenderDetalle(r); }
     catch(e2){ body.innerHTML='<div style="color:var(--danger);padding:16px;font-size:.82rem;">❌ Error al renderizar: '+e2.message+'<br><pre style="margin-top:8px;font-size:.7rem;color:var(--text-3);white-space:pre-wrap;">'+e2.stack+'</pre></div>'; }
