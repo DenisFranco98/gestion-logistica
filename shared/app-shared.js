@@ -5034,6 +5034,65 @@ function _verHistorialCliente(guia){
 // ===== VEEDURÍA: BUSCAR ORDEN =====
 
 function _bordNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+// Teléfono comparable: solo dígitos y quedándose con los últimos 10, que es el
+// largo de un celular colombiano. Sin esto, el mismo número guardado como
+// "+57 300 123 4567" en un lado y "3001234567" en otro no cruzaba, y el anticipo
+// o el R.O. no aparecían en el pedido.
+function _bordTel(s){
+  const d=String(s||'').replace(/\D/g,'');
+  return d.length>10 ? d.slice(-10) : d;
+}
+
+// Arma tres índices para cruzar contra el pedido: por guía y por teléfono.
+// El teléfono es la única llave de los anticipos, que no guardan guía.
+let _bordExtras={novPorGuia:{}, roPorGuia:{}, roPorTel:{}, antPorTel:{}, antPorCliente:{}};
+function _bordIndexarExtras(novTiendas, roTiendas, antTiendas){
+  const ix={novPorGuia:{}, roPorGuia:{}, roPorTel:{}, antPorTel:{}, antPorCliente:{}};
+  const meter=(obj,k,v)=>{ if(!k) return; (obj[k]=obj[k]||[]).push(v); };
+  novTiendas.forEach(({id,val})=>Object.entries(val||{}).forEach(([mes,regs])=>
+    Object.values(regs||{}).forEach(n=>{
+      if(!n||!n.guia) return;
+      const sols=_novGetSols(n);
+      const dev=sols.some(s=>s&&s.estado==='devuelta');
+      meter(ix.novPorGuia,_bordNorm(n.guia),{mes, tienda:id, asesor:n.asesor||'', fecha:n.fecha||'',
+        evidencias:sols.length, estado: dev?'devuelta':(n.solucionadaDropi||sols.some(s=>s&&s.estado==='solucionada')?'solucionada':'pendiente'),
+        tipoNovedad:n.tipoNovedad||''});
+    })));
+  roTiendas.forEach(({id,val})=>Object.entries(val||{}).forEach(([mes,regs])=>
+    Object.values(regs||{}).forEach(r=>{
+      if(!r) return;
+      const fila={mes, tienda:id, cliente:r.cliente||'', telefono:r.telefono||'', guia:r.guia||'',
+        notaCliente:r.notaCliente||'', notaSeguimiento:r.notaSeguimiento||'',
+        fechaContacto:r.fechaContacto||'', fechaEstado:r.fechaEstado||''};
+      meter(ix.roPorGuia,_bordNorm(r.guia),fila);
+      meter(ix.roPorTel,_bordTel(r.telefono),fila);
+    })));
+  antTiendas.forEach(({id,val})=>Object.entries(val||{}).forEach(([mes,tipos])=>
+    ['con','sin'].forEach(t=>Object.values((tipos||{})[t]||{}).forEach(a=>{
+      if(!a) return;
+      const fila={mes, tienda:id, tipo:t, cliente:a.cliente||'', telefono:a.telefono||'',
+        producto:a.producto||'', transporte:a.transporte||'', entrega:a.entrega||'',
+        motivo:a.motivo||'', fecha:a.fecha||'', tieneComprobante:!!a.comprobante};
+      meter(ix.antPorTel,_bordTel(a.telefono),fila);
+      meter(ix.antPorCliente,_bordNorm(a.cliente),fila);
+    }))));
+  return ix;
+}
+// Lo que se sabe de un pedido fuera del kanban.
+function _bordExtrasDe(guia, tel, nombre){
+  const g=_bordNorm(guia), t=_bordTel(tel), n=_bordNorm(nombre);
+  const roSet=new Set(), ro=[];
+  [...(_bordExtras.roPorGuia[g]||[]), ...(t?(_bordExtras.roPorTel[t]||[]):[])].forEach(r=>{
+    const k=r.mes+'|'+r.guia+'|'+r.telefono;      // el mismo R.O. puede entrar por guía y por teléfono
+    if(roSet.has(k)) return; roSet.add(k); ro.push(r);
+  });
+  const antSet=new Set(), ant=[];
+  [...(t?(_bordExtras.antPorTel[t]||[]):[]), ...(n?(_bordExtras.antPorCliente[n]||[]):[])].forEach(a=>{
+    const k=a.mes+'|'+a.tipo+'|'+a.cliente+'|'+a.telefono+'|'+a.fecha;
+    if(antSet.has(k)) return; antSet.add(k); ant.push(a);
+  });
+  return { novedades:_bordExtras.novPorGuia[g]||[], ro, anticipos:ant };
+}
 function _bordFmtTs(ts){ if(!ts)return'—'; const d=new Date(ts); return d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}); }
 
 function _admBuscarOrden(){
@@ -5055,9 +5114,18 @@ function _admBuscarOrden(){
     ? _db.ref('admin_empresas/'+adminId).once('value').then(s=>Object.keys(s.val()||{}))
     : Promise.resolve([empresaId]);
 
-  resolverTiendas.then(ids=>Promise.all(
-    ids.map(id=>_db.ref('gestiones_sync/'+id).once('value').then(s=>({id, val:s.val()||{}})))
-  )).then(porTienda=>{
+  // Además del kanban se traen novedades, R.O. y anticipos: un pedido se
+  // entiende mirando todo lo que pasó con él, no solo sus llamadas.
+  //   novedades → se cruzan por guía
+  //   R.O.      → por guía, teléfono o cliente
+  //   anticipos → NO tienen guía, solo por teléfono o cliente
+  resolverTiendas.then(ids=>Promise.all([
+    Promise.all(ids.map(id=>_db.ref('gestiones_sync/'+id).once('value').then(s=>({id, val:s.val()||{}})))),
+    Promise.all(ids.map(id=>_db.ref('novedades/'+id).once('value').then(s=>({id, val:s.val()||{}})))),
+    Promise.all(ids.map(id=>_db.ref('ro/'+id).once('value').then(s=>({id, val:s.val()||{}})))),
+    Promise.all(ids.map(id=>_db.ref('anticipos/'+id).once('value').then(s=>({id, val:s.val()||{}}))))
+  ])).then(([porTienda, novTiendas, roTiendas, antTiendas])=>{
+    _bordExtras = _bordIndexarExtras(novTiendas, roTiendas, antTiendas);
     // Se juntan las gestiones de todas las tiendas consultadas, recordando de
     // cuál viene cada una para poder mostrarlo en el resultado.
     const gestTienda={}, tiendaDe={};
@@ -5092,6 +5160,25 @@ function _admBuscarOrden(){
     document.getElementById('bord-results').innerHTML=
       '<div class="adm-empty" style="color:var(--danger);">No se pudo buscar: '+esc(e.message)+'</div>';
   });
+}
+
+// Resumen de una línea: si el pedido tuvo novedades, está en R.O. o tiene
+// anticipos. El detalle completo va en el modal.
+function _bordChipsExtras(guia, tel, nombre){
+  const x=_bordExtrasDe(guia, tel, nombre);
+  const chip=(txt,color,fondo)=>'<span style="background:'+fondo+';color:'+color+';border-radius:20px;padding:1px 8px;font-size:.62rem;font-weight:700;white-space:nowrap;">'+txt+'</span>';
+  const partes=[];
+  if(x.novedades.length){
+    const dev=x.novedades.filter(n=>n.estado==='devuelta').length;
+    const pend=x.novedades.filter(n=>n.estado==='pendiente').length;
+    const txt='⚠️ '+x.novedades.length+' novedad'+(x.novedades.length>1?'es':'')+
+      (dev?' · '+dev+' devuelta'+(dev>1?'s':''):'')+(pend?' · '+pend+' pendiente'+(pend>1?'s':''):'');
+    partes.push(chip(txt, pend?'#d97706':'#16a34a', pend?'var(--warning-soft)':'var(--success-soft)'));
+  }
+  if(x.ro.length)        partes.push(chip('🏢 En R.O.'+(x.ro.length>1?' ('+x.ro.length+')':''), '#7c3aed','rgba(124,58,237,.12)'));
+  if(x.anticipos.length) partes.push(chip('💵 '+x.anticipos.length+' anticipo'+(x.anticipos.length>1?'s':''), '#0891b2','var(--info-soft)'));
+  if(!partes.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">'+partes.join('')+'</div>';
 }
 
 function _bordMostrarResultados(mapa, q, debug){
@@ -5133,6 +5220,7 @@ function _bordMostrarResultados(mapa, q, debug){
               (tel?'<span>📞 '+tel+'</span>':'')+
               '<span>👥 '+nombres+'</span>'+
             '</div>'+
+            _bordChipsExtras(r.guia, tel, r.nombre)+
           '</div>'+
           '<div style="text-align:right;flex-shrink:0;">'+
             '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;font-size:.68rem;font-weight:700;'+
@@ -5300,7 +5388,59 @@ function _bordRenderDetalle(r){
       html+='</div></div>';
     });
   }
+  html += _bordRenderExtras(clienteInfo.guia||r.guia, clienteInfo.tel, clienteInfo.nombre||r.nombre);
   return html;
+}
+
+// Bloques de novedades, R.O. y anticipos del pedido. Van al final del detalle,
+// después de la trayectoria del kanban, porque son el contexto de lo que pasó
+// con el pedido más allá de las llamadas.
+function _bordRenderExtras(guia, tel, nombre){
+  const x=_bordExtrasDe(guia, tel, nombre);
+  if(!x.novedades.length && !x.ro.length && !x.anticipos.length) return '';
+  const nomTienda=id=>(_bordEmpresas[id]||{}).nombre||'';
+  const titulo=t=>'<div style="font-size:.72rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.3px;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:6px;">'+t+'</div>';
+  const caja=(borde,cont)=>'<div style="padding:8px 10px;background:var(--bg-card);border-radius:8px;border-left:3px solid '+borde+';margin-bottom:5px;">'+cont+'</div>';
+  const menor=t=>'<div style="font-size:.65rem;color:var(--text-3);margin-top:2px;">'+t+'</div>';
+  let h='';
+  if(x.novedades.length){
+    h+='<div style="margin-bottom:14px;">'+titulo('⚠️ Novedades ('+x.novedades.length+')');
+    x.novedades.forEach(n=>{
+      const col=n.estado==='devuelta'?'#d97706':n.estado==='solucionada'?'#16a34a':'#0891b2';
+      const et=n.estado==='devuelta'?'🔄 Devuelta':n.estado==='solucionada'?'✅ Solucionada':'📋 Pendiente';
+      h+=caja(col,'<div style="font-size:.78rem;font-weight:600;color:var(--text-1);">'+et+
+        (n.tipoNovedad?' · '+esc(n.tipoNovedad):'')+'</div>'+
+        menor([n.fecha, n.asesor?'por '+esc(n.asesor):'', n.evidencias+' evidencia'+(n.evidencias===1?'':'s'),
+               nomTienda(n.tienda)?'🏪 '+nomTienda(n.tienda):''].filter(Boolean).join(' · ')));
+    });
+    h+='</div>';
+  }
+  if(x.ro.length){
+    h+='<div style="margin-bottom:14px;">'+titulo('🏢 Reclamo en oficina ('+x.ro.length+')');
+    x.ro.forEach(r=>{
+      h+=caja('#7c3aed','<div style="font-size:.78rem;font-weight:600;color:var(--text-1);">'+
+        esc(r.cliente||'(sin cliente)')+(r.guia?' · guía '+esc(r.guia):'')+'</div>'+
+        (r.notaCliente?menor('🗒️ '+esc(r.notaCliente)):'')+
+        (r.notaSeguimiento?menor('📌 '+esc(r.notaSeguimiento)):'')+
+        menor([r.fechaContacto?'contacto: '+r.fechaContacto:'', r.fechaEstado?'estado: '+r.fechaEstado:'',
+               nomTienda(r.tienda)?'🏪 '+nomTienda(r.tienda):''].filter(Boolean).join(' · ')));
+    });
+    h+='</div>';
+  }
+  if(x.anticipos.length){
+    h+='<div style="margin-bottom:14px;">'+titulo('💵 Anticipos ('+x.anticipos.length+')')+
+      '<div style="font-size:.62rem;color:var(--text-3);margin-bottom:6px;">Los anticipos no guardan número de guía: se vinculan por teléfono o nombre del cliente, así que pueden ser de otro pedido de la misma persona.</div>';
+    x.anticipos.forEach(a=>{
+      h+=caja('#0891b2','<div style="font-size:.78rem;font-weight:600;color:var(--text-1);">'+
+        (a.tipo==='con'?'Con anticipo':'Sin anticipo')+(a.producto?' · '+esc(a.producto):'')+
+        (a.tieneComprobante?' · 📎':'')+'</div>'+
+        menor([a.fecha, a.transporte?esc(a.transporte):'', a.entrega?'entrega: '+esc(a.entrega):'',
+               nomTienda(a.tienda)?'🏪 '+nomTienda(a.tienda):''].filter(Boolean).join(' · '))+
+        (a.motivo?menor('🗒️ '+esc(a.motivo)):''));
+    });
+    h+='</div>';
+  }
+  return h;
 }
 
 function _bordLabelEvento(tipo){
