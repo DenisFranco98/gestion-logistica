@@ -624,9 +624,18 @@ window._auditMembresias = function(opts){
       console.log('Si el empresaId es "__todas__" viene del alta vieja. Estas NO se reparan solas: hay que reasignar a mano la tienda correcta.');
       console.groupEnd();
     }
-    const arreglos=[...faltaEA,...faltaUT];
-    if(!arreglos.length){ console.log('%c✔ Los dos índices están parejos.','color:#15803d;font-weight:bold'); return; }
-    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para reparar: _auditMembresias({aplicar:true})','font-weight:bold'); return; }
+    // SOLO se repara la dirección segura: completar empresa_asesores para quien
+    // ya está en user_tiendas. Eso lo hace visible en el panel y nada más.
+    //
+    // La dirección inversa NO se repara nunca: escribir user_tiendas le DA
+    // acceso real a una tienda. Al correr esto en producción aparecieron 46
+    // casos, todos de "3D Company", que tenía 22 asesores asignados habiendo 17
+    // usuarios en total — los deja ahí _migracionInicial(), no son un error de
+    // sincronía. Repararlos habría dado acceso a esa tienda a media empresa.
+    if(faltaUT.length) console.log('%cLos '+faltaUT.length+' de arriba NO se reparan solos: escribir user_tiendas les daría acceso a esa tienda. Revisá caso por caso y agregalos desde el panel si corresponde.','color:#b45309');
+    const arreglos=faltaEA;
+    if(!arreglos.length){ console.log('%c✔ No hay asesores invisibles en el panel.','color:#15803d;font-weight:bold'); return; }
+    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para reparar los '+arreglos.length+' invisibles: _auditMembresias({aplicar:true})','font-weight:bold'); return; }
     const updates={}; arreglos.forEach(x=>{ updates[x._path]=true; });
     _db.ref().update(updates)
       .then(()=>console.log('%c[MEMBRESÍAS] listo: '+arreglos.length+' reparadas. Los huérfanos siguen pendientes de reasignar a mano.','font-weight:bold;color:#15803d'))
@@ -733,11 +742,19 @@ window._migrarAsesoresAUid = function(opts){
       if(!k||k==='_') return;
       (porSlug[k]=porSlug[k]||[]).push(uid);
     });
+    // Nodos que cuelgan del mes pero NO son asesores: tratarlos como carpetas
+    // de persona los mandaría a la lista de "sin dueño" y ensuciaría el informe.
+    const NO_ASESOR = new Set(['notasHist','cod','config','consolidado','dias','_nombre']);
     const mover=[], ambiguos=[], sinDuenio=[], conflictos=[];
     Object.entries(gd).forEach(([tid,meses])=>{
+      // Las raíces que no son un empresaId son las rutas legacy por nombre de
+      // tienda, que quedaron como respaldo de la migración anterior. Copiar ahí
+      // sería crear registros nuevos dentro de una copia de seguridad.
+      if(!empresas[tid]) return;
       const tNombre=(empresas[tid]||{}).nombre||tid;
       Object.entries(meses||{}).forEach(([mes,asesores])=>{
         Object.entries(asesores||{}).forEach(([clave,nodo])=>{
+          if(NO_ASESOR.has(clave)) return;               // no es una persona
           if(users[clave]) return;                       // ya es un uid: nada que hacer
           const cands=porSlug[clave]||[];
           const dias=Object.keys((nodo||{}).dias||{}).length;
