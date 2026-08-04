@@ -695,7 +695,33 @@ async function _consoCapturar(corteId){
     if(cab) cab.style.display='block';
     // Fondo sólido: sin esto el PNG sale transparente y en WhatsApp se ve negro.
     const fondo=getComputedStyle(document.body).backgroundColor||'#ffffff';
-    const canvas=await html2canvas(cont,{backgroundColor:fondo,scale:2,logging:false,useCORS:true});
+    // html2canvas no ubica bien el texto DENTRO de un <input>: no calcula su
+    // línea base y lo dibuja corrido, pegado al borde. En pantalla se ve bien y
+    // en la imagen sale tapado. onclone actúa sobre la copia que se fotografía
+    // —el DOM real no se toca, así que no hay parpadeo ni queda roto si falla—:
+    // cada campo se cambia por un <span> con el mismo valor, del mismo tamaño
+    // exacto que tenía el input, y el texto plano sí lo dibuja bien.
+    const canvas=await html2canvas(cont,{backgroundColor:fondo,scale:2,logging:false,useCORS:true,
+      onclone:doc=>{
+        doc.querySelectorAll('#conso-corte-'+corteId+' input.conso-inp').forEach(inp=>{
+          const orig=inp.id?document.getElementById(inp.id):null;
+          const caja=orig?orig.getBoundingClientRect():null;
+          const s=doc.createElement('span');
+          s.className=inp.className+' conso-inp-cap';
+          // Un campo sin cargar muestra el placeholder atenuado, igual que en
+          // pantalla: si se pintara como un 0 normal, la imagen diría que se
+          // cargó un cero cuando en realidad no se cargó nada.
+          s.textContent=inp.value||inp.placeholder||'0';
+          if(!inp.value) s.style.opacity='.45';
+          if(caja&&caja.height){
+            s.style.width=caja.width+'px';
+            s.style.height=caja.height+'px';
+            // Alto menos padding (2+2) y borde (1+1): centra el número.
+            s.style.lineHeight=Math.max(caja.height-6,10)+'px';
+          }
+          inp.parentNode.replaceChild(s,inp);
+        });
+      }});
     const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
     if(!blob) throw new Error('no se pudo generar la imagen');
     const nombreArch='Consolidado_'+corteId+'_'+_gdMes+'-'+String(_consoDia).padStart(2,'0')+'.png';
