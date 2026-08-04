@@ -76,7 +76,22 @@ window._sbEstadosToggle=function(){
       <button class="adm-nav-item active" id="tab-btn-enlive" onclick="_admTab('enlive')">
         <span class="adm-nav-icon">🔴</span> En vivo
       </button>
-      <button class="adm-nav-item" id="tab-btn-ranking" onclick="_admTab('ranking')">
+      <!-- RANKING OCULTO (2026-08-03) — el código queda intacto, solo se retira
+           del menú. Se apagó por dos razones:
+           1. Su score sale de una fórmula que no se puede reconstruir
+              (finalizados×5 + tasaCierre − devoluciones×4 + ritmo/minuto): sin
+              tope, mezclando cantidades con porcentajes y premiando cerrar
+              rápido.
+           2. Mide volumen, y el volumen depende de cuántos pedidos le tocan a
+              cada uno, no de su desempeño. Falta el dato de carga por asesor
+              para normalizarlo: el Excel es de la tienda y el reparto ocurre
+              fuera del sistema.
+           Además solo lee historial_diario (kanban de Gestión Logística), así
+           que a quien trabaja desde Gestiones Diarias lo deja fuera: el día que
+           se ocultó, las 17 cuentas quedaban excluidas.
+           Mientras tanto esto se mira en Consolidado GD, cuyos números sí se
+           pueden verificar. Para reactivarlo, quitar este comentario. -->
+      <button class="adm-nav-item" id="tab-btn-ranking" onclick="_admTab('ranking')" style="display:none;">
         <span class="adm-nav-icon">🏆</span> Ranking
       </button>
       <div class="adm-sidebar-label">Gestión</div>
