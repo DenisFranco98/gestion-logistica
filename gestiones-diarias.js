@@ -1110,7 +1110,9 @@ async function _novSyncGD(dia, asesorKey){
   // total de la tienda. Ver _novGestionesDe/_novContarDia en app-shared.js.
   const ak=asesorKey||_gdAK();
   const esPropio=ak===_gdAK();
-  const {soluc, devuelt}=_novContarDia(_novData, ak, dia, _gdMes);
+  // Para el nodo propio se cuentan las dos claves (uid y nombre viejo); para el
+  // de otro asesor solo la que se recibió, que ya viene resuelta.
+  const {soluc, devuelt}=_novContarDia(_novData, esPropio?_clavesAsesorSesion():ak, dia, _gdMes);
   // Leer datos actuales del día en GD (para no pisar otras columnas).
   // _leerTienda sobre el nodo completo primero: si el mes aún vive en la clave
   // vieja, lo migra entero — leer solo /dias/{dia} habría copiado ese día suelto

@@ -3365,12 +3365,18 @@ function marcarDevolucion(id){
 async function _novRecontarDiaGD(dia, asesorKey){
   if(typeof _db==='undefined'||!dia) return;
   const mes=_getMesCargado();
-  const ak=asesorKey||(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
+  // El nodo se escribe con el uid, que es la clave canónica desde la migración
+  // de identidad. Antes acá se usaba el slug del nombre y este recuento habría
+  // ido a parar a una carpeta que ya nadie lee.
+  const ak=asesorKey||_gdAK();
   const novBasePath=_novGDBasePath();
   const gdDiasPath='gestiones_diarias/'+_gdTK()+'/'+mes+'/'+ak+'/dias';
 
   const mesNovsSnap=await _db.ref(novBasePath).once('value');
-  const {soluc, devuelt}=_novContarDia(mesNovsSnap.val()||{}, ak, dia, mes);
+  // Se cuentan las dos claves de la persona: las evidencias viejas se guardaron
+  // con el nombre y las nuevas con el uid.
+  const claves = asesorKey ? ak : _clavesAsesorSesion();
+  const {soluc, devuelt}=_novContarDia(mesNovsSnap.val()||{}, claves, dia, mes);
 
   // Leer el día actual de GD para no pisar las otras columnas
   const diaSnap=await _db.ref(gdDiasPath+'/'+dia).once('value');
@@ -3382,8 +3388,7 @@ async function _novRecontarDiaGD(dia, asesorKey){
   // Si Gestiones Diarias está cargado en memoria, refrescar también su UI.
   // Solo cuando se recalculó el nodo del asesor de la sesión: la tabla en
   // pantalla es la suya, y pintarle ahí el conteo de otro sería mentirle.
-  const akSesion=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
-  if(ak===akSesion && typeof _gdData!=='undefined'&&_gdData){
+  if(ak===_gdAK() && typeof _gdData!=='undefined'&&_gdData){
     if(!_gdData[dia]) _gdData[dia]={};
     Object.assign(_gdData[dia],{soluc,devuelt});
     delete _gdData[dia].gestion;

@@ -5661,15 +5661,29 @@ function _novGestionesDe(n, mes){
 
 // Cuenta las gestiones de un asesor en un día concreto, sobre todas las
 // novedades del mes. `novs` es el objeto crudo de novedades/{tienda}/{mes}.
+//
+// `asesorKey` acepta una clave o varias. Hacen falta las dos porque conviven dos
+// formas de identificar a la misma persona: las evidencias guardadas desde el
+// paso a identidad por uid traen `asesorUid`, y las anteriores solo el nombre,
+// que se resuelve al slug. Si se comparara contra el uid nada más, todo lo
+// cargado antes dejaría de contar y los contadores caerían a cero solos en
+// cuanto alguien tocara una novedad.
 function _novContarDia(novs, asesorKey, dia, mes){
+  const claves=(Array.isArray(asesorKey)?asesorKey:[asesorKey]).filter(Boolean);
   let soluc=0, devuelt=0;
   Object.values(novs||{}).forEach(n=>{
     _novGestionesDe(n, mes).forEach(g=>{
-      if(g.dia!==dia || g.asesorKey!==asesorKey) return;
+      if(g.dia!==dia || !claves.includes(g.asesorKey)) return;
       if(g.estado==='devuelta') devuelt++; else soluc++;
     });
   });
   return {soluc, devuelt};
+}
+// Las dos claves de la persona de la sesión: uid (nueva) y slug del nombre
+// (con la que se guardaron las evidencias anteriores).
+function _clavesAsesorSesion(){
+  const nom = window.getLoginAsesor ? window.getLoginAsesor() : '';
+  return [...new Set([_gdAK(), _gdKey(nom||'_')].filter(k=>k&&k!=='_'))];
 }
 // _roAutoSync/_roSyncFromGestion: sincroniza el tracking de "Reclamo en Oficina"
 // a Firebase desde Gestión Logística en cada guardado de gestión — llamada de
