@@ -361,8 +361,11 @@ window._auditCargarAsesores = function(){
       // Refrescar el nombre por si lo renombraron desde la última vez.
       _setAuditAsesor(elegido, (lista.find(a=>a.uid===elegido)||{}).nombre||'');
     }
+    // data-nombre lleva el nombre limpio: el texto visible puede traer el correo
+    // pegado para desempatar homónimos, y ese texto no sirve como nombre.
     sel.innerHTML = lista.map(a=>
-      '<option value="'+esc(a.uid)+'"'+(a.uid===elegido?' selected':'')+'>'+esc(a.nombre)+'</option>'
+      '<option value="'+esc(a.uid)+'" data-nombre="'+esc(a.nombre)+'"'+
+      (a.uid===elegido?' selected':'')+'>'+esc(a.etiqueta||a.nombre)+'</option>'
     ).join('');
   }).catch(e=>{
     console.warn('[AUDITORÍA] no se pudo cargar la lista de asesores', e);
@@ -396,15 +399,32 @@ function _auditListaAsesores(users, gd, asignados){
   // carpetas viejas SIN uid equivalente se siguen listando, porque ahí no hay
   // ninguna otra forma de llegar a ese historial.
   const slugsConUid = new Set(candidatos.filter(c=>c.esUid).map(c=>_gdKey(c.nombre)));
-  return candidatos
+  const lista = candidatos
     .filter(c=>c.esUid || !slugsConUid.has(_gdKey(c.nombre)))
     .sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  // Regla 3: dos CUENTAS distintas pueden llamarse igual (pasa cuando queda una
+  // cuenta vieja "por tienda" junto a la personal). Ahí no hay nada que fusionar
+  // —son uids distintos, con datos distintos— pero dos opciones con el mismo
+  // texto dejan al auditor eligiendo a ciegas, así que se desempatan con el
+  // correo. `etiqueta` es solo para mostrar: `nombre` tiene que quedar limpio
+  // porque de él sale el slug con el que _gdAKLegacy busca las carpetas viejas.
+  const vecesPorNombre = {};
+  lista.forEach(c=>{ vecesPorNombre[c.nombre] = (vecesPorNombre[c.nombre]||0)+1; });
+  lista.forEach(c=>{
+    if(vecesPorNombre[c.nombre] < 2){ c.etiqueta = c.nombre; return; }
+    const u = users[c.uid]||{};
+    const detalle = u.email || u.username || (c.esUid ? c.uid.slice(0,6) : 'carpeta antigua');
+    c.etiqueta = c.nombre+' · '+detalle;
+  });
+  return lista;
 }
 
 window._auditCambiarAsesor = function(uid){
   if(!uid) return;
   const sel = document.getElementById('audit-asesor');
-  const nombre = sel ? (sel.options[sel.selectedIndex]||{}).text||'' : '';
+  const opt = sel ? sel.options[sel.selectedIndex] : null;
+  // El nombre limpio, no el texto visible: con homónimos el texto trae el correo.
+  const nombre = opt ? (opt.dataset.nombre || opt.text || '') : '';
   _setAuditAsesor(uid, nombre);
   // Recarga completa a propósito. La clave del asesor (_gdAK) está leída en
   // decenas de puntos de cada módulo —tablas, contadores, consolidado, gráficos—
