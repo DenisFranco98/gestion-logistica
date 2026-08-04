@@ -650,13 +650,26 @@ window._auditMembresias = function(opts){
 //   _migrarAsesor('PAQUETIN','Wildropshop','Laura',{aplicar:true})  → aplica
 window._migrarAsesor = function(nombreTienda, nombreViejo, nombreNuevo, opts){
   const aplicar=!!(opts||{}).aplicar;
-  const kViejo=_gdKey(nombreViejo||''), kNuevo=_gdKey(nombreNuevo||'');
-  if(!kViejo||!kNuevo||kViejo==='_'||kNuevo==='_'){ console.error('Faltan nombres: _migrarAsesor("TIENDA","Nombre viejo","Nombre nuevo")'); return; }
-  if(kViejo===kNuevo){ console.log('Los dos nombres dan la misma clave ("'+kViejo+'"): no hay nada que mover.'); return; }
+  const kViejo=_gdKey(nombreViejo||'');
+  if(!kViejo||kViejo==='_'||!nombreNuevo){ console.error('Faltan nombres: _migrarAsesor("TIENDA","Nombre viejo","Nombre nuevo")'); return; }
   const kTienda=_gdKey(nombreTienda||'');
-  console.log('%c[MIGRAR asesor] '+kViejo+' → '+kNuevo+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
-  Promise.all([_db.ref('empresas').once('value'),_db.ref('gestiones_diarias').once('value')]).then(([se,sg])=>{
-    const empresas=se.val()||{}, gd=sg.val()||{};
+  console.log('%c[MIGRAR asesor] desde '+kViejo+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
+  Promise.all([_db.ref('empresas').once('value'),_db.ref('gestiones_diarias').once('value'),_db.ref('users').once('value')]).then(([se,sg,su])=>{
+    const empresas=se.val()||{}, gd=sg.val()||{}, users=su.val()||{};
+    // El destino es el UID de la persona, que es la clave canónica desde la
+    // migración de identidad. Se resuelve por nombre o aceptando el uid directo;
+    // solo si no hay cuenta que coincida se cae al slug del nombre.
+    const porNombre=Object.entries(users).filter(([,u])=>_gdKey((u||{}).asesor||'')===_gdKey(nombreNuevo));
+    let kNuevo;
+    if(users[nombreNuevo]) kNuevo=nombreNuevo;                    // pasaron el uid
+    else if(porNombre.length===1) kNuevo=porNombre[0][0];         // resuelto por nombre
+    else if(porNombre.length>1){
+      console.error('Hay '+porNombre.length+' cuentas llamadas "'+nombreNuevo+'". Pasá el uid en vez del nombre:');
+      console.table(porNombre.map(([uid,u])=>({uid,email:u.email||'',asesor:u.asesor||''})));
+      return;
+    } else kNuevo=_gdKey(nombreNuevo);
+    if(kViejo===kNuevo){ console.log('Origen y destino son la misma carpeta ("'+kViejo+'"): no hay nada que mover.'); return; }
+    console.log('  destino: '+kNuevo+((users[kNuevo]||{}).asesor?' ('+users[kNuevo].asesor+')':''));
     const tiendas=Object.entries(empresas).filter(([,e])=>_gdKey((e||{}).nombre||'')===kTienda);
     if(!tiendas.length){ console.error('No hay ninguna tienda que se llame así.'); return; }
     if(tiendas.length>1) console.warn('⚠ '+tiendas.length+' tiendas comparten ese nombre: se procesan todas.');
@@ -846,6 +859,9 @@ function _initLogin(){
   const LOGIN_KEY = 'lgs_auth';
   const TIENDA_KEY = 'lgs_tienda';
   const ASESOR_KEY = 'lgs_asesor';
+  // Nombre anterior tras un renombre: sin él no se puede encontrar el historial
+  // guardado bajo la carpeta vieja (ver _gdAKPrevio).
+  const ASESOR_PREV_KEY = 'lgs_asesor_prev';
   const USER_KEY = 'lgs_user';
   const ADMIN_USER = 'admin';
   const ADMIN_PASS = 'admin';
@@ -1400,6 +1416,11 @@ function _initLogin(){
     const actual = (localStorage.getItem(ASESOR_KEY)||'').trim();
     if(actual === nuevo) return;
     console.log('[SESIÓN] el nombre cambió: "'+actual+'" → "'+nuevo+'"');
+    // El nombre anterior se conserva porque la lectura de datos viejos depende
+    // de él: gestiones_diarias guardaba la carpeta como _gdKey(nombre), así que
+    // pisar el nombre sin recordarlo dejaba el historial invisible (le pasó a
+    // una asesora renombrada: entró y vio la tabla vacía).
+    if(actual) localStorage.setItem(ASESOR_PREV_KEY, actual);
     localStorage.setItem(ASESOR_KEY, nuevo);
     // Que el panel lo vea sin esperar a la próxima navegación del asesor.
     if(typeof _db!=='undefined' && uid) _db.ref('presence/'+uid+'/asesor').set(nuevo);
@@ -5337,6 +5358,11 @@ function _gdTK(){
 //                   hay sesión resuelta, para no escribir en un nodo suelto)
 //   _gdAKLegacy() → clave vieja por nombre, solo para leer/migrar lo anterior
 function _gdAKLegacy(){ return _gdKey(window.getLoginAsesor?window.getLoginAsesor():'_'); }
+// Nombre con el que trabajaba antes de que lo renombraran, si lo hubo. Es la
+// única pista para encontrar su historial: la carpeta vieja se llamaba así.
+function _gdAKPrevio(){
+  try{ const p=localStorage.getItem('lgs_asesor_prev'); return p?_gdKey(p):''; }catch(e){ return ''; }
+}
 function _gdAK(){
   return window._currentUsername || localStorage.getItem('lgs_user') || _gdAKLegacy();
 }
@@ -5387,9 +5413,16 @@ function _leerTienda(rutaFn, q){
 // borra, así que se puede revisar y revertir.
 //   rutaFn: (tk, ak) => 'gestiones_diarias/'+tk+'/'+mes+'/'+ak
 function _leerGD(rutaFn){
-  const tkN=_gdTK(), tkV=_gdTKLegacy(), akN=_gdAK(), akV=_gdAKLegacy();
+  const tkN=_gdTK(), tkV=_gdTKLegacy(), akN=_gdAK(), akV=_gdAKLegacy(), akP=_gdAKPrevio();
   const destino=rutaFn(tkN, akN);
-  const alternativas=[rutaFn(tkN, akV), rutaFn(tkV, akV)].filter(r=>r!==destino);
+  // El nombre previo va primero entre las alternativas: si a la persona la
+  // renombraron, su historial está bajo el nombre ANTERIOR, no bajo el actual.
+  const alternativas=[
+    akP?rutaFn(tkN, akP):null,
+    rutaFn(tkN, akV),
+    akP?rutaFn(tkV, akP):null,
+    rutaFn(tkV, akV)
+  ].filter(r=>r&&r!==destino);
   return _db.ref(destino).once('value').then(sn=>{
     if(sn.exists()||!alternativas.length) return sn;
     // Probar las viejas en orden hasta encontrar una con datos.
