@@ -803,6 +803,161 @@ window._migrarAsesoresAUid = function(opts){
   }).catch(e=>console.error('[MIGRAR a uid] falló (¿sesión de admin?):',e));
 };
 
+// ===== PERFIL DEL USUARIO =====
+// Cada quien edita su nombre, su contraseña y su foto. El correo NO: es la
+// credencial de acceso y un error de tipeo dejaría a la persona afuera, así que
+// lo cambia el admin desde el panel, que puede corregirlo.
+//
+// La foto vive en user_fotos/{uid} y no dentro de users/: el Centro de
+// Operaciones lee users completo en cada carga, y con 35 imágenes adentro se
+// arrastraría todas en cada refresco.
+const FOTOS_PATH='user_fotos';
+let _fotosCache={}, _fotosCargadas=false;
+
+// Reduce la imagen antes de guardarla. Sin esto, una foto de celular de 4 MB se
+// guarda tal cual en la base y la lee todo el que abra el panel.
+function _perfilResizeImg(file, max, quality){
+  return new Promise((resolve,reject)=>{
+    const rd=new FileReader();
+    rd.onerror=()=>reject(new Error('No se pudo leer el archivo'));
+    rd.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('El archivo no es una imagen válida'));
+      img.onload=()=>{
+        const lado=Math.min(img.width,img.height);          // recorte cuadrado centrado
+        const sx=(img.width-lado)/2, sy=(img.height-lado)/2;
+        const c=document.createElement('canvas');
+        c.width=c.height=Math.min(max,lado);
+        c.getContext('2d').drawImage(img,sx,sy,lado,lado,0,0,c.width,c.height);
+        resolve(c.toDataURL('image/jpeg',quality));
+      };
+      img.src=rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+
+// Carga las fotos una sola vez por sesión; el avatar cae a las iniciales si no hay.
+window._cargarFotos=function(){
+  if(_fotosCargadas||typeof _db==='undefined') return Promise.resolve(_fotosCache);
+  _fotosCargadas=true;
+  return _db.ref(FOTOS_PATH).once('value')
+    .then(s=>{ _fotosCache=s.val()||{}; return _fotosCache; })
+    .catch(()=>_fotosCache);
+};
+window._fotoDe=function(uid){ return (_fotosCache||{})[uid]||null; };
+// Avatar reutilizable: foto si hay, iniciales si no.
+window._avatarHTML=function(uid,nombre,tam,clase){
+  const f=window._fotoDe(uid), px=tam||38;
+  if(f) return '<div class="'+(clase||'')+'" style="width:'+px+'px;height:'+px+'px;border-radius:50%;background-image:url('+f+');background-size:cover;background-position:center;flex-shrink:0;"></div>';
+  return '<div class="'+(clase||'')+'" style="width:'+px+'px;height:'+px+'px;border-radius:50%;background:'+_avatarColor(nombre)+';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:'+Math.round(px*0.36)+'px;flex-shrink:0;">'+_avatarInitials(nombre)+'</div>';
+};
+
+let _perfilFotoNueva=null;   // '' = quitar, null = sin cambios, string = nueva
+window._perfilAbrir=function(){
+  const uid=localStorage.getItem('lgs_user')||window._currentUsername;
+  if(!uid||typeof _db==='undefined'){ toast('No hay sesión activa'); return; }
+  _perfilFotoNueva=null;
+  const $=id=>document.getElementById(id);
+  $('perfil-error').style.display='none';
+  $('perfil-ok').style.display='none';
+  $('perfil-pass-actual').value=''; $('perfil-pass-nueva').value=''; $('perfil-pass-rep').value='';
+  $('perfil-modal').classList.add('open');
+  _db.ref('users/'+uid).once('value').then(s=>{
+    const u=s.val()||{};
+    $('perfil-nombre').value=u.asesor||'';
+    $('perfil-correo').value=u.email||'(sin correo)';
+    $('perfil-rol').textContent=u.rol==='dueno'?'👑 Dueño de tienda':'👤 Asesor';
+  });
+  window._cargarFotos().then(()=>_perfilPintarFoto(window._fotoDe(uid),
+    (localStorage.getItem('lgs_asesor')||'')));
+};
+function _perfilPintarFoto(src,nombre){
+  const box=document.getElementById('perfil-foto');
+  if(!box) return;
+  box.innerHTML = src
+    ? '<img src="'+src+'" style="width:100%;height:100%;object-fit:cover;">'
+    : '<span style="font-size:1.6rem;font-weight:800;color:#fff;">'+_avatarInitials(nombre||'?')+'</span>';
+  box.style.background = src ? 'transparent' : _avatarColor(nombre||'?');
+  const btnQuitar=document.getElementById('perfil-foto-quitar');
+  if(btnQuitar) btnQuitar.style.display = src ? 'inline-block' : 'none';
+}
+window._perfilElegirFoto=async function(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  const err=document.getElementById('perfil-error');
+  try{
+    if(!/^image\//.test(f.type)) throw new Error('Elegí un archivo de imagen');
+    _perfilFotoNueva=await _perfilResizeImg(f,256,.8);
+    _perfilPintarFoto(_perfilFotoNueva, localStorage.getItem('lgs_asesor')||'');
+    err.style.display='none';
+  }catch(e){ err.textContent=e.message; err.style.display='block'; }
+  input.value='';
+};
+window._perfilQuitarFoto=function(){
+  _perfilFotoNueva='';
+  _perfilPintarFoto(null, localStorage.getItem('lgs_asesor')||'');
+};
+window._perfilCerrar=function(){ document.getElementById('perfil-modal').classList.remove('open'); };
+
+window._perfilGuardar=async function(btn){
+  const uid=localStorage.getItem('lgs_user')||window._currentUsername;
+  const $=id=>document.getElementById(id);
+  const err=$('perfil-error'), ok=$('perfil-ok');
+  err.style.display='none'; ok.style.display='none';
+  const nombre=$('perfil-nombre').value.trim();
+  if(!nombre){ err.textContent='El nombre no puede quedar vacío'; err.style.display='block'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Guardando...'; }
+  try{
+    const updates={};
+    updates['users/'+uid+'/asesor']=nombre;
+    // presence también, para que el panel lo vea sin esperar a la próxima carga
+    updates['presence/'+uid+'/asesor']=nombre;
+    if(_perfilFotoNueva!==null) updates[FOTOS_PATH+'/'+uid]=_perfilFotoNueva||null;
+    await _db.ref().update(updates);
+    // La sesión local tiene que quedar en sintonía: getLoginAsesor() alimenta
+    // el saludo y el nombre que se guarda en las gestiones nuevas.
+    localStorage.setItem('lgs_asesor',nombre);
+    if(_perfilFotoNueva!==null){
+      if(_perfilFotoNueva) _fotosCache[uid]=_perfilFotoNueva; else delete _fotosCache[uid];
+      _perfilFotoNueva=null;
+    }
+    ok.textContent='✅ Perfil actualizado'; ok.style.display='block';
+    const g=document.getElementById('mss-greeting');
+    if(g) g.textContent='¡Hola, '+nombre.split(' ')[0]+'!';
+  }catch(e){ err.textContent='No se pudo guardar: '+e.message; err.style.display='block'; }
+  if(btn){ btn.disabled=false; btn.textContent='Guardar cambios'; }
+};
+
+// Firebase exige haber iniciado sesión hace poco para cambiar la contraseña, así
+// que se pide la actual y se reautentica en el momento. Sin esto devuelve
+// auth/requires-recent-login y el usuario no entiende por qué falla.
+window._perfilCambiarPass=async function(btn){
+  const $=id=>document.getElementById(id);
+  const err=$('perfil-error'), ok=$('perfil-ok');
+  err.style.display='none'; ok.style.display='none';
+  const actual=$('perfil-pass-actual').value, nueva=$('perfil-pass-nueva').value, rep=$('perfil-pass-rep').value;
+  if(!actual||!nueva){ err.textContent='Completá la contraseña actual y la nueva'; err.style.display='block'; return; }
+  if(nueva.length<6){ err.textContent='La nueva contraseña necesita al menos 6 caracteres'; err.style.display='block'; return; }
+  if(nueva!==rep){ err.textContent='La confirmación no coincide con la nueva contraseña'; err.style.display='block'; return; }
+  const user=firebase.auth().currentUser;
+  if(!user||!user.email){ err.textContent='No hay sesión activa. Volvé a entrar.'; err.style.display='block'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Cambiando...'; }
+  try{
+    const cred=firebase.auth.EmailAuthProvider.credential(user.email,actual);
+    await user.reauthenticateWithCredential(cred);
+    await user.updatePassword(nueva);
+    $('perfil-pass-actual').value=''; $('perfil-pass-nueva').value=''; $('perfil-pass-rep').value='';
+    ok.textContent='✅ Contraseña actualizada'; ok.style.display='block';
+  }catch(e){
+    const m=e.code==='auth/wrong-password'||e.code==='auth/invalid-credential' ? 'La contraseña actual no es correcta'
+      : e.code==='auth/weak-password' ? 'La nueva contraseña es demasiado débil'
+      : e.code==='auth/too-many-requests' ? 'Demasiados intentos. Esperá unos minutos.'
+      : 'No se pudo cambiar: '+e.message;
+    err.textContent=m; err.style.display='block';
+  }
+  if(btn){ btn.disabled=false; btn.textContent='Cambiar contraseña'; }
+};
+
 // Clave para gestiones_sync: siempre por tienda (empresa), no por usuario individual
 let _gsKeyWarned=false;
 function _gsKey(){
@@ -2559,6 +2714,9 @@ function _admCargarDashboard(){
   // offset, un admin con la hora corrida vería a todos desconectados o a todos
   // conectados. Lo necesita igual que el cliente del asesor.
   _iniciarOffsetServidor();
+  // Las fotos de perfil viven aparte de users/ y se leen una sola vez; cuando
+  // llegan se repintan las tarjetas, que hasta entonces muestran iniciales.
+  if(typeof window._cargarFotos==='function') window._cargarFotos().then(()=>_admRepintarPresencia());
   _admCargarNegocio(); // refresca nombre/logo del negocio en el encabezado
 
   if(!adminId){
@@ -2926,7 +3084,10 @@ function _mkEnliveCard(u, p, isOnline){
   const safeT=(u.tienda||'').replace(/'/g,"\\'");
   card.innerHTML=
     '<div class="enlive-card-top">'+
-      '<div class="enlive-avatar" style="background:'+color+'">'+initials+'</div>'+
+      // Foto de perfil si la subió; si no, las iniciales de siempre.
+      (window._fotoDe&&window._fotoDe(u.uid)
+        ? '<div class="enlive-avatar" style="background-image:url('+window._fotoDe(u.uid)+');background-size:cover;background-position:center;"></div>'
+        : '<div class="enlive-avatar" style="background:'+color+'">'+initials+'</div>')+
       '<div style="flex:1;min-width:0;">'+
         '<div class="enlive-name">'+name+'</div>'+
         '<div class="enlive-tienda">🏪 '+tienda+'</div>'+

@@ -1152,6 +1152,11 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
    el z-index de .adm-modal-bg (10001) quedaba tapado y parecía que el botón no
    hacía nada. */
 #modal-confirm{z-index:1000001;}
+/* El perfil se abre desde el selector de módulo (z-index 200) y desde dentro de
+   los módulos, así que va por encima de todos ellos. */
+#perfil-modal{z-index:1000000;}
+.perfil-btn-foto{display:inline-block;background:var(--bg-inset);border:1.5px solid var(--border);border-radius:8px;padding:6px 12px;font-size:.7rem;font-weight:700;color:var(--text-1);cursor:pointer;transition:border-color .15s;}
+.perfil-btn-foto:hover{border-color:var(--accent);}
 /* Varios mensajes traen saltos de línea (venían de textos escritos para el
    confirm() nativo, que sí los respeta). Con textContent y sin esto se veían
    como un párrafo corrido. */

@@ -759,6 +759,7 @@ window._sbEstadosToggle=function(){
     <button id="btn-volver-roles-modeselect" onclick="_volverSelectorRol()" style="display:none;margin-top:8px;background:#1A2230;color:white;border:none;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:700;cursor:pointer;width:100%;font-family:inherit;">
       🎭 Cambiar perfil
     </button>
+    <button onclick="_perfilAbrir()" style="margin-top:8px;background:#1A2230;color:white;border:none;border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:700;cursor:pointer;width:100%;font-family:inherit;">👤 Mi perfil</button>
     <button onclick="_cerrarSesion()" style="margin-top:8px;background:none;border:1.5px solid var(--border);border-radius:10px;padding:10px 20px;font-size:.75rem;font-weight:600;color:var(--text-3);cursor:pointer;width:100%;transition:all .15s;font-family:inherit;" onmouseover="this.style.borderColor='#dc2626';this.style.color='#dc2626';" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8';">
       Cerrar sesión
     </button>
@@ -1406,5 +1407,43 @@ window._gdMostrarModeSelect = function(asesor){
 // de verdad a la página principal.
 window._gdVolver = function(){ irAPagina('/'); };
 </script>
+
+<!-- ===== MI PERFIL ===== -->
+<!-- El correo va bloqueado a propósito: es la credencial de acceso y un error de
+     tipeo dejaría a la persona sin poder entrar. Lo cambia el admin. -->
+<div class="adm-modal-bg" id="perfil-modal">
+  <div class="adm-modal" style="max-width:420px;max-height:88vh;overflow-y:auto;">
+    <h3>Mi perfil</h3>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+      <div id="perfil-foto" style="width:72px;height:72px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:2px solid var(--border);"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label class="perfil-btn-foto">Cambiar foto
+          <input type="file" accept="image/*" onchange="_perfilElegirFoto(this)" style="display:none;">
+        </label>
+        <button id="perfil-foto-quitar" onclick="_perfilQuitarFoto()" style="display:none;background:none;border:none;color:var(--danger);font-size:.68rem;font-weight:700;cursor:pointer;padding:0;text-align:left;">Quitar foto</button>
+        <span id="perfil-rol" style="font-size:.66rem;color:var(--text-3);font-weight:600;"></span>
+      </div>
+    </div>
+    <div class="adm-field"><label>Nombre</label><input type="text" id="perfil-nombre" autocomplete="off"/></div>
+    <div class="adm-field"><label>Correo</label>
+      <input type="text" id="perfil-correo" disabled style="opacity:.6;cursor:not-allowed;"/>
+      <div style="font-size:.62rem;color:var(--text-3);margin-top:3px;">Para cambiarlo, pedíselo a un administrador.</div>
+    </div>
+    <div id="perfil-error" style="display:none;background:var(--danger-soft);color:var(--danger);border-radius:7px;padding:7px 10px;font-size:.7rem;font-weight:600;margin:8px 0;"></div>
+    <div id="perfil-ok" style="display:none;background:var(--success-soft);color:var(--success);border-radius:7px;padding:7px 10px;font-size:.7rem;font-weight:600;margin:8px 0;"></div>
+    <div class="adm-modal-btns">
+      <button class="adm-modal-btn cancel" onclick="_perfilCerrar()">Cerrar</button>
+      <button class="adm-modal-btn primary" onclick="_perfilGuardar(this)">Guardar cambios</button>
+    </div>
+    <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:14px;">
+      <div style="font-size:.68rem;font-weight:800;color:var(--text-2);margin-bottom:8px;">Cambiar contraseña</div>
+      <div class="adm-field"><label>Contraseña actual</label><input type="password" id="perfil-pass-actual" autocomplete="current-password"/></div>
+      <div class="adm-field"><label>Nueva contraseña</label><input type="password" id="perfil-pass-nueva" autocomplete="new-password"/></div>
+      <div class="adm-field"><label>Repetir nueva</label><input type="password" id="perfil-pass-rep" autocomplete="new-password"/></div>
+      <button class="adm-modal-btn primary" style="width:100%;" onclick="_perfilCambiarPass(this)">Cambiar contraseña</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
