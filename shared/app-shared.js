@@ -593,10 +593,21 @@ window._auditMembresias = function(opts){
     const ea=sea.val()||{}, ut=sut.val()||{}, empresas=se.val()||{}, users=su.val()||{};
     const nombreEmp=id=>(empresas[id]||{}).nombre||'(no existe)';
     const quien=uid=>{const u=users[uid]||{};return (u.asesor||u.email||uid);};
-    const faltaUT=[], faltaEA=[], huerfanos=[];
+    const faltaUT=[], faltaEA=[], huerfanos=[], sinCuenta=[];
+    // Una asimetría entre los dos índices NO siempre es falta de sincronía:
+    // puede ser una membresía de alguien que ya no existe. Repararla la hace
+    // aparecer en el panel como un asesor fantasma — pasó dos veces en
+    // producción. Si no hay cuenta en users/, va a la lista de borrar.
+    const revisar=(uid,empId,indice)=>{
+      if(users[uid]) return false;
+      sinCuenta.push({uid, tienda:nombreEmp(empId), visto:indice,
+        _paths:['empresa_asesores/'+empId+'/'+uid,'user_tiendas/'+uid+'/'+empId]});
+      return true;
+    };
     Object.entries(ea).forEach(([empId,uids])=>{
       Object.keys(uids||{}).forEach(uid=>{
         if(!empresas[empId]){ huerfanos.push({indice:'empresa_asesores',empresaId:empId,uid,asesor:quien(uid)}); return; }
+        if(revisar(uid,empId,'empresa_asesores')) return;
         if(!((ut[uid]||{})[empId])) faltaUT.push({asesor:quien(uid),uid,tienda:nombreEmp(empId),empresaId:empId,
           _path:'user_tiendas/'+uid+'/'+empId});
       });
@@ -604,10 +615,17 @@ window._auditMembresias = function(opts){
     Object.entries(ut).forEach(([uid,emps])=>{
       Object.keys(emps||{}).forEach(empId=>{
         if(!empresas[empId]){ huerfanos.push({indice:'user_tiendas',empresaId:empId,uid,asesor:quien(uid)}); return; }
+        if(revisar(uid,empId,'user_tiendas')) return;
         if(!((ea[empId]||{})[uid])) faltaEA.push({asesor:quien(uid),uid,tienda:nombreEmp(empId),empresaId:empId,
           _path:'empresa_asesores/'+empId+'/'+uid});
       });
     });
+    if(sinCuenta.length){
+      console.group('%c⚠ Membresías de cuentas que NO existen ('+sinCuenta.length+') — hay que BORRARLAS, no repararlas','color:#b91c1c;font-weight:bold');
+      console.table(sinCuenta.map(({uid,tienda,visto})=>({uid,tienda,visto})));
+      console.log('Repararlas las haría aparecer en el panel como asesores fantasma. Borralas a mano o con _limpiarMembresiasSinCuenta().');
+      console.groupEnd();
+    }
     if(faltaEA.length){
       console.group('%c⚠ INVISIBLES EN EL PANEL — están en user_tiendas pero no en empresa_asesores ('+faltaEA.length+')','color:#b91c1c;font-weight:bold');
       console.table(faltaEA.map(({asesor,tienda,uid})=>({asesor,tienda,uid}))); console.groupEnd();
@@ -710,6 +728,63 @@ window._migrarAsesor = function(nombreTienda, nombreViejo, nombreNuevo, opts){
       .then(()=>console.log('%c[MIGRAR asesor] listo: '+mover.length+' nodos copiados. La clave vieja queda intacta por si hay que revisar.','font-weight:bold;color:#15803d'))
       .catch(e=>console.error('  ✗',e));
   }).catch(e=>console.error('[MIGRAR asesor] falló (¿sesión de admin?):',e));
+};
+
+// Borra las membresías de cuentas que ya no existen en users/. Son asesores
+// fantasma: aparecen en el panel y en los filtros, pero no hay nadie detrás.
+// Solo borra si además NO tienen datos en ninguna raíz — si los tuvieran, es
+// una cuenta que trabajó y se eliminó, y sus registros hay que reasignarlos
+// antes, no dejarlos huérfanos.
+// Ejecutar desde la consola como admin:
+//   _limpiarMembresiasSinCuenta()                 → simulación
+//   _limpiarMembresiasSinCuenta({aplicar:true})   → aplica
+window._limpiarMembresiasSinCuenta = function(opts){
+  const aplicar=!!(opts||{}).aplicar;
+  const RAICES=['gestiones_diarias','novedades','ro','anticipos','gestiones_sync','historial_diario','user_fotos'];
+  console.log('%c[MEMBRESÍAS FANTASMA] leyendo...'+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
+  Promise.all([
+    _db.ref('users').once('value'), _db.ref('empresas').once('value'),
+    _db.ref('empresa_asesores').once('value'), _db.ref('user_tiendas').once('value'),
+    ...RAICES.map(r=>_db.ref(r).once('value'))
+  ]).then(snaps=>{
+    const users=snaps[0].val()||{}, empresas=snaps[1].val()||{}, ea=snaps[2].val()||{}, ut=snaps[3].val()||{};
+    const datos=RAICES.map((r,i)=>({raiz:r, val:snaps[4+i].val()||{}}));
+    const ids=new Set();
+    Object.values(ea).forEach(m=>Object.keys(m||{}).forEach(u=>{ if(!users[u]) ids.add(u); }));
+    Object.keys(ut).forEach(u=>{ if(!users[u]) ids.add(u); });
+    if(!ids.size){ console.log('%c✔ No hay membresías sin cuenta.','color:#15803d;font-weight:bold'); return; }
+    const borrar=[], conDatos=[];
+    ids.forEach(uid=>{
+      // ¿tiene datos en algún lado, como clave de tienda o de asesor?
+      const donde=[];
+      datos.forEach(({raiz,val})=>{
+        if(val[uid]) donde.push(raiz+' (como tienda)');
+        Object.entries(val).forEach(([tid,ms])=>{
+          if(!ms||typeof ms!=='object') return;
+          Object.entries(ms).forEach(([mes,ases])=>{ if(ases&&typeof ases==='object'&&ases[uid]) donde.push(raiz+'/'+tid+'/'+mes); });
+        });
+      });
+      const tiendas=[...new Set([
+        ...Object.entries(ea).filter(([,m])=>(m||{})[uid]).map(([e])=>e),
+        ...Object.keys(ut[uid]||{})
+      ])];
+      const fila={ uid, tiendas:tiendas.map(e=>(empresas[e]||{}).nombre||e).join(', ') };
+      if(donde.length){ conDatos.push({...fila, datosEn:donde.slice(0,4).join(' · ')}); return; }
+      borrar.push({...fila, _paths:[...tiendas.map(e=>'empresa_asesores/'+e+'/'+uid), 'user_tiendas/'+uid]});
+    });
+    if(conDatos.length){
+      console.group('%c⚠ Tienen datos — NO se borran ('+conDatos.length+')','color:#b45309;font-weight:bold');
+      console.table(conDatos); console.log('Reasigná esos registros antes de eliminar la membresía.'); console.groupEnd();
+    }
+    if(!borrar.length){ console.log('%cNada que borrar.','color:#15803d;font-weight:bold'); return; }
+    console.group('%cMembresías fantasma a borrar ('+borrar.length+')','color:#0e7490;font-weight:bold');
+    console.table(borrar.map(({uid,tiendas})=>({uid,tiendas}))); console.groupEnd();
+    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para aplicar: _limpiarMembresiasSinCuenta({aplicar:true})','font-weight:bold'); return; }
+    const updates={}; borrar.forEach(b=>b._paths.forEach(p=>{ updates[p]=null; }));
+    _db.ref().update(updates)
+      .then(()=>console.log('%c[MEMBRESÍAS FANTASMA] listo: '+borrar.length+' eliminadas.','font-weight:bold;color:#15803d'))
+      .catch(e=>console.error('  ✗',e));
+  }).catch(e=>console.error('[MEMBRESÍAS FANTASMA] falló (¿sesión de admin?):',e));
 };
 
 // Pasa las Gestiones Diarias de la clave por nombre a la clave por uid.
