@@ -139,15 +139,20 @@ window._sbEstadosToggle=function(){
              miran otros períodos. Estando acá se oculta solo al cambiar de tab,
              sin lógica extra en _admTab. -->
         <div class="adm-cmdbar">
-          <!-- Los dos primeros salen del último Excel cargado en Gestión Logística
-               (logistica_live/{empresaId}). El Excel es de toda la tienda, así que
-               la última carga reemplaza a la anterior: no se suma entre asesores. -->
+          <!-- Los dos primeros salen del CONSOLIDADO de Gestiones Diarias
+               (gestiones_diarias/{empresaId}/{mes}/consolidado), que es donde cada
+               tienda anota tres veces al día cuánto tiene pendiente. De cada tienda
+               se toma UN solo registro —el corte más reciente que tenga el dato—,
+               nunca la suma de sus cortes: en cada corte se vuelve a anotar lo que
+               hay pendiente EN ESE MOMENTO, así que sumarlos contaría el mismo
+               pedido tres veces. Entre tiendas distintas sí se suma. -->
           <div class="adm-cmd-card amber">
             <div class="adm-cmd-icon">🕒</div>
             <div class="adm-cmd-val" id="adm-stat-pendconf" style="color:#f59e0b">—</div>
             <div class="adm-cmd-lbl">Pendientes de confirmación</div>
-            <!-- Sin la hora, un número de hace 6 horas se lee como si fuera de ahora -->
-            <div class="adm-cmd-lbl" id="adm-stat-pendconf-sub" style="text-transform:none;letter-spacing:0;color:var(--text-3);font-weight:600;opacity:.75;">Sin Excel cargado hoy</div>
+            <!-- De qué corte salió y cuántas tiendas reportaron: sin eso, un total
+                 al que le faltan tiendas se lee como "hay poco pendiente". -->
+            <div class="adm-cmd-lbl" id="adm-stat-pendconf-sub" style="text-transform:none;letter-spacing:0;color:var(--text-3);font-weight:600;opacity:.75;">Sin consolidado cargado hoy</div>
           </div>
           <div class="adm-cmd-card">
             <div class="adm-cmd-icon">⚠️</div>

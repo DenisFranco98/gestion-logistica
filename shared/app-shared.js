@@ -3294,13 +3294,45 @@ function _admCargarEmpresa(adminId, empresasIds, empresaActualId){
 }
 
 // ── Tarjetas del Centro de Operaciones ───────────────────────────────────
-// Dos fuentes distintas y a propósito:
-//   · Pendientes de confirmación y Pedidos en novedad → logistica_live/{empId},
-//     el pulso del último Excel cargado. Como el Excel es de toda la tienda, la
-//     última carga reemplaza a la anterior; entre tiendas sí se suma.
-//   · El resumen del día → gestiones_diarias, sumando a TODOS los asesores de
-//     la tienda para el día de hoy. Es lo que el equipo carga a mano más lo que
-//     se deriva de las novedades.
+// Todo sale de gestiones_diarias, de una sola lectura del mes por tienda:
+//   · Pendientes de confirmación y Pedidos en novedad → del CONSOLIDADO, que es
+//     donde cada tienda anota esas dos cifras en cada corte del día.
+//   · El resumen del día → de las carpetas de asesor, sumando a TODOS los de la
+//     tienda para el día de hoy.
+// Antes las dos primeras salían de logistica_live/{empId} (el pulso del último
+// Excel cargado en Gestión Logística). Se cambió porque el Excel refleja lo que
+// una persona tenía abierto en su navegador en un momento suelto, mientras que
+// el consolidado es el registro que la tienda lleva a mano tres veces al día.
+// Los tres cortes del consolidado, del más temprano al más tarde (ver _CORTES
+// en gestiones-diarias.js, que es donde se cargan).
+const _ADM_CORTES = ['8am','12pm','5pm'];
+const _ADM_CORTE_LBL = ['Consolidado 8 AM','Consolidado 12 PM','Consolidado 5 PM'];
+// Cuánto tiene HOY una tienda de un campo del consolidado.
+//
+// Devuelve UN SOLO registro, nunca la suma de los cortes: en cada corte se
+// vuelve a anotar cuánto hay pendiente EN ESE MOMENTO, así que sumar 8 AM + 12
+// PM + 5 PM contaría tres veces el mismo pedido. Se toma el corte más reciente
+// que tenga el dato cargado, que es el que dice cómo está la tienda ahora.
+//
+// Se busca campo por campo y no "el último corte cargado" entero, porque un
+// corte puede estar a medio llenar: si a las 5 PM ya anotaron novedades pero
+// todavía no el pendiente de Dropi, el pendiente sigue saliendo del de 12 PM en
+// vez de contarse como cero.
+//   secciones: se prueban en orden — el corte de 5 PM guarda las novedades bajo
+//   'novedades5pm' y los otros dos bajo 'novedades'.
+function _admConsoHoy(consolidado, dia, secciones, campo){
+  const delDia = (consolidado||{})[dia];
+  if(!delDia) return null;
+  for(let i=_ADM_CORTES.length-1; i>=0; i--){
+    const corte = delDia[_ADM_CORTES[i]];
+    if(!corte) continue;
+    for(const sec of secciones){
+      const v = (corte[sec]||{})[campo];
+      if(typeof v === 'number') return {valor:v, corte:i};
+    }
+  }
+  return null;   // la tienda todavía no cargó ese dato hoy
+}
 let _admTarjetasTick = null;
 let _admTarjetasIds = [];
 // Gestiones de HOY por clave de asesor, para las tarjetas de En Vivo.
@@ -3321,36 +3353,33 @@ function _admCargarTarjetas(empresaIds){
   const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
   if(!ids.length){ ['adm-stat-pendconf','adm-stat-novedad'].forEach(i=>set(i,'—')); return; }
 
-  // 1. Pulso del Excel
-  Promise.all(ids.map(id=>_db.ref('logistica_live/'+id).once('value')))
-    .then(snaps=>{
-      let pend=0, nov=0, hubo=false, masReciente=0, quien='';
-      snaps.forEach(s=>{
-        const d=s.val(); if(!d) return;
-        hubo=true; pend+=d.pendConfirmacion||0; nov+=d.enNovedad||0;
-        if((d.ts||0)>masReciente){ masReciente=d.ts||0; quien=d.porAsesor||''; }
-      });
-      set('adm-stat-pendconf', hubo?pend:'—');
-      set('adm-stat-novedad',  hubo?nov:'—');
-      // Sin saber cuándo se cargó, un número viejo se lee como si fuera de ahora.
-      const lbl=document.getElementById('adm-stat-pendconf-sub');
-      if(lbl) lbl.textContent = hubo ? ('Excel de '+_fmtTiempo(masReciente)+(quien?' · '+quien.split(' ')[0]:'')) : 'Sin Excel cargado hoy';
-    })
-    .catch(()=>{ ['adm-stat-pendconf','adm-stat-novedad'].forEach(i=>set(i,'—')); });
-
-  // 2. Resumen del día desde Gestiones Diarias. La misma lectura alimenta el
-  // desglose por asesor que usan las tarjetas de En Vivo (_admGDHoy), así se
-  // recorre el mes una sola vez.
+  // Una sola lectura del mes por tienda alimenta las tres tarjetas y el desglose
+  // por asesor de En Vivo (_admGDHoy).
   const hoy=new Date();
   const mes=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
   const dia=String(hoy.getDate());
   Promise.all(ids.map(id=>_db.ref('gestiones_diarias/'+id+'/'+mes).once('value')))
     .then(snaps=>{
       let conf=0,soluc=0,carri=0,wpp=0,cancel=0;
+      let pend=0, nov=0, reportaron=0, corteMasNuevo=-1;
       const porAsesor={};
       snaps.forEach(s=>{
-        // Un nivel por asesor; de cada uno se toma solo el día de hoy.
-        Object.entries(s.val()||{}).forEach(([ak,nodo])=>{
+        const mesData = s.val()||{};
+        // 1. Pendientes y novedades: UN registro por tienda (ver _admConsoHoy).
+        const p = _admConsoHoy(mesData.consolidado, dia, ['confDropi'], 'pendConfirmacion');
+        const n = _admConsoHoy(mesData.consolidado, dia, ['novedades5pm','novedades'], 'novedadesPend');
+        if(p || n){
+          reportaron++;
+          pend += (p ? p.valor : 0);
+          nov  += (n ? n.valor : 0);
+          // El corte que se muestra es el más atrasado entre las tiendas: decir
+          // "12 PM" cuando una todavía va por el de 8 AM haría leer el total
+          // como más fresco de lo que es.
+          [p,n].forEach(x=>{ if(x && (corteMasNuevo<0 || x.corte<corteMasNuevo)) corteMasNuevo=x.corte; });
+        }
+        // 2. Resumen del día: un nivel por asesor, y de cada uno solo hoy.
+        Object.entries(mesData).forEach(([ak,nodo])=>{
+          if(_GD_NO_ASESOR.has(ak)) return;   // 'consolidado' y 'notasHist' no son personas
           const d=((nodo||{}).dias||{})[dia]; if(!d) return;
           conf+=d.conf||0; soluc+=d.soluc||0; carri+=d.recupCarri||0;
           wpp+=d.ventasWpp||0; cancel+=d.cancel||0;
@@ -3368,10 +3397,21 @@ function _admCargarTarjetas(empresaIds){
       _admGDHoy=porAsesor;
       set('adm-res-conf',conf); set('adm-res-soluc',soluc); set('adm-res-carri',carri);
       set('adm-res-wpp',wpp); set('adm-res-cancel',cancel);
+      set('adm-stat-pendconf', reportaron?pend:'—');
+      set('adm-stat-novedad',  reportaron?nov:'—');
+      // Con qué corte y cuántas tiendas se armó el número: un total al que le
+      // faltan tiendas por cargar se lee como "hay poco pendiente" cuando lo que
+      // pasa es que todavía no reportaron.
+      const lbl=document.getElementById('adm-stat-pendconf-sub');
+      if(lbl){
+        lbl.textContent = reportaron
+          ? (_ADM_CORTE_LBL[corteMasNuevo]||'Consolidado')+' · '+reportaron+' de '+ids.length+' tienda'+(ids.length!==1?'s':'')
+          : 'Sin consolidado cargado hoy';
+      }
       // Los datos llegaron después del primer render de las tarjetas.
       _admRepintarPresencia();
     })
-    .catch(()=>{});
+    .catch(()=>{ ['adm-stat-pendconf','adm-stat-novedad'].forEach(i=>set(i,'—')); });
 
   // Refresco periódico: estos números los mueven los asesores mientras trabajan,
   // y no hay listener sobre esas rutas (serían lecturas de todo el mes).
