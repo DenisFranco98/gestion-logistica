@@ -1230,3 +1230,70 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 #super-admin-panel{display:none;position:fixed;inset:0;z-index:9998;background:var(--bg);overflow:hidden;font-family:'Segoe UI',sans-serif;}
 /* ===== REGISTRO ADMIN MODAL ===== */
 #registro-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:10002;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+
+/* ══ MODO AUDITORÍA ═══════════════════════════════════════════════
+   La barra va ANCLADA ABAJO y no arriba por una razón concreta del layout:
+   body es height:100vh;overflow:hidden y todo el armado cuelga de elementos
+   fixed con offsets calculados desde el tope (#topnav top:0, header top:52px,
+   #main margin-top:52px). Meter 44px arriba obligaría a recalcular esa cadena
+   —y todos los calc(100vh - …)— en las 4 páginas. Anclada abajo no desplaza
+   nada: solo se agrega respiro al final de los contenedores con scroll para
+   que la última fila no quede debajo de la barra. */
+#audit-bar{position:fixed;bottom:0;left:0;right:0;height:44px;z-index:9000;
+  display:flex;align-items:center;gap:10px;padding:0 16px;overflow-x:auto;
+  background:var(--warning);color:#1A1206;
+  font-family:var(--f-body);font-size:.74rem;font-weight:700;
+  box-shadow:0 -4px 18px rgba(0,0,0,.45);}
+.audit-bar-tag{font-weight:800;letter-spacing:.3px;white-space:nowrap;}
+.audit-bar-sep{opacity:.45;}
+.audit-bar-ro{font-weight:600;opacity:.8;white-space:nowrap;}
+.audit-bar-tienda{margin-left:auto;padding:3px 10px;border-radius:20px;
+  background:rgba(0,0,0,.14);white-space:nowrap;}
+.audit-bar-lbl{font-weight:600;opacity:.75;white-space:nowrap;}
+.audit-bar-select{background:rgba(0,0,0,.82);color:#F4E9C8;color-scheme:dark;
+  border:1px solid rgba(0,0,0,.35);border-radius:7px;padding:5px 9px;
+  font-family:var(--f-body);font-size:.73rem;font-weight:700;cursor:pointer;
+  max-width:220px;}
+.audit-bar-salir{background:#1A1206;color:var(--warning);border:none;
+  border-radius:7px;padding:6px 14px;font-family:var(--f-body);font-size:.72rem;
+  font-weight:800;cursor:pointer;white-space:nowrap;}
+.audit-bar-salir:hover{background:#000;}
+/* Respiro al final de los contenedores con scroll propio, para que la barra no
+   tape la última fila de una tabla o la última card de una columna. */
+body.modo-auditoria .status-section,
+body.modo-auditoria .day-col-body,
+body.modo-auditoria .cf-tab,
+body.modo-auditoria .adm-main,
+body.modo-auditoria #gd-panel,
+body.modo-auditoria #cf-panel,
+body.modo-auditoria #main{padding-bottom:56px;}
+@media(max-width:760px){
+  .audit-bar-ro,.audit-bar-sep,.audit-bar-lbl{display:none;}
+  .audit-bar-tienda{margin-left:8px;}
+}
+/* Botones de acción que se retiran mientras se audita. El blindaje de _db.ref
+   ya impide que escriban, pero dejarlos visibles invita a hacer clic y a creer
+   que se guardó algo. Se seleccionan por su onclick para no tener que tocar el
+   HTML de las 4 páginas ni el markup que arman los módulos por JS.
+   Los de navegar, filtrar, cambiar de mes o salir NO se tocan: el auditor tiene
+   que poder moverse por todo. */
+body.modo-auditoria [onclick^="_antAgregar("],
+body.modo-auditoria [onclick^="_antEliminar("],
+body.modo-auditoria [onclick^="_antSubirComp("],
+body.modo-auditoria [onclick^="_cfAplicarTodo("],
+body.modo-auditoria [onclick^="_cfQuitarXls("],
+body.modo-auditoria [onclick^="_cfResetCodCostos("],
+body.modo-auditoria [onclick^="_gdAgregarNota("],
+body.modo-auditoria [onclick^="_gdBorrarNota("],
+body.modo-auditoria [onclick^="_gdEditarNota("],
+body.modo-auditoria [onclick^="_gdGuardarEdicion("],
+body.modo-auditoria [onclick^="_novNuevo("],
+body.modo-auditoria [onclick^="_novGuardar("],
+body.modo-auditoria [onclick^="_novEditar("],
+body.modo-auditoria [onclick^="_novEliminar("],
+body.modo-auditoria [onclick^="_novEvGuardar("],
+body.modo-auditoria [onclick^="_guardarNubeDesdePDF("],
+body.modo-auditoria [onclick^="_resetConPDF("],
+body.modo-auditoria [onclick^="_lbReset("],
+body.modo-auditoria [onclick^="_perfilGuardar("],
+body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}

@@ -162,6 +162,236 @@ const _fbApp = firebase.initializeApp({
 });
 const _db = firebase.database();
 
+// ===== MODO AUDITORÍA (solo lectura) ====================================
+// El admin entra a una tienda para VER cómo trabaja el equipo, no para operar.
+// Antes "Entrar a tienda" lo metía como un asesor más: se registraba en
+// presence/ (aparecía en "En vivo" y abría una sesión en session_hist), y
+// cualquier cosa que tocara quedaba guardada a su nombre dentro de una tienda
+// ajena. Auditar ensuciaba justamente lo que se iba a auditar.
+//
+// El modo auditoría corrige las tres cosas:
+//   1. no registra presencia ni sesión — el auditor es invisible;
+//   2. bloquea TODA escritura a la base (ver _refSoloLectura, más abajo);
+//   3. deja elegir a qué asesor se está mirando (ver _gdAK).
+//
+// El estado se persiste en localStorage porque saltar de módulo es
+// irAPagina() → location.href → carga completa: lo que viva solo en memoria no
+// sobrevive al salto (mismo motivo que _cameFromAdmin y _currentTiendaIds).
+const AUDIT_AK_KEY = 'lgs_audit_ak';  // uid del asesor que se está mirando
+const AUDIT_AN_KEY = 'lgs_audit_an';  // su nombre, para pintarlo en la barra
+// La verdad sobre "esto es una auditoría" la lleva lgs_auth==='audit', y no una
+// bandera propia, a propósito: una bandera aparte sobrevive a un cierre de
+// pestaña sin "Salir", y entonces el SIGUIENTE que entrara en ese navegador
+// —un asesor, con su sesión legítima— se encontraría la app en solo lectura sin
+// entender por qué. lgs_auth, en cambio, lo reescribe cada login.
+// window._auditoria solo cubre el instante previo a que _entrarApp la fije.
+function _esAuditoria(){
+  if(window._auditoria===false) return false;
+  try{ if(localStorage.getItem('lgs_auth')==='audit') return true; }catch(e){}
+  return window._auditoria===true;
+}
+function _setAuditoria(on){ window._auditoria = !!on; }
+// El asesor observado. Sin uno elegido se cae al del propio auditor, que dentro
+// de una tienda ajena es un nodo vacío: por eso la barra elige el primero apenas
+// carga la lista.
+function _setAuditAsesor(uid, nombre){
+  window._auditAk = uid||'';
+  window._auditAn = nombre||'';
+  try{
+    uid ? localStorage.setItem(AUDIT_AK_KEY, uid) : localStorage.removeItem(AUDIT_AK_KEY);
+    nombre ? localStorage.setItem(AUDIT_AN_KEY, nombre) : localStorage.removeItem(AUDIT_AN_KEY);
+  }catch(e){}
+}
+function _getAuditAsesor(){
+  if(window._auditAk) return window._auditAk;
+  try{ const v=localStorage.getItem(AUDIT_AK_KEY); if(v){ window._auditAk=v; return v; } }catch(e){}
+  return '';
+}
+function _getAuditAsesorNombre(){
+  if(window._auditAn) return window._auditAn;
+  try{ const v=localStorage.getItem(AUDIT_AN_KEY); if(v){ window._auditAn=v; return v; } }catch(e){}
+  return '';
+}
+function _limpiarAuditoria(){
+  window._auditoria=false; window._auditAk=''; window._auditAn='';
+  try{ [AUDIT_AK_KEY,AUDIT_AN_KEY].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+}
+
+// ── Blindaje de escritura ────────────────────────────────────────────────
+// Ocultar los botones no alcanza: entre los 4 archivos hay ~356 llamadas de
+// escritura, muchas automáticas (sincronizaciones, contadores derivados,
+// heartbeats) que se disparan solas con solo abrir un módulo. Como todas pasan
+// por _db.ref(), se blinda ahí una sola vez y no queda ningún camino suelto.
+//
+// El bloqueo NO rechaza la promesa: devuelve una resuelta. Un reject suelto
+// dentro de un .then() de la app rompería el render a medias y el auditor vería
+// una pantalla incompleta en vez de los datos que vino a mirar.
+const _AUDIT_METODOS_ESCRITURA = ['set','update','remove','setPriority','setWithPriority','transaction'];
+let _auditAvisoTs = 0;
+function _auditBloquear(metodo, ruta){
+  console.warn('[AUDITORÍA] escritura bloqueada: '+metodo+'() sobre '+ruta);
+  // Un solo aviso cada 3s: una acción de la UI suele disparar varias escrituras
+  // encadenadas y el usuario recibiría una ráfaga de toasts por un solo clic.
+  const ahora = Date.now();
+  if(ahora - _auditAvisoTs > 3000){
+    _auditAvisoTs = ahora;
+    if(typeof toast==='function') toast('🛡️ Modo auditoría: solo lectura, no se guardó nada', 3500);
+  }
+}
+const _AUDIT_ON_DISCONNECT_NOOP = {
+  set:()=>Promise.resolve(), update:()=>Promise.resolve(),
+  remove:()=>Promise.resolve(), setWithPriority:()=>Promise.resolve(),
+  cancel:()=>Promise.resolve()
+};
+// Envuelve una Reference/Query de Firebase dejando pasar las lecturas y
+// neutralizando las escrituras. Todo lo que devuelva otra ref (child, parent,
+// orderByChild, .ref de una Query...) se envuelve también, para que el blindaje
+// no se pierda al navegar el árbol.
+function _refSoloLectura(ref){
+  if(!ref || typeof ref!=='object') return ref;
+  return new Proxy(ref, {
+    get(target, prop){
+      const valor = target[prop];
+      if(_AUDIT_METODOS_ESCRITURA.includes(prop) && typeof valor==='function'){
+        return function(...args){
+          _auditBloquear(prop, String(target));
+          // transaction() recibe un callback de resultado que hay que honrar:
+          // si no se llama, el código que espera confirmación se queda colgado.
+          if(prop==='transaction' && typeof args[1]==='function') args[1](null, false, null);
+          return Promise.resolve();
+        };
+      }
+      if(prop==='onDisconnect') return ()=>_AUDIT_ON_DISCONNECT_NOOP;
+      // push(valor) escribe; push() a secas solo genera una clave del lado del
+      // cliente. Se llama sin argumentos para conservar .key —hay código que lo
+      // usa— sin que nada llegue a la base.
+      if(prop==='push' && typeof valor==='function'){
+        return function(...args){
+          if(args.length) _auditBloquear('push', String(target));
+          return _refSoloLectura(valor.call(target));
+        };
+      }
+      if(typeof valor==='function'){
+        return function(...args){
+          const r = valor.apply(target, args);
+          // Devolvió otra ref o query (tiene once()): envolverla.
+          return (r && typeof r==='object' && typeof r.once==='function') ? _refSoloLectura(r) : r;
+        };
+      }
+      // Propiedades que son refs: .parent, .root, .ref de una Query.
+      if(valor && typeof valor==='object' && typeof valor.once==='function') return _refSoloLectura(valor);
+      return valor;
+    }
+  });
+}
+// Se instala una sola vez por carga de página, y solo si la sesión ya venía en
+// auditoría: cada módulo es una carga nueva, así que el estado se relee de
+// localStorage en cada una.
+const _dbRefOriginal = _db.ref.bind(_db);
+function _instalarBlindajeAuditoria(){
+  if(window._auditBlindado) return;
+  window._auditBlindado = true;
+  _db.ref = function(ruta){
+    const r = _dbRefOriginal(ruta);
+    return _esAuditoria() ? _refSoloLectura(r) : r;
+  };
+}
+if(_esAuditoria()) _instalarBlindajeAuditoria();
+
+// ── Barra de auditoría ───────────────────────────────────────────────────
+// Se inyecta desde acá y no desde el HTML porque tiene que existir en las 4
+// páginas: los 4 archivos cargan app-shared.js, así que se escribe una vez.
+// Sin ella el auditor no tendría cómo saber que está en solo lectura, a quién
+// está mirando, ni cómo salir.
+window._auditBarraRefrescar = function(){
+  const previa = document.getElementById('audit-bar');
+  if(!_esAuditoria()){
+    if(previa) previa.remove();
+    document.body.classList.remove('modo-auditoria');
+    return;
+  }
+  document.body.classList.add('modo-auditoria');
+  let bar = previa;
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'audit-bar';
+    document.body.appendChild(bar);
+  }
+  const tienda = localStorage.getItem('lgs_tienda') || '—';
+  bar.innerHTML =
+    '<span class="audit-bar-tag">🛡️ Modo auditoría</span>'+
+    '<span class="audit-bar-sep">·</span>'+
+    '<span class="audit-bar-ro">solo lectura</span>'+
+    '<span class="audit-bar-tienda">🏪 '+esc(tienda)+'</span>'+
+    '<label class="audit-bar-lbl" for="audit-asesor">Viendo a</label>'+
+    '<select id="audit-asesor" class="audit-bar-select" onchange="_auditCambiarAsesor(this.value)">'+
+      '<option value="">Cargando…</option>'+
+    '</select>'+
+    '<button class="audit-bar-salir" onclick="_volverAlAdmin()">Salir de la tienda</button>';
+  _auditCargarAsesores();
+};
+
+// Los asesores salen de empresa_asesores/{empresaId} (el índice que ya usa el
+// Panel Admin) y los nombres de /users. Se agregan los uid que tengan datos en
+// gestiones_diarias del mes: alguien que ya no está asignado a la tienda igual
+// trabajó ahí, y su historial es justamente lo que se viene a auditar.
+window._auditCargarAsesores = function(){
+  const sel = document.getElementById('audit-asesor');
+  const empId = window._currentTiendaId || localStorage.getItem('lgs_empresa_id') || '';
+  if(!sel || !empId) return;
+  const mes = (typeof _gdMes!=='undefined' && _gdMes) ? _gdMes : _hoyLocal().slice(0,7);
+  Promise.all([
+    _db.ref('empresa_asesores/'+empId).once('value'),
+    _db.ref('users').once('value'),
+    _db.ref('gestiones_diarias/'+empId+'/'+mes).once('value')
+  ]).then(([snapEA, snapU, snapGD])=>{
+    const users = snapU.val()||{};
+    const nombreDe = uid => (users[uid]||{}).asesor || (users[uid]||{}).email || uid;
+    const uids = new Set(Object.keys(snapEA.val()||{}));
+    const gd = snapGD.val()||{};
+    Object.keys(gd).forEach(k=>uids.add(k));
+    const lista = [...uids]
+      // _nombre es el rótulo que deja el propio módulo cuando el uid no está en
+      // /users (cuentas viejas por slug): sin él quedaría la clave cruda.
+      .map(uid=>({uid, nombre: (users[uid] ? nombreDe(uid) : ((gd[uid]||{})._nombre || uid))}))
+      .sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+    if(!lista.length){
+      sel.innerHTML = '<option value="">Sin asesores en esta tienda</option>';
+      return;
+    }
+    let elegido = _getAuditAsesor();
+    // Sin nadie elegido (o si el elegido ya no está en la tienda) se toma el
+    // primero: el selector nunca puede quedar apuntando a un nodo que no existe,
+    // porque entonces el módulo sale vacío y parece un error de datos.
+    if(!elegido || !lista.find(a=>a.uid===elegido)){
+      elegido = lista[0].uid;
+      _setAuditAsesor(elegido, lista[0].nombre);
+    } else {
+      // Refrescar el nombre por si lo renombraron desde la última vez.
+      _setAuditAsesor(elegido, (lista.find(a=>a.uid===elegido)||{}).nombre||'');
+    }
+    sel.innerHTML = lista.map(a=>
+      '<option value="'+esc(a.uid)+'"'+(a.uid===elegido?' selected':'')+'>'+esc(a.nombre)+'</option>'
+    ).join('');
+  }).catch(e=>{
+    console.warn('[AUDITORÍA] no se pudo cargar la lista de asesores', e);
+    sel.innerHTML = '<option value="">No se pudo cargar</option>';
+  });
+};
+
+window._auditCambiarAsesor = function(uid){
+  if(!uid) return;
+  const sel = document.getElementById('audit-asesor');
+  const nombre = sel ? (sel.options[sel.selectedIndex]||{}).text||'' : '';
+  _setAuditAsesor(uid, nombre);
+  // Recarga completa a propósito. La clave del asesor (_gdAK) está leída en
+  // decenas de puntos de cada módulo —tablas, contadores, consolidado, gráficos—
+  // y no hay un único "repintar todo" que se pueda llamar; recargar garantiza
+  // que no quede en pantalla un dato de la persona anterior.
+  window._navegandoInterno = true;   // que el beforeunload no pida confirmación
+  location.reload();
+};
+
 // Diagnóstico: listar nodos de historial_diario con estructura vieja ({fecha} directo
 // en vez de {asesor}/{fecha}). Ejecutar desde la consola: _auditHistorialEstructura()
 window._auditHistorialEstructura = function(){
@@ -1233,6 +1463,7 @@ function _initLogin(){
         _limpiarPresencia();
         [LOGIN_KEY,TIENDA_KEY,ASESOR_KEY,USER_KEY,TIENDAS_KEY,FROM_ADMIN_KEY].forEach(k=>localStorage.removeItem(k));
         window._currentTiendaIds=null; window._cameFromAdmin=false;
+        _limpiarAuditoria();
         ['login-user','login-pass','login-tienda','login-asesor'].forEach(id=>{ const el=document.getElementById(id); if(el)el.value=''; });
         // Cerrar cualquier modal abierto
         ['logout-modal','nuevo-modal','reset-modal'].forEach(id=>{ const el=document.getElementById(id); if(el){el.classList.remove('open');el.style.display='none';} });
@@ -1263,8 +1494,10 @@ function _initLogin(){
     _db.ref('presence/'+_currentUsername+'/sessionGestiones').transaction(v=>(v||0)+1);
   };
 
-  function _entrarApp(username, tienda, asesor, empresaId){
-    localStorage.setItem(LOGIN_KEY, '1');
+  // auditoria=true entra en solo lectura y sin presencia: es el camino de
+  // "🛡️ Auditar tienda" del Panel Admin (ver _admEntrarTienda).
+  function _entrarApp(username, tienda, asesor, empresaId, auditoria){
+    localStorage.setItem(LOGIN_KEY, auditoria ? 'audit' : '1');
     localStorage.setItem(TIENDA_KEY, tienda);
     localStorage.setItem(ASESOR_KEY, asesor);
     localStorage.setItem(USER_KEY, username);
@@ -1289,8 +1522,21 @@ function _initLogin(){
     document.getElementById('login-error').classList.remove('show');
     document.getElementById('login-error-campos').classList.remove('show');
     _loginHide();
-    _registrarPresencia(username, tienda, asesor);
+    if(auditoria) _entrarSinPresencia(username);
+    else _registrarPresencia(username, tienda, asesor);
     window._gdMostrarModeSelect(asesor);
+  }
+
+  // Sesión de auditoría: nada de presence/ ni session_hist —el auditor no
+  // aparece en "En vivo" ni suma como asesor de la tienda—, pero sí se publica
+  // window._currentUsername, porque media app lo usa como "¿hay sesión viva?"
+  // antes de LEER (_fbCargarHistorialPropio, el historial por guía del kanban):
+  // sin él, el auditor entraría a un módulo en blanco.
+  function _entrarSinPresencia(username){
+    window._currentUsername = username;
+    _cachedLoginTime = Date.now();
+    _iniciarOffsetServidor();
+    if(window._forceLogoutRef){ window._forceLogoutRef.off('value'); window._forceLogoutRef=null; }
   }
   // Expuesta globalmente: _admEntrarTienda (fuera de este closure) también la necesita
   window._entrarApp = _entrarApp;
@@ -1386,6 +1632,11 @@ function _initLogin(){
 
   // Entrar al panel según el rol elegido
   function _entrarConRol(uid, email, rolTipo, admData, userData, snapTiendasPrefetch){
+    // Alguien está entrando con su propia sesión: sea quien sea, ya no es la
+    // auditoría de antes. Va acá arriba porque lgs_auth todavía puede decir
+    // 'audit' (un admin que cerró la pestaña sin salir) y las escrituras de este
+    // login —_auditLogin, presencia— quedarían bloqueadas sin explicación.
+    _limpiarAuditoria();
     const btn = document.querySelector('.login-btn');
     if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
     document.getElementById('rol-select-screen').style.display='none';
@@ -1636,17 +1887,20 @@ function _initLogin(){
     window._currentRol=null;
     window._currentTiendaIds=null;
     window._cameFromAdmin=false;
+    _limpiarAuditoria();
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
   window._admLogout = function(){
     [LOGIN_KEY,'lgs_admin_id','lgs_admin_user','lgs_empresa_actual',TIENDAS_KEY,FROM_ADMIN_KEY].forEach(k=>localStorage.removeItem(k));
     window._currentTiendaIds=null; window._cameFromAdmin=false;
+    _limpiarAuditoria();
     document.getElementById('admin-panel').classList.remove('visible');
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
   window._superAdmLogout = function(){
     [LOGIN_KEY,TIENDAS_KEY,FROM_ADMIN_KEY].forEach(k=>localStorage.removeItem(k));
     window._currentTiendaIds=null; window._cameFromAdmin=false;
+    _limpiarAuditoria();
     document.getElementById('super-admin-panel').style.display='none';
     firebase.auth().signOut().then(()=>{ _loginShow(); document.getElementById('login-user').focus(); });
   };
@@ -1762,12 +2016,19 @@ function _initLogin(){
       // eran inalcanzables salvo pasando por 🏪 Tiendas → "Entrar a tienda".
       const tAdm = localStorage.getItem(TIENDA_KEY), aAdm = localStorage.getItem(ASESOR_KEY);
       if(window._PAGINA_MODULO && user && tAdm && aAdm){
+        // Un admin dentro de una tienda es un auditor, se haya metido por
+        // "🛡️ Auditar tienda" o entrando a la URL del módulo a mano: en los dos
+        // casos mira datos ajenos, así que entra igual de blindado.
+        _setAuditoria(true);
+        _instalarBlindajeAuditoria();
+        localStorage.setItem(LOGIN_KEY,'audit');
         _loginHide();
         window._currentRol = localStorage.getItem('lgs_rol')||'dueno';
         window._currentTiendaId = localStorage.getItem('lgs_empresa_id')||null;
-        _registrarPresencia(user.uid, tAdm, aAdm);
+        _entrarSinPresencia(user.uid);
         _refrescarBotonCambiarPerfil(user.uid, user.email||'');
         window._gdMostrarModeSelect(aAdm);
+        _auditBarraRefrescar();
         return;
       }
       // Sin tienda elegida no hay ruta de datos que leer (_gdTK/_gdAK caerían
@@ -1777,6 +2038,30 @@ function _initLogin(){
         setTimeout(()=>toast('Para abrir '+window._PAGINA_MODULO+', entra primero a una tienda desde 🏪 Tiendas',4500),800);
       }
       _showAdmin(); _admCargarDashboard(); if(user)_refrescarBotonCambiarPerfil(user.uid,user.email||''); return;
+    }
+    // Auditoría en curso (el admin está dentro de una tienda, en solo lectura).
+    // Necesita rama propia porque es el único estado que entra a un módulo SIN
+    // registrar presencia: si cayera en la rama de abajo, cada salto de página
+    // volvería a publicarlo en "En vivo" como un asesor más de la tienda.
+    if(savedSession==='audit'){
+      if(!user){ _limpiarAuditoria(); localStorage.removeItem(LOGIN_KEY); _loginShow(); document.getElementById('login-user').focus(); return; }
+      const tAud = localStorage.getItem(TIENDA_KEY), aAud = localStorage.getItem(ASESOR_KEY);
+      if(!tAud){
+        // Sin tienda no hay nada que auditar: devolverlo al Centro de Operaciones.
+        _limpiarAuditoria(); localStorage.setItem(LOGIN_KEY,'admin');
+        if(window._PAGINA_MODULO){ irAPagina('/'); return; }
+        _showAdmin(); _admCargarDashboard(); return;
+      }
+      _setAuditoria(true);
+      _instalarBlindajeAuditoria();
+      _loginHide();
+      window._currentRol = localStorage.getItem('lgs_rol')||'dueno';
+      window._currentTiendaId = localStorage.getItem('lgs_empresa_id')||null;
+      _entrarSinPresencia(user.uid);
+      _refrescarBotonCambiarPerfil(user.uid, user.email||'');
+      window._gdMostrarModeSelect(aAud);
+      _auditBarraRefrescar();
+      return;
     }
     if(!user){ _loginShow(); document.getElementById('login-user').focus(); return; }
     const uid = user.uid;
@@ -4499,7 +4784,7 @@ function _admCargarEmpresas(){
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <div style="font-weight:800;color:var(--text-1);font-size:.9rem;">🏢 ${emp.nombre}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button onclick="_admEntrarTienda('${empId}','${emp.nombre.replace(/'/g,"\\'")}')" style="background:#131920;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;">→ Entrar a tienda</button>
+            <button onclick="_admEntrarTienda('${empId}','${emp.nombre.replace(/'/g,"\\'")}')" style="background:#131920;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;" title="Entra en solo lectura para revisar cómo trabaja el equipo. No quedás registrado como conectado ni podés modificar nada.">🛡️ Auditar tienda</button>
             <button onclick="_admAbrirEditarEmpresa('${empId}')" style="background:var(--bg-hover);color:var(--text-2);border:1.5px solid var(--border);border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;">✏️ Editar</button>
             <button onclick="_admGestionarEmpresa('${empId}')" style="background:var(--bg-hover);color:var(--text-2);border:1.5px solid var(--border);border-radius:7px;padding:5px 12px;font-size:.7rem;font-weight:700;cursor:pointer;">Gestionar asesores</button>
           </div>
@@ -4610,6 +4895,10 @@ window._meeGuardar = function(){
   });
 };
 
+// Entrar a una tienda desde el Panel Admin es SIEMPRE auditar: se mira cómo
+// trabaja el equipo, en solo lectura y sin dejar rastro (ver el bloque MODO
+// AUDITORÍA arriba). Antes esto entraba como un asesor más de la tienda, con
+// presencia registrada y permiso de escritura sobre datos ajenos.
 window._admEntrarTienda = function(empId, empNombre){
   const adminId = localStorage.getItem('lgs_admin_id');
   const adminEmail = localStorage.getItem('lgs_admin_user')||'';
@@ -4618,18 +4907,38 @@ window._admEntrarTienda = function(empId, empNombre){
     const u = snapU.val()||{};
     const nombreAsesor = u.asesor || adminEmail.split('@')[0] || 'Admin';
     window._currentRol = u.rol||'dueno';
+    // El blindaje se instala ANTES de entrar: desde acá no hay recarga de
+    // página (el panel admin y el mode-select viven los dos en index.html), así
+    // que nadie más lo va a instalar por nosotros.
+    _setAuditoria(true);
+    _setAuditAsesor('','');   // la barra elige el primer asesor al cargar la lista
+    _instalarBlindajeAuditoria();
     // Ocultar panel admin y entrar a la tienda
     document.getElementById('admin-panel').classList.remove('visible');
     _setCameFromAdmin(true);
     const btnV = document.getElementById('mss-btn-volver-admin');
     if(btnV) btnV.style.display = 'block';
-    _entrarApp(adminId, empNombre, nombreAsesor, empId);
+    _entrarApp(adminId, empNombre, nombreAsesor, empId, true);
+    _auditBarraRefrescar();
   });
 };
 
 window._volverAlAdmin = function(){
   const btnV = document.getElementById('mss-btn-volver-admin');
   if(btnV) btnV.style.display = 'none';
+  // Salir de la tienda termina la auditoría: se apaga la bandera (con lo que el
+  // blindaje de _db.ref deja de bloquear solo) y se olvida el asesor observado,
+  // para que la próxima no arranque mirando al de la vez pasada.
+  const eraAuditoria = _esAuditoria();
+  _limpiarAuditoria();
+  _auditBarraRefrescar();
+  // El Panel Admin solo existe en index.html: desde un módulo hay que navegar.
+  if(eraAuditoria && window._PAGINA_MODULO){
+    localStorage.setItem('lgs_auth','admin');
+    _setCameFromAdmin(false);
+    irAPagina('/');
+    return;
+  }
   _ocultarTodosModos();
   document.getElementById('mode-select-screen').style.display = 'none';
   if(_getCameFromAdmin()){
@@ -5990,13 +6299,29 @@ function _gdTK(){
 //   _gdAK()       → clave de ESCRITURA (uid; cae al slug del nombre si aún no
 //                   hay sesión resuelta, para no escribir en un nodo suelto)
 //   _gdAKLegacy() → clave vieja por nombre, solo para leer/migrar lo anterior
-function _gdAKLegacy(){ return _gdKey(window.getLoginAsesor?window.getLoginAsesor():'_'); }
+function _gdAKLegacy(){
+  // Auditando se mira la carpeta vieja del asesor OBSERVADO, no la del admin
+  // que está mirando: si esa persona todavía no migró a uid, su historial sigue
+  // guardado bajo el slug de su nombre y es lo único que hay para mostrar.
+  if(_esAuditoria() && _getAuditAsesorNombre()) return _gdKey(_getAuditAsesorNombre());
+  return _gdKey(window.getLoginAsesor?window.getLoginAsesor():'_');
+}
 // Nombre con el que trabajaba antes de que lo renombraran, si lo hubo. Es la
 // única pista para encontrar su historial: la carpeta vieja se llamaba así.
 function _gdAKPrevio(){
+  // 'lgs_asesor_prev' es el nombre anterior del que tiene la sesión abierta.
+  // Auditando ese sería el del admin, y apuntaría a la carpeta equivocada.
+  if(_esAuditoria()) return '';
   try{ const p=localStorage.getItem('lgs_asesor_prev'); return p?_gdKey(p):''; }catch(e){ return ''; }
 }
 function _gdAK(){
+  // Auditando, la carpeta a leer es la del asesor que se eligió en la barra: sin
+  // esto el admin abría Gestiones Diarias en su PROPIO nodo dentro de una tienda
+  // ajena —vacío— y parecía que el equipo no había trabajado nada.
+  if(_esAuditoria()){
+    const observado = _getAuditAsesor();
+    if(observado) return observado;
+  }
   return window._currentUsername || localStorage.getItem('lgs_user') || _gdAKLegacy();
 }
 
@@ -6027,6 +6352,10 @@ function _leerTienda(rutaFn, q){
     if(sn.exists()||nueva===vieja) return sn;
     return ref(vieja).once('value').then(sv=>{
       if(!sv.exists()) return sn;
+      // Auditando no se migra nada: la copia está bloqueada por ser escritura, y
+      // encadenarla igual devolvería el nodo nuevo (vacío) en vez de los datos.
+      // Se muestra el legacy tal cual y la migración queda para el dueño real.
+      if(_esAuditoria()) return sv;
       // Copiar el nodo completo a la clave nueva antes de que alguien lo edite.
       return _db.ref(nueva).set(sv.val())
         .then(()=>ref(nueva).once('value'))
@@ -6063,6 +6392,8 @@ function _leerGD(rutaFn){
       if(i>=alternativas.length) return Promise.resolve(sn);
       return _db.ref(alternativas[i]).once('value').then(sv=>{
         if(!sv.exists()) return probar(i+1);
+        // Mismo motivo que en _leerTienda: auditando se lee el legacy y punto.
+        if(_esAuditoria()) return sv;
         console.log('[GD] migrando '+alternativas[i]+' → '+destino);
         return _db.ref(destino).set(sv.val())
           .then(()=>_db.ref(destino).once('value'))
