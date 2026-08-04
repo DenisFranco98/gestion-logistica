@@ -345,16 +345,7 @@ window._auditCargarAsesores = function(){
     _db.ref('users').once('value'),
     _db.ref('gestiones_diarias/'+empId+'/'+mes).once('value')
   ]).then(([snapEA, snapU, snapGD])=>{
-    const users = snapU.val()||{};
-    const nombreDe = uid => (users[uid]||{}).asesor || (users[uid]||{}).email || uid;
-    const uids = new Set(Object.keys(snapEA.val()||{}));
-    const gd = snapGD.val()||{};
-    Object.keys(gd).forEach(k=>uids.add(k));
-    const lista = [...uids]
-      // _nombre es el rótulo que deja el propio módulo cuando el uid no está en
-      // /users (cuentas viejas por slug): sin él quedaría la clave cruda.
-      .map(uid=>({uid, nombre: (users[uid] ? nombreDe(uid) : ((gd[uid]||{})._nombre || uid))}))
-      .sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+    const lista = _auditListaAsesores(snapU.val()||{}, snapGD.val()||{}, Object.keys(snapEA.val()||{}));
     if(!lista.length){
       sel.innerHTML = '<option value="">Sin asesores en esta tienda</option>';
       return;
@@ -378,6 +369,37 @@ window._auditCargarAsesores = function(){
     sel.innerHTML = '<option value="">No se pudo cargar</option>';
   });
 };
+
+// Quién sale en el selector, a partir de /users, del nodo del mes en
+// gestiones_diarias y de los asignados en empresa_asesores. Aparte y sin tocar
+// Firebase para poder probarla: tiene dos reglas que se ven en los datos reales.
+//   users: {uid:{asesor,email}}   gd: nodo de gestiones_diarias/{tienda}/{mes}
+function _auditListaAsesores(users, gd, asignados){
+  const nombreDe = uid => (users[uid]||{}).asesor || (users[uid]||{}).email || uid;
+  const claves = new Set(asignados||[]);
+  // Regla 1: del mes solo interesan las carpetas de personas. 'consolidado' y
+  // 'notasHist' cuelgan del mes pero son de la tienda entera, y aparecían
+  // listados como si fueran un asesor más.
+  Object.keys(gd||{}).forEach(k=>{ if(!_GD_NO_ASESOR.has(k)) claves.add(k); });
+  const candidatos = [...claves].map(clave=>{
+    const esUid = !!users[clave];
+    // _nombre es el rótulo que deja el propio módulo cuando la carpeta no es un
+    // uid (las viejas, por slug del nombre): sin él quedaría la clave cruda.
+    const nombre = esUid ? nombreDe(clave) : ((gd||{})[clave]||{})._nombre || clave;
+    return {uid:clave, nombre, esUid};
+  });
+  // Regla 2: una misma persona puede tener DOS carpetas, la nueva por uid y la
+  // vieja por slug del nombre, de antes de que la clave canónica pasara a ser el
+  // uid — por eso se veían "DALILA" y "dalila" como si fueran dos asesoras. Se
+  // muestra solo la del uid: para un mes que solo exista en la carpeta vieja,
+  // _leerGD cae al slug del nombre observado y los datos igual salen. Las
+  // carpetas viejas SIN uid equivalente se siguen listando, porque ahí no hay
+  // ninguna otra forma de llegar a ese historial.
+  const slugsConUid = new Set(candidatos.filter(c=>c.esUid).map(c=>_gdKey(c.nombre)));
+  return candidatos
+    .filter(c=>c.esUid || !slugsConUid.has(_gdKey(c.nombre)))
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+}
 
 window._auditCambiarAsesor = function(uid){
   if(!uid) return;
@@ -1070,6 +1092,11 @@ window._limpiarMembresiasSinCuenta = function(opts){
   }).catch(e=>console.error('[MEMBRESÍAS FANTASMA] falló (¿sesión de admin?):',e));
 };
 
+// Nodos que cuelgan del MES en gestiones_diarias pero no son la carpeta de una
+// persona: el consolidado y las notas son de la tienda entera. Confundirlos con
+// asesores mete "consolidado" en cualquier lista de gente.
+const _GD_NO_ASESOR = new Set(['notasHist','cod','config','consolidado','dias','_nombre']);
+
 // Pasa las Gestiones Diarias de la clave por nombre a la clave por uid.
 // Antes la carpeta de cada asesor era _gdKey(su nombre): renombrarlo partía su
 // historial, y dos homónimos en la misma tienda compartían carpeta sin aviso.
@@ -1100,9 +1127,9 @@ window._migrarAsesoresAUid = function(opts){
       if(!k||k==='_') return;
       (porSlug[k]=porSlug[k]||[]).push(uid);
     });
-    // Nodos que cuelgan del mes pero NO son asesores: tratarlos como carpetas
-    // de persona los mandaría a la lista de "sin dueño" y ensuciaría el informe.
-    const NO_ASESOR = new Set(['notasHist','cod','config','consolidado','dias','_nombre']);
+    // Los nodos que no son de una persona (ver _GD_NO_ASESOR) se saltan:
+    // tratarlos como carpetas de asesor los mandaría a "sin dueño".
+    const NO_ASESOR = _GD_NO_ASESOR;
     const mover=[], ambiguos=[], sinDuenio=[], conflictos=[];
     Object.entries(gd).forEach(([tid,meses])=>{
       // Las raíces que no son un empresaId son las rutas legacy por nombre de
