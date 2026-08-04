@@ -498,7 +498,9 @@ function _gdTab(tab){
 }
 
 // ── CONSOLIDADO ─────────────────────────────────────────────────────────
-let _consoData={}, _consoDia=1, _consoSaveTimer=null;
+// _consoPend: campos tocados y todavía sin guardar, como rutas relativas al día
+// ('5pm/confDropi/pendConfirmacion' → 12). Ver _consoGuardar.
+let _consoData={}, _consoDia=1, _consoSaveTimer=null, _consoPend={};
 
 const _CS={
   confDropi:{
@@ -564,6 +566,10 @@ function _consoInit(){
 }
 
 function _consoSetDia(dia){
+  // Lo que quedó a medio guardar es del día que se está dejando: se escribe
+  // ANTES de mover _consoDia, o se guardaría en el día nuevo.
+  if(_consoSaveTimer){ clearTimeout(_consoSaveTimer); _consoSaveTimer=null; }
+  _consoGuardar();
   const prev=document.getElementById('conso-db-'+_consoDia);
   if(prev) prev.classList.remove('active');
   _consoDia=dia;
@@ -718,7 +724,10 @@ async function _consoCapturar(corteId){
 function _consoCambio(corteId,secId,campo,valor){
   if(!_consoData[corteId])_consoData[corteId]={};
   if(!_consoData[corteId][secId])_consoData[corteId][secId]={};
-  _consoData[corteId][secId][campo]=parseInt(valor)||0;
+  const num=parseInt(valor)||0;
+  _consoData[corteId][secId][campo]=num;
+  // Se anota SOLO el campo tocado (ver _consoGuardar).
+  _consoPend[corteId+'/'+secId+'/'+campo]=num;
   const def=_CS[secId];
   if(def&&def.total){
     const el=document.getElementById('ct-'+corteId+'-'+secId);
@@ -728,12 +737,33 @@ function _consoCambio(corteId,secId,campo,valor){
   _consoSaveTimer=setTimeout(_consoGuardar,900);
 }
 
+// Guarda SOLO los campos que se tocaron, con update() multi-ruta.
+//
+// Antes hacía .set(_consoData) sobre consolidado/{dia}, o sea reescribía el día
+// ENTERO —los tres cortes— con la copia que este navegador tenía en memoria. Con
+// dos personas en la misma tienda, o la misma persona en dos pestañas, el que
+// hubiera abierto la página primero tenía en memoria un día incompleto (solo el
+// corte de las 8, por ejemplo) y al tocar cualquier casilla BORRABA los cortes
+// que el otro había cargado después. No hacía falta ni tocar ese corte: bastaba
+// una tecla en cualquier campo del día.
+//
+// Con update() por campo, dos personas pueden llenar cortes distintos —o
+// casillas distintas del mismo corte— sin pisarse.
 function _consoGuardar(){
   if(typeof _db==='undefined'||!window._currentUsername)return;
-  document.getElementById('gd-save-st').textContent='Guardando...';
-  _db.ref(_consoPath()+'/'+_consoDia).set(_consoData).then(()=>{
-    document.getElementById('gd-save-st').textContent='✓ Guardado';
+  const pend=_consoPend; _consoPend={};
+  if(!Object.keys(pend).length)return;
+  const st=document.getElementById('gd-save-st');
+  if(st)st.textContent='Guardando...';
+  _db.ref(_consoPath()+'/'+_consoDia).update(pend).then(()=>{
+    if(st)st.textContent='✓ Guardado';
     setTimeout(()=>{const el=document.getElementById('gd-save-st');if(el)el.textContent='';},2000);
+  }).catch(e=>{
+    // Si falla, lo pendiente vuelve a la cola: perderlo en silencio es
+    // justamente lo que hizo que alguien creyera que había guardado.
+    Object.assign(_consoPend,pend);
+    if(st)st.textContent='⚠️ No se pudo guardar';
+    console.warn('[consolidado]',e);
   });
 }
 
