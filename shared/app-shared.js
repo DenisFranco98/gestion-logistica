@@ -4946,31 +4946,38 @@ function _iadmDetalle(idx){
 function _malRender(){
   const p=_malPresData; if(!p) return;
   const isOnline=_estaOnline(p);
-  const name=p.asesor||_malUsername||'—';
-  const color=_avatarColor(name);
-  const initials=_avatarInitials(name);
+  // El nombre editable manda sobre el de presence, igual que en el resto del
+  // panel: presence lo reescribe el navegador del asesor en cada navegación.
+  const uid=_malUsername;
+  const name=((_admUsuariosCache||[]).find(u=>u.uid===uid)||{}).asesor || p.asesor || uid || '—';
   const av=document.getElementById('mal-avatar');
-  av.style.background=color; av.textContent=initials;
+  const foto=window._fotoDe&&window._fotoDe(uid);
+  if(foto){
+    av.textContent=''; av.style.background='transparent';
+    av.style.backgroundImage='url('+foto+')';
+    av.style.backgroundSize='cover'; av.style.backgroundPosition='center';
+  } else {
+    av.style.backgroundImage='none';
+    av.style.background=_avatarColor(name); av.textContent=_avatarInitials(name);
+  }
   document.getElementById('mal-nombre').textContent=name;
   document.getElementById('mal-tienda').textContent='🏪 '+(p.tienda||'—');
   document.getElementById('mal-status').innerHTML=isOnline
     ?'<div class="enlive-online-pill"><span class="adm-live-dot"></span>EN VIVO</div>'
     :'<div class="enlive-offline-pill">Offline</div>';
-  const fin=p.finalizados||0, tp=p.totalPedidos||0;
-  const tCierre=tp>0?Math.min(100,Math.round(fin/tp*100)):null;
-  document.getElementById('mal-m-total').textContent=tp||'—';
-  document.getElementById('mal-m-fin').textContent=fin;
-  document.getElementById('mal-m-cierre').textContent=tCierre!==null?tCierre+'%':'—';
-  document.getElementById('mal-m-cont').textContent=p.contestaron||0;
-  document.getElementById('mal-m-wa').textContent=p.waEnviados||0;
-  document.getElementById('mal-m-dev').textContent=p.devoluciones||0;
+  // Las métricas del kanban se retiraron: este modal mira ACTIVIDAD, no
+  // producción. Las cifras del día están en la tarjeta, desde Gestiones Diarias.
   _malActualizarTiempos();
 }
 
 function _malActualizarTiempos(){
   const p=_malPresData; if(!p) return;
-  const now=Date.now();
-  const isOnline=!!p.online&&(now-(p.lastSeen||0))<120000;
+  // Hora del servidor, no el reloj local: lastSeen y lastActivity se escriben
+  // con la del servidor, y comparar contra Date.now() daba duraciones falsas en
+  // equipos con la hora corrida. Este punto había quedado fuera de la
+  // unificación de _estaOnline.
+  const now=_ahoraServidor();
+  const isOnline=_estaOnline(p);
   // Tiempo en línea
   const tOnEl=document.getElementById('mal-t-online');
   if(isOnline&&p.loginTime){

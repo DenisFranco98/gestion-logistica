@@ -672,32 +672,9 @@ window._sbEstadosToggle=function(){
     <div id="mal-sin-accion" style="background:var(--warning-soft);border:1px solid rgba(230,181,57,.4);border-radius:10px;padding:12px;margin-bottom:14px;text-align:center;font-size:.8rem;color:var(--warning);display:none;">
       ⚠️ Sin acciones registradas aún en esta sesión
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:18px;">
-      <div style="background:var(--bg-hover);border-radius:8px;padding:9px 4px;text-align:center;border:1px solid var(--border);">
-        <div style="font-size:.95rem;font-weight:800;color:var(--text-2);" id="mal-m-total">—</div>
-        <div style="font-size:.5rem;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Total ped.</div>
-      </div>
-      <div style="background:var(--bg-hover);border-radius:8px;padding:9px 4px;text-align:center;border:1px solid var(--border);">
-        <div style="font-size:.95rem;font-weight:800;color:#4ade80;" id="mal-m-fin">—</div>
-        <div style="font-size:.5rem;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Finalizados</div>
-      </div>
-      <div style="background:var(--bg-hover);border-radius:8px;padding:9px 4px;text-align:center;border:1px solid var(--border);">
-        <div style="font-size:.95rem;font-weight:800;color:var(--text-1);" id="mal-m-cierre">—</div>
-        <div style="font-size:.5rem;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">% Cierre</div>
-      </div>
-      <div style="background:var(--bg-hover);border-radius:8px;padding:9px 4px;text-align:center;border:1px solid var(--border);">
-        <div style="font-size:.95rem;font-weight:800;color:#60a5fa;" id="mal-m-cont">—</div>
-        <div style="font-size:.5rem;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Contestaron</div>
-      </div>
-      <div style="background:var(--bg-hover);border-radius:8px;padding:9px 4px;text-align:center;border:1px solid var(--border);">
-        <div style="font-size:.95rem;font-weight:800;color:#a78bfa;" id="mal-m-wa">—</div>
-        <div style="font-size:.5rem;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">WA enviados</div>
-      </div>
-      <div style="background:var(--bg-hover);border-radius:8px;padding:9px 4px;text-align:center;border:1px solid var(--border);">
-        <div style="font-size:.95rem;font-weight:800;color:#fb923c;" id="mal-m-dev">—</div>
-        <div style="font-size:.5rem;color:var(--text-3);margin-top:2px;text-transform:uppercase;letter-spacing:.3px;">Devoluciones</div>
-      </div>
-    </div>
+    <!-- Las metricas del kanban se quitaron: este modal mira ACTIVIDAD
+         (si esta trabajando ahora), no produccion. Las cifras del dia estan en
+         la tarjeta de En Vivo, sacadas de Gestiones Diarias. -->
     <!-- Historial de sesiones -->
     <div style="margin-bottom:16px;">
       <div style="font-size:.65rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📅 Últimas sesiones</div>
