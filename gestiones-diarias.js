@@ -1027,22 +1027,22 @@ function _novSetEstado(estado){
   _novEstadoActivo=estado;
   document.getElementById('nov-estado-sol').classList.toggle('active',estado==='solucionada');
   document.getElementById('nov-estado-dev').classList.toggle('active',estado==='devuelta');
-  const tipoWrap=document.getElementById('nov-tipo-wrap');
-  if(estado==='devuelta'){
-    tipoWrap.style.display='none';
-    _novSetTipo('txt');
-  } else {
-    tipoWrap.style.display='block';
-    _novSetTipo('img');
-  }
+  // El estado ya no decide qué se puede adjuntar. Antes, marcar "devuelta"
+  // escondía el selector y obligaba a texto: no se podía dejar la foto de la
+  // devolución. Ahora los dos estados aceptan imagen, texto o ambos.
 }
 
+// Los dos campos quedan siempre a la vista: se puede adjuntar la foto, escribir
+// la nota, o las dos cosas. El selector de tipo se retiró — obligaba a elegir
+// uno y hacía perder el otro.
 function _novSetTipo(tipo){
-  _novTipoActivo=tipo;
-  document.getElementById('nov-tipo-img').classList.toggle('active',tipo==='img');
-  document.getElementById('nov-tipo-txt').classList.toggle('active',tipo==='txt');
-  document.getElementById('nov-m-img-wrap').style.display=tipo==='img'?'block':'none';
-  document.getElementById('nov-m-txt-wrap').style.display=tipo==='txt'?'block':'none';
+  _novTipoActivo=tipo||'ambos';
+  const wImg=document.getElementById('nov-m-img-wrap');
+  const wTxt=document.getElementById('nov-m-txt-wrap');
+  if(wImg) wImg.style.display='block';
+  if(wTxt) wTxt.style.display='block';
+  const tw=document.getElementById('nov-tipo-wrap');
+  if(tw) tw.style.display='none';
 }
 
 async function _novGuardar(){
@@ -1064,15 +1064,18 @@ async function _novGuardar(){
     // gestión dejaría de atribuirse a la misma persona. El nombre se guarda
     // igual para poder mostrarlo sin tener que resolver el uid.
     const meta={asesor:gestorNom, asesorUid:_gdAK(), dia:fechaBase.getDate(), mes:solMes};
-    // Build solution object
-    let solObj=null;
-    if(_novTipoActivo==='img'){
-      const fi=document.getElementById('nov-m-img');
-      if(fi.files.length) solObj={estado:_novEstadoActivo,tipo:'img',val:await _novResizeImg(fi.files[0],800,.72),fechaLabel,ts:Date.now(),...meta};
-    } else {
-      const txt=document.getElementById('nov-m-txt').value.trim();
-      if(txt) solObj={estado:_novEstadoActivo,tipo:'txt',val:txt,fechaLabel,ts:Date.now(),...meta};
-    }
+    // Se miran los DOS campos: si cargó foto y además escribió la nota, quedan
+    // las dos evidencias. Antes solo se guardaba la del tipo seleccionado y la
+    // otra se perdía sin aviso.
+    const solObjs=[];
+    const fi=document.getElementById('nov-m-img');
+    if(fi && fi.files.length)
+      solObjs.push({estado:_novEstadoActivo,tipo:'img',val:await _novResizeImg(fi.files[0],800,.72),fechaLabel,ts:Date.now(),...meta});
+    const txt=(document.getElementById('nov-m-txt')||{}).value||'';
+    if(txt.trim())
+      solObjs.push({estado:_novEstadoActivo,tipo:'txt',val:txt.trim(),fechaLabel,ts:Date.now()+1,...meta});
+    // solObj: la primera, para el resto del flujo (mensajes y recálculo).
+    const solObj=solObjs[0]||null;
     const _fmtFecha=v=>{if(!v)return'';const d=new Date(v+'T12:00:00');return isNaN(d)?v:d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});};
     if(state.mode==='new'){
       const guia=document.getElementById('nov-m-guia').value.trim();
@@ -1088,9 +1091,11 @@ async function _novGuardar(){
           btn.textContent='Guardar'; btn.disabled=false; return;
         }
         const nEvid=_novGetSols(existente.nov).length+1;
-        const solRef=await _novGuardarSol(existente.id, solObj);
         if(!_novData[existente.id].soluciones) _novData[existente.id].soluciones={};
-        _novData[existente.id].soluciones[solRef.key]=solObj;
+        for(const s of solObjs){
+          const solRef=await _novGuardarSol(existente.id, s);
+          _novData[existente.id].soluciones[solRef.key]=s;
+        }
         toast('La guía '+guia+' ya estaba registrada — se agregó como evidencia '+nEvid+' de esa novedad.',5000);
       } else {
         const fechaVal=document.getElementById('nov-m-fecha').value.trim();
@@ -1102,10 +1107,12 @@ async function _novGuardar(){
         // Primera evidencia va en soluciones/ si existe
         const ref=await _db.ref(_novBasePath()).push(novData);
         _novData[ref.key]=novData;
-        if(solObj){
-          const solRef=await _novGuardarSol(ref.key, solObj);
-          if(!_novData[ref.key].soluciones)_novData[ref.key].soluciones={};
-          _novData[ref.key].soluciones[solRef.key]=solObj;
+        if(solObjs.length){
+          _novData[ref.key].soluciones={};
+          for(const s of solObjs){
+            const solRef=await _novGuardarSol(ref.key, s);
+            _novData[ref.key].soluciones[solRef.key]=s;
+          }
         }
       }
     } else if(state.mode==='edit'){
@@ -1120,11 +1127,14 @@ async function _novGuardar(){
       Object.assign(_novData[state.id], updates);
     } else {
       // Agregar nueva evidencia → siempre push a soluciones/
-      if(!solObj){ _mAlert('Falta la evidencia','Adjuntá una imagen o escribí un texto para registrar la gestión.'); btn.textContent='Guardar'; btn.disabled=false; return; }
-      const solRef=await _db.ref(_novBasePath()+'/'+state.id+'/soluciones').push(solObj);
+      if(!solObjs.length){ _mAlert('Falta la evidencia','Adjuntá una imagen, escribí un texto, o las dos cosas.'); btn.textContent='Guardar'; btn.disabled=false; return; }
       if(!_novData[state.id]) _novData[state.id]={};
       if(!_novData[state.id].soluciones) _novData[state.id].soluciones={};
-      _novData[state.id].soluciones[solRef.key]=solObj;
+      // _novGuardarSol y no un push directo: deja la imagen fuera del registro.
+      for(const s of solObjs){
+        const solRef=await _novGuardarSol(state.id, s);
+        _novData[state.id].soluciones[solRef.key]=s;
+      }
     }
     _novCerrarModal();
     _novRender();
