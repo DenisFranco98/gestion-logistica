@@ -27,6 +27,13 @@ function _hoyLocal(d){
 // que están en páginas distintas.
 const _NOV_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
+// La guía se escribe a mano o se pega desde Dropi, así que para comparar se
+// ignoran espacios, guiones y mayúsculas: "ABC 123" y "abc-123" son la misma.
+// Vive acá porque la usan los dos lados del cruce: Gestiones Diarias, para no
+// duplicar la novedad de una guía ya registrada, y Gestión Logística, para
+// reconocer en el tablero una guía que ya se gestionó.
+function _novNormGuia(g){ return String(g||'').replace(/[\s-]+/g,'').toLowerCase(); }
+
 // Normaliza nombre → clave Firebase segura (sin tildes, sin espacios, solo a-z0-9_)
 function _gdKey(s){
   return (s||'').trim().toLowerCase()
@@ -54,8 +61,13 @@ function _fmtFecha(val){
   return d.getDate().toString().padStart(2,'0')+'/'+(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getFullYear();
 }
 // Mes actualmente cargado en Gestión Logística (window._mesCargado) — lo usa también Gestiones Diarias
+// El respaldo va por _hoyLocal y no por toISOString: este equipo está en
+// Colombia (UTC-5), así que el último día del mes, a partir de las 19:00, la
+// versión UTC ya devolvía el mes SIGUIENTE. Con eso, novedades/, ro/ y la
+// sincronización de guías se ponían a leer y escribir un nodo del mes que
+// viene, vacío, justo en el cierre de mes.
 function _getMesCargado(){
-  return window._mesCargado || new Date().toISOString().slice(0,7);
+  return window._mesCargado || _hoyLocal().slice(0,7);
 }
 
 // ── CARGA DIFERIDA DE LIBRERÍAS EXTERNAS ────────────────────────────────
@@ -6701,6 +6713,28 @@ function _clavesAsesorSesion(){
 // forma incondicional desde el módulo legacy, por eso vive aquí y no en
 // gestiones-diarias.js (su UI/caché en memoria de GD se actualiza solo si
 // esa página está cargada, ver guards de typeof adentro).
+// ── R.O. (Reclamo en Oficina) ────────────────────────────────────────────
+// Reglas confirmadas por el usuario el 2026-08-04, después de encontrar los
+// mismos pedidos duplicados en dos meses con estados que se contradecían:
+//
+//  1. UNA GUÍA, UN REGISTRO. Si la guía ya está en el mes, no se crea otro.
+//     Antes no se podían reconocer entre sí: el Gestor Logístico guardaba con
+//     la guía como clave y el alta manual de Gestiones Diarias con una clave
+//     push, así que el mismo pedido entraba dos veces.
+//  2. EL ESTADO ES DEL ASESOR. R.O. sigue si el cliente ya recogió el paquete, y
+//     eso solo lo sabe quien habla con él. El registro nace PENDIENTE y desde
+//     ahí solo lo cambia una persona. Antes se derivaba del tablero y
+//     `gestion_final` —que es "cerré la card"— se guardaba como ENTREGADO:
+//     había pedidos marcados como entregados cuya propia nota decía que el
+//     cliente todavía no había reclamado. Además se escribía con .set(), así
+//     que cada carga de Excel pisaba lo corregido a mano.
+//  3. GESTIONAR EN EL TABLERO SOLO TOCA DOS CAMPOS: nota de seguimiento y fecha
+//     de actualización de estado. Nada más.
+//  4. EL MES ES EL DE HOY, no el del Excel. Con el mes del Excel, el kanban
+//     escribía en julio mientras Gestiones Diarias miraba agosto: el asesor no
+//     veía lo que generaba la carga y lo terminaba cargando a mano.
+function _roMes(){ return _hoyLocal().slice(0,7); }
+
 function _roAutoSync(){
   // Sincronizar todos los pedidos en Oficina que aún no tienen registro RO.
   // 'pedidos' solo existe con Gestión Logística cargado y este archivo lo cargan
@@ -6712,49 +6746,133 @@ function _roAutoSync(){
   // Migrar el mes de ro/ ANTES de escribir: si esta sync creara el nodo nuevo
   // con un registro suelto, la lectura posterior lo daría por existente y el
   // resto del historial (aún en la clave vieja) dejaría de verse.
-  _leerTienda(tk=>'ro/'+tk+'/'+_getMesCargado())
+  _leerTienda(tk=>'ro/'+tk+'/'+_roMes())
     .catch(()=>{})
-    .then(()=>oficinas.forEach(p=>_roSyncFromGestion(p.id)));
+    // soloCrear: cargar un Excel no es gestionar. Los pedidos que ya tienen
+    // registro se dejan intactos —estado, notas y fechas son del asesor—; solo
+    // se dan de alta los que faltan.
+    .then(()=>oficinas.forEach(p=>_roSyncFromGestion(p.id, true)))
+    .then(()=>_roCerrarPorExcel());
 }
 
-function _roSyncFromGestion(id){
+// ENTREGADO y DEVUELTO son los dos estados que NO pone el asesor: los dice el
+// Excel, que es lo que reporta la transportadora. Antes se deducían de lo que se
+// hacía en el tablero —cerrar una card se guardaba como ENTREGADO— y quedaban
+// pedidos marcados como entregados cuya propia nota decía que el cliente no
+// había reclamado.
+//
+// Los dos desenlaces desaparecen del kanban (mapEstado los descarta: no hay nada
+// que gestionar), y justamente por eso su registro de R.O. se quedaba esperando
+// para siempre. Las guías se recogen durante el parseo, antes del descarte.
+//
+// Se revisan el mes actual y el anterior: un pedido de fin de julio que se cierra
+// en agosto tiene su registro de R.O. en julio, y mirando solo el mes en curso
+// no se cerraría nunca.
+function _roCerrarPorExcel(){
+  // guía normalizada → estado con el que hay que cerrarla.
+  const destinoDe = new Map();
+  (window._guiasEntregadas||new Set()).forEach(g=>destinoDe.set(_novNormGuia(g),'ENTREGADO'));
+  // Entregado gana si una guía apareciera en las dos listas: es el desenlace
+  // más avanzado y significa que el paquete llegó a manos del cliente.
+  (window._guiasDevueltas||new Set()).forEach(g=>{
+    const k=_novNormGuia(g);
+    if(!destinoDe.has(k)) destinoDe.set(k,'DEVUELTO');
+  });
+  if(!destinoDe.size) return Promise.resolve();
+  if(typeof _db==='undefined' || !_tiendaLista('cierre de R.O.')) return Promise.resolve();
+  const hoy = _hoyLocal();
+  const [y,m] = _roMes().split('-').map(Number);
+  const prev = new Date(y, m-2, 1);   // m-2: getMonth es 0-based y se busca el anterior
+  const meses = [...new Set([_roMes(), prev.getFullYear()+'-'+String(prev.getMonth()+1).padStart(2,'0')])];
+  return Promise.all(meses.map(mes=>{
+    const base = 'ro/'+_gdTK()+'/'+mes;
+    return _db.ref(base).once('value').then(snap=>{
+      const updates = {};
+      let entregados=0, devueltos=0;
+      Object.entries(snap.val()||{}).forEach(([k,r])=>{
+        if(!r) return;
+        const destino = destinoDe.get(_novNormGuia(r.guia));
+        if(!destino) return;              // el pedido sigue su curso
+        if(r.estado===destino) return;    // ya estaba cerrado así
+        updates[k+'/estado'] = destino;
+        updates[k+'/fechaEstado'] = hoy;
+        destino==='ENTREGADO' ? entregados++ : devueltos++;
+      });
+      const n = entregados+devueltos;
+      if(!n) return;
+      return _db.ref(base).update(updates).then(()=>{
+        const detalle = [entregados?entregados+' entregado'+(entregados!==1?'s':''):'',
+                         devueltos?devueltos+' devuelto'+(devueltos!==1?'s':''):''].filter(Boolean).join(' y ');
+        console.log('[R.O.] '+mes+': '+detalle+' según el Excel');
+        if(typeof toast==='function') toast('📦 R.O. actualizado: '+detalle,4000);
+      });
+    });
+  })).then(()=>{
+    // Repintar si la pestaña R.O. está abierta en Gestiones Diarias.
+    const tabRo=document.getElementById('gd-tab-ro');
+    if(tabRo&&tabRo.style.display!=='none'&&typeof _roInit==='function')_roInit();
+  }).catch(e=>console.warn('[R.O. entregados]',e));
+}
+
+function _roSyncFromGestion(id, soloCrear){
   try{
     if(typeof _db==='undefined'||!window._currentUsername)return;
     const p=_pedidoMap.get(id);
     if(!p||p.estadoKey!=='oficina'||!p.guia)return;
     const g=gestiones[id]||{};
     const notas=g.notas||(g.nota?[{texto:g.nota,fecha:new Date().toLocaleDateString('es-CO'),ts:Date.now()}]:[]);
-    // Determinar estado
-    let estado='PENDIENTE';
-    if(g.devolucion)       estado='DEVUELTO';
-    else if(g.gestion_final) estado='ENTREGADO';
-    else if(g.llamada)     estado='EN PROCESO';
     const hoy=_hoyLocal();
-    const mes=_getMesCargado();
+    const mes=_roMes();
     const tel=(p.telefono||'').replace(/^57/,'');
     const rKey=_fbKey(p.guia);
-    const basePath='ro/'+_gdTK()+'/'+mes+'/'+rKey;
-    _db.ref(basePath).once('value').then(snap=>{
-      const ex=snap.val()||{};
-      // La primera nota nunca se sobreescribe (primer contacto)
-      const notaCliente=ex.notaCliente||(notas.length?notas[0].texto:'');
-      const notaSeg=notas.length?notas[notas.length-1].texto:'';
-      return _db.ref(basePath).set({
+    const base='ro/'+_gdTK()+'/'+mes;
+    // Se lee el mes entero y se busca por GUÍA, no por clave: un registro dado
+    // de alta a mano en Gestiones Diarias tiene una clave push que jamás
+    // coincidiría con la de la guía, y se duplicaría.
+    _db.ref(base).once('value').then(snap=>{
+      const data=snap.val()||{};
+      const guiaK=_novNormGuia(p.guia);
+      let existente=Object.entries(data).find(([,r])=>_novNormGuia(r&&r.guia)===guiaK);
+      // Respaldo por teléfono: cuando el asesor da de alta una fila a mano suele
+      // llenar teléfono y nota y dejar la guía vacía —así están los registros
+      // reales—, y buscando solo por guía no se la encontraba y se creaba un
+      // duplicado del mismo cliente. Solo se adoptan filas SIN guía: si tiene
+      // una guía distinta es otro pedido, aunque sea del mismo teléfono.
+      if(!existente && tel){
+        existente=Object.entries(data).find(([,r])=>r && !(r.guia||'').trim() && (r.telefono||'').trim()===tel);
+      }
+      if(existente){
+        if(soloCrear) return;   // ya está: la carga del Excel no lo toca
+        // Gestionado desde el tablero: solo estos dos campos.
+        const upd={fechaEstado:hoy};
+        const notaSeg=notas.length?notas[notas.length-1].texto:'';
+        if(notaSeg) upd.notaSeguimiento=notaSeg;
+        // Si se adoptó por teléfono, se completan los huecos que el asesor no
+        // llenó. No pisa nada —solo escribe donde estaba vacío— y evita que la
+        // próxima carga vuelva a no reconocer la fila.
+        const reg=existente[1]||{};
+        if(!(reg.guia||'').trim() && p.guia) upd.guia=p.guia;
+        if(!(reg.cliente||'').trim() && p.nombre) upd.cliente=p.nombre;
+        return _db.ref(base+'/'+existente[0]).update(upd);
+      }
+      // Alta: nace PENDIENTE y con la primera nota como nota de cliente.
+      return _db.ref(base+'/'+rKey).set({
         guia:p.guia, cliente:p.nombre||'', telefono:tel,
-        notaCliente, notaSeguimiento:notaSeg,
-        estado, fechaContacto:hoy, fechaEstado:hoy,
-        ts:ex.ts||Date.now(), _fromLogistica:true
+        notaCliente:notas.length?notas[0].texto:'',
+        notaSeguimiento:notas.length?notas[notas.length-1].texto:'',
+        estado:'PENDIENTE', fechaContacto:hoy, fechaEstado:'',
+        ts:Date.now(), _fromLogistica:true
       });
     }).then(()=>{
-      // Actualizar caché/UI de Gestiones Diarias solo si esa página está cargada
-      // (en gestion-logistica.html estas variables/función no existen — el
-      // registro en Firebase de arriba ya se hizo, esto es solo refresco visual).
+      // Refrescar la UI de Gestiones Diarias solo si esa página está cargada (en
+      // gestion-logistica.html estas variables/función no existen — el registro
+      // en Firebase ya se hizo, esto es solo repintado).
+      // Se repinta releyendo de Firebase en vez de parchear _roData a mano: la
+      // clave del registro puede no ser la de la guía —si lo dieron de alta a
+      // mano es una clave push— y escribir en la caché con la clave equivocada
+      // metía una fila fantasma que no existía en la base.
       if(typeof _gdMes==='undefined')return;
       if(!_gdMes||_gdMes===mes){
-        if(typeof _roData!=='undefined'){
-          if(!_roData[rKey])_roData[rKey]={ts:Date.now()};
-          Object.assign(_roData[rKey],{guia:p.guia,cliente:p.nombre||'',telefono:tel,estado});
-        }
         const tabRo=document.getElementById('gd-tab-ro');
         if(tabRo&&tabRo.style.display!=='none'&&typeof _roInit==='function')_roInit();
       }

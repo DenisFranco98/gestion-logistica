@@ -743,9 +743,8 @@ let _novData={}, _novModalState={mode:'new',id:null,solNum:1}, _novTipoActivo='i
 function _novBase(tk){ return 'novedades/'+(tk||_gdTK())+'/'+_gdMes; }
 function _novBasePath(){ return _novBase(); }
 
-// La guía se escribe a mano o se pega desde Dropi, así que para comparar se
-// ignoran espacios, guiones y mayúsculas: "ABC 123" y "abc-123" son la misma.
-function _novNormGuia(g){ return String(g||'').replace(/[\s-]+/g,'').toLowerCase(); }
+// _novNormGuia se movió a shared/app-shared.js: Gestión Logística también cruza
+// guías contra estas novedades y necesita comparar con la MISMA regla.
 // Busca la novedad ya registrada de una guía, dentro del mes que se está viendo
 // (_novData solo tiene ese mes; una guía del mes anterior no se encuentra y se
 // registra como novedad nueva de este mes).
@@ -1494,6 +1493,14 @@ function _roRender(){
   });
 }
 
+// ¿Otra fila del mes ya tiene esta guía? Se compara con _novNormGuia, la misma
+// regla con la que el resto del proyecto decide si dos guías son la misma.
+function _roGuiaDuplicada(idPropio, guia){
+  const k=_novNormGuia(guia);
+  if(!k) return false;
+  return Object.entries(_roData||{}).some(([id,r])=>id!==idPropio && _novNormGuia(r&&r.guia)===k);
+}
+
 function _roEstCambio(id,sel){
   const e=_RO_ESTADOS.find(x=>x.val===sel.value);
   sel.style.background=e?e.bg:'white';
@@ -1503,6 +1510,16 @@ function _roEstCambio(id,sel){
 
 function _roCambio(id,campo,valor){
   if(!_roData[id])return;
+  // Una guía, un registro. La fila se crea vacía y la guía se escribe acá, así
+  // que este es el único punto donde se puede detectar que ya existe. Sin esto,
+  // el mismo pedido terminaba dos veces en R.O. —una por el alta a mano y otra
+  // por la carga del Excel— con estados que se contradecían entre sí.
+  if(campo==='guia' && valor && _roGuiaDuplicada(id, valor)){
+    toast('⚠️ Esa guía ya está en R.O. de este mes — se abre el registro que ya existe',4500);
+    _roData[id][campo]='';
+    _roRender();
+    return;
+  }
   _roData[id][campo]=valor;
   const k='ro'+id+campo;
   if(_roST[k])clearTimeout(_roST[k]);

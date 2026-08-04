@@ -958,13 +958,30 @@ function parsear(data){
   // número, así que se cuentan acá antes de que mapEstado los deje fuera.
   // Se cuentan IDs únicos, no filas: un pedido con varios productos ocupa
   // varias filas del Excel.
+  // Los desenlaces —ENTREGADO y DEVUELTO— se anotan por el mismo motivo, antes
+  // de que mapEstado los descarte: son la única forma de saber que un pedido de
+  // R.O. ya terminó. Los dos salen del kanban (no hay nada que gestionar), y
+  // justamente por eso su registro de R.O. se quedaba esperando para siempre.
+  // "entregado" se exige al PRINCIPIO del estado y no en cualquier parte, para
+  // que un "NO ENTREGADO" no cuente como entregado; "entregada a conexiones",
+  // que es tránsito, tampoco entra porque dice "entregada", no "entregado".
+  // En devolución sí basta con que aparezca, para cubrir sus cuatro variantes
+  // ("devolución", "devolución en bodega", "en proceso de devolución",
+  // "tránsito a devolución proveedor"): en todas el cliente ya no lo va a
+  // recoger, que es lo que R.O. necesita saber.
   const _idsPendConf=new Set();
+  const _guiasEntregadas=new Set(), _guiasDevueltas=new Set();
   const mapa=new Map();let _idx=0;
   rows.forEach(r=>{
     const id=String(r[cID]||'').trim();if(!id)return;
     const guia=String(r[cG]||'').trim();
     const transportadora=String(r[cTr]||'').trim();
-    if(norm(r[cE]).includes('pendiente confirmacion')) _idsPendConf.add(id);
+    const _estNorm=norm(r[cE]);
+    if(_estNorm.includes('pendiente confirmacion')) _idsPendConf.add(id);
+    if(guia){
+      if(_estNorm.startsWith('entregado')) _guiasEntregadas.add(guia);
+      else if(_estNorm.includes('devolucion')||_estNorm.includes('devuelt')) _guiasDevueltas.add(guia);
+    }
     const _estadoRaw=mapEstado(r[cE],transportadora);
     if(!_estadoRaw)return;
     // Sin guía: solo se admiten PENDIENTE y RECHAZADO (pueden no tener guía generada)
@@ -1042,6 +1059,10 @@ function parsear(data){
   // que se publica por tienda y la última carga reemplaza a la anterior — sumar
   // entre asesores multiplicaría el número, porque todos suben el mismo archivo.
   _publicarSnapshotLogistica(result, _idsPendConf.size);
+  // Los consume _roCerrarPorExcel (shared/app-shared.js) cuando corre la
+  // sincronización de R.O., ya sin acceso a las filas del Excel.
+  window._guiasEntregadas = _guiasEntregadas;
+  window._guiasDevueltas  = _guiasDevueltas;
   return result;
 }
 
@@ -1233,7 +1254,10 @@ function _cargarArchivo(file){
       const sorted=Object.entries(mesesConteo).sort((a,b)=>b[1]-a[1]);
       if(sorted.length){
         window._mesCargado=sorted[0][0];
-        const mesActual=new Date().toISOString().slice(0,7);
+        // _hoyLocal y no toISOString: el 31 a las 19:00 hora Colombia, la
+        // versión UTC ya da el mes siguiente y el banner avisaría que el Excel
+        // es de otro mes cuando en realidad es el del día.
+        const mesActual=_hoyLocal().slice(0,7);
         const banner=document.getElementById('mes-excel-banner');
         const bannerTxt=document.getElementById('mes-excel-banner-txt');
         if(banner&&bannerTxt){
@@ -2914,30 +2938,51 @@ async function _novSyncSolucionadaGD(id, solucionada){
   toast(solucionada?'✅ Novedad marcada como solucionada en GD':'↩️ Novedad desmarcada en GD',2500);
 }
 
-// ── Sincronización en vivo: novedades solucionadas desde la extensión (Dropi) ──
-// La extensión "REDKING Herramientas" (novedades-content.js, panel en
-// app.dropi.co/dashboard/novelties) escribe evidencias directo en
-// novedades/{tienda}/{mes}/{id}/soluciones/{key}. Este listener detecta esas
-// soluciones por número de guía y mueve la card correspondiente a Gestionadas
-// en Gestor Logístico, sin exigir el flujo manual de contacto+nota.
-let _novExtListenerPath=null;
+// ── Sincronización en vivo: novedades ya gestionadas por otra vía ────────
+// Una misma novedad se puede trabajar desde tres lados, y todos escriben en el
+// mismo lugar —novedades/{tienda}/{mes}/{id}/soluciones/{key}—:
+//   · Gestiones Diarias, cuando el asesor registra la novedad con su evidencia;
+//   · la extensión "REDKING Herramientas" (novedades-content.js, panel en
+//     app.dropi.co/dashboard/novelties);
+//   · el propio Gestor Logístico.
+// Este listener no mira quién la escribió: cruza por número de guía y, si la
+// última evidencia dice que quedó solucionada, mueve la card a Gestionadas sin
+// exigir el flujo manual de contacto+nota. Así, al cargar el Excel del día, una
+// novedad que ya se gestionó por otra ruta aparece resuelta en vez de volver a
+// pedir trabajo que ya se hizo.
+// Se escuchan DOS meses, no uno. Los dos lados guardan la novedad en un mes
+// distinto y hasta ahora solo se miraba uno:
+//   · el Gestor Logístico usa el mes del EXCEL (_getMesCargado, o sea el mes más
+//     frecuente entre las fechas de orden). Un tablero con novedades del 27 al
+//     31 de julio da "2026-07" aunque hoy sea 4 de agosto;
+//   · Gestiones Diarias usa el mes que tiene abierto, que es el ACTUAL.
+// Con un solo listener, el asesor gestionaba hoy la novedad de un pedido viejo y
+// la card seguía pendiente: se escuchaba julio mientras la evidencia se escribía
+// en agosto. Cuando los dos meses coinciden queda un solo listener.
+let _novExtListenerPaths=[];
 function _iniciarEscuchaNovedadesExt(){
   if(typeof _db==='undefined'||!window._currentUsername)return;
-  const tk=_gdTK(), mes=_getMesCargado();
-  const path='novedades/'+tk+'/'+mes;
-  if(_novExtListenerPath===path)return;
-  if(_novExtListenerPath) _db.ref(_novExtListenerPath).off('value',_procesarNovedadesExt);
-  _novExtListenerPath=path;
-  _db.ref(path).on('value',_procesarNovedadesExt);
+  const tk=_gdTK();
+  const paths=[...new Set([_getMesCargado(), _hoyLocal().slice(0,7)])]
+    .map(m=>'novedades/'+tk+'/'+m);
+  if(_novExtListenerPaths.join('|')===paths.join('|'))return;
+  _novExtListenerPaths.forEach(p=>_db.ref(p).off('value',_procesarNovedadesExt));
+  _novExtListenerPaths=paths;
+  paths.forEach(p=>_db.ref(p).on('value',_procesarNovedadesExt));
 }
 function _procesarNovedadesExt(snap){
   const data=snap.val()||{};
   const porGuia=new Map();
-  pedidos.forEach(p=>{ if(p.estadoKey==='novedad'&&p.guia) porGuia.set(String(p.guia).trim(),p); });
+  // _novNormGuia y no trim(): las dos puntas escriben la guía por su lado y no
+  // siempre igual —un cero de más, un guion, un espacio— y comparándolas crudas
+  // el cruce se perdía en silencio, dejando la card pidiendo una gestión que ya
+  // estaba hecha. Es la misma regla con la que Gestiones Diarias decide si una
+  // guía ya tiene novedad registrada.
+  pedidos.forEach(p=>{ if(p.estadoKey==='novedad'&&p.guia) porGuia.set(_novNormGuia(p.guia),p); });
   if(!porGuia.size)return;
 
   Object.values(data).forEach(n=>{
-    const guia=String(n.guia||'').trim();
+    const guia=_novNormGuia(n.guia);
     if(!guia)return;
     const p=porGuia.get(guia);
     if(!p)return; // esa guía no está entre las novedades cargadas ahora mismo
@@ -2955,14 +3000,15 @@ function _procesarNovedadesExt(snap){
       if(!gestiones[p.id].contacto_metodo)gestiones[p.id].contacto_metodo='chatepro';
       _novSyncSolucionadaGD(p.id,true);
       marcarFinalizado(p.id);
-      toast('✅ Guía '+guia+' resuelta desde la extensión — movida a Gestionadas');
+      // Se muestra la guía del pedido, no la normalizada: esa es para comparar.
+      toast('✅ Guía '+p.guia+' ya estaba gestionada — movida a Gestionadas');
     } else if(ultima.estado==='devuelta'){
       if(!gestiones[p.id])gestiones[p.id]={};
       gestiones[p.id].devolucion=true;
       gestiones[p.id].devolucion_razon=ultima.tipo==='txt'?ultima.val:'Producto devuelto (registrado desde la extensión)';
       guardar();_fbSyncGestion(p.id);_roSyncFromGestion(p.id);
       animarCompletado(p.id,()=>_completarYLimpiar(p.id),'🔄');
-      toast('🔄 Guía '+guia+' devuelta desde la extensión');
+      toast('🔄 Guía '+p.guia+' ya estaba marcada como devuelta');
     }
   });
 }
