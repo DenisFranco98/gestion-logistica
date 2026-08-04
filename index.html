@@ -460,7 +460,15 @@ window._sbEstadosToggle=function(){
           </div>
           <div>
             <label style="font-size:.65rem;font-weight:700;color:var(--text-2);display:block;margin-bottom:3px;">MES</label>
-            <input id="gdadm-mes" type="month" style="border:1.5px solid var(--border);border-radius:8px;padding:6px 11px;font-size:.78rem;outline:none;">
+            <input id="gdadm-mes" type="month" onchange="_gdadmPoblarDias()" style="border:1.5px solid var(--border);border-radius:8px;padding:6px 11px;font-size:.78rem;outline:none;">
+          </div>
+          <!-- El día filtra sobre lo YA cargado: cambiar el mes obliga a leer de
+               nuevo (botón), cambiar el día no, así que repinta al instante. -->
+          <div>
+            <label style="font-size:.65rem;font-weight:700;color:var(--text-2);display:block;margin-bottom:3px;">DÍA</label>
+            <select id="gdadm-dia" onchange="_gdadmSetDia(this.value)" style="border:1.5px solid var(--border);border-radius:8px;padding:6px 11px;font-size:.78rem;outline:none;background:var(--bg-card);color:var(--text-1);min-width:130px;">
+              <option value="0">Todo el mes</option>
+            </select>
           </div>
           <button onclick="_gdadmCargar()" style="background:#131920;color:white;border:none;border-radius:8px;padding:8px 18px;font-size:.78rem;font-weight:700;cursor:pointer;align-self:flex-end;">Ver consolidado</button>
         </div>

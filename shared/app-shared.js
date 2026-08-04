@@ -21,6 +21,12 @@ function _hoyLocal(d){
   return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0');
 }
 
+// Meses cortos, escritos a mano y no con toLocaleDateString: es-CO con
+// month:'short' devuelve "1 de ago" y el resultado cambia según el entorno.
+// Vive acá porque lo usan Gestiones Diarias y el Consolidado GD del Panel Admin,
+// que están en páginas distintas.
+const _NOV_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
 // Normaliza nombre → clave Firebase segura (sin tildes, sin espacios, solo a-z0-9_)
 function _gdKey(s){
   return (s||'').trim().toLowerCase()
@@ -3040,6 +3046,8 @@ function _admTab(tab){
     const hoy=new Date(), y=hoy.getFullYear(), m=String(hoy.getMonth()+1).padStart(2,'0');
     const mesEl=document.getElementById('gdadm-mes');
     if(mesEl&&!mesEl.value) mesEl.value=y+'-'+m;
+    // El selector de día se llena a partir del mes, así que va después.
+    _gdadmPoblarDias();
     _gdadmPoblarTiendas();
   }
   if(tab==='auditoria') _audInicializar();
@@ -6164,6 +6172,7 @@ function _gdadmCargar(){
     _gdadmAsesores=[];
     const [y,m]=mes.split('-').map(Number);
     _gdadmDias=new Date(y,m,0).getDate();
+    _gdadmPoblarDias();   // por si el mes cambió sin pasar por su onchange
     results.forEach(({tienda,snap})=>{
       if(!snap.exists()) return;
       const raw=snap.val()||{};
@@ -6184,6 +6193,47 @@ function _gdadmCargar(){
     _gdadmSubtab(_gdadmSubtabActual);
   });
 }
+
+// ── Filtro de día ────────────────────────────────────────
+// 0 = todo el mes. Las tres tablas se arman recorriendo _gdadmDiasLista() y
+// dividiendo los promedios por _gdadmDivisor(), así que acotar a un día es
+// cambiar esas dos y nada más. El filtro es local: los días del mes ya están en
+// _gdadmAsesores, no hace falta volver a Firebase para cambiar de día.
+let _gdadmDiaSel = 0;
+function _gdadmDiasLista(){
+  if(_gdadmDiaSel) return [_gdadmDiaSel];
+  const out=[]; for(let d=1;d<=_gdadmDias;d++) out.push(d);
+  return out;
+}
+// Divisor de los promedios: con un día elegido es 1, no los 31 del mes — si no,
+// "PROM." mostraría el trabajo de ese día repartido en todo el mes.
+function _gdadmDivisor(){ return _gdadmDiaSel ? 1 : _gdadmDias; }
+// Etiqueta del período, para que la tabla diga siempre de qué está hablando.
+function _gdadmPeriodoLbl(){
+  if(!_gdadmDiaSel) return 'MES';
+  const mes=(_gdadmData||{}).mes||'';
+  const [y,m]=mes.split('-').map(Number);
+  const f=new Date(y,(m||1)-1,_gdadmDiaSel);
+  return (_NOV_MESES && !isNaN(f) ? _gdadmDiaSel+' DE '+_NOV_MESES[f.getMonth()].toUpperCase() : 'DÍA '+_gdadmDiaSel);
+}
+window._gdadmPoblarDias = function(){
+  const sel=document.getElementById('gdadm-dia');
+  const mes=(document.getElementById('gdadm-mes')||{}).value||'';
+  if(!sel) return;
+  const [y,m]=mes.split('-').map(Number);
+  const total=(y&&m)?new Date(y,m,0).getDate():0;
+  const previo=_gdadmDiaSel;
+  let html='<option value="0">Todo el mes</option>';
+  for(let d=1;d<=total;d++) html+='<option value="'+d+'">Día '+d+'</option>';
+  sel.innerHTML=html;
+  // Si el mes nuevo es más corto, el día elegido puede no existir.
+  _gdadmDiaSel = (previo && previo<=total) ? previo : 0;
+  sel.value=String(_gdadmDiaSel);
+};
+window._gdadmSetDia = function(v){
+  _gdadmDiaSel = parseInt(v,10)||0;
+  if(_gdadmAsesores.length) _gdadmSubtab(_gdadmSubtabActual);
+};
 
 function _gdadmSubtab(t){
   _gdadmSubtabActual=t;
@@ -6213,9 +6263,9 @@ function _gdadmGralDia(d){
        +(d.recupCarri||0)+(d.contNoRecup||0)+(d.recupNov||0)+(d.ventasWpp||0);
 }
 function _gdadmDayTotals(dias){
-  // Returns {conf,cancel,soluc,devuelt,recupNov,recupCarri,contNoRecup,ventasWpp,gral} summed over all days
+  // Suma los días del período elegido: el mes entero, o uno solo si hay filtro.
   let c={conf:0,cancel:0,soluc:0,devuelt:0,recupNov:0,recupCarri:0,contNoRecup:0,ventasWpp:0,gral:0};
-  Object.values(dias).forEach(d=>{
+  _gdadmDiasLista().map(n=>(dias||{})[n]).filter(Boolean).forEach(d=>{
     c.conf+=d.conf||0; c.cancel+=d.cancel||0; c.soluc+=d.soluc||0;
     c.devuelt+=d.devuelt||0; c.recupNov+=d.recupNov||0;
     c.recupCarri+=d.recupCarri||0; c.contNoRecup+=d.contNoRecup||0;
@@ -6231,13 +6281,21 @@ function _avg(n,d){ return d?(n/d).toFixed(1):'—'; }
 function _gdadmRenderRanking(){
   const el=document.getElementById('gdadm-content');
   let rows='', totals={conf:0,cancel:0,soluc:0,recupNov:0,recupCarri:0,ventasWpp:0,gral:0};
-  _gdadmAsesores.forEach((a,i)=>{
+  // Con un día elegido, quien no tiene registro ese día llenaría la tabla de
+  // ceros: se saca de la lista y se nombra abajo, que es el dato que importa
+  // ahí ("no cargó"), sin ensuciar la comparación entre los que sí trabajaron.
+  const sinRegistro=[];
+  const visibles=!_gdadmDiaSel ? _gdadmAsesores : _gdadmAsesores.filter(a=>{
+    if((a.dias||{})[_gdadmDiaSel]) return true;
+    sinRegistro.push(a.nombre); return false;
+  });
+  visibles.forEach((a,i)=>{
     const t=_gdadmDayTotals(a.dias);
     // La columna NOVEDADES muestra solucionadas + devueltas, y CARRITOS
     // recuperados + no recuperados: ambas son gestiones hechas.
     totals.conf+=t.conf; totals.cancel+=t.cancel; totals.soluc+=t.soluc+t.devuelt;
     totals.recupNov+=t.recupNov+t.recupCarri+t.contNoRecup; totals.ventasWpp+=t.ventasWpp; totals.gral+=t.gral;
-    const prom=_avg(t.gral,_gdadmDias);
+    const prom=_avg(t.gral,_gdadmDivisor());
     const efect=_pct(t.conf,t.gral);
     const bg=i===0?'style="background:var(--warning-soft);"':i===1?'style="background:var(--success-soft);"':i===2?'style="background:var(--warning-soft);"':'';
     rows+=`<tr ${bg}>
@@ -6255,7 +6313,8 @@ function _gdadmRenderRanking(){
       <td>0</td><td>—</td><td>—</td>
     </tr>`;
   });
-  el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">EQUIPO · RANKING · BONIFICACIONES</div>
+  el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">EQUIPO · RANKING · BONIFICACIONES · ${_gdadmPeriodoLbl()}</div>
+  ${sinRegistro.length?`<div style="font-size:.68rem;color:var(--text-3);margin-bottom:8px;">Sin registro ese día (${sinRegistro.length}): ${esc(sinRegistro.join(' · '))}</div>`:''}
   <div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr>
       <th>#</th><th>NOMBRE</th><th>TIENDA</th><th>TOTAL GEST.</th>
@@ -6267,7 +6326,7 @@ function _gdadmRenderRanking(){
       <td colspan="3" style="text-align:left;font-weight:800;">TOTALES</td>
       <td>${totals.gral}</td><td>${totals.conf}</td><td>${totals.cancel}</td>
       <td>${totals.soluc}</td><td>${totals.recupNov}</td><td>${totals.ventasWpp}</td>
-      <td>${_avg(totals.gral,_gdadmDias)}</td>
+      <td>${_avg(totals.gral,_gdadmDivisor())}</td>
       <td>${_pct(totals.conf,totals.gral)}</td>
       <td>0</td><td colspan="2"></td>
     </tr></tfoot>
@@ -6278,7 +6337,7 @@ function _gdadmRenderRanking(){
 function _gdadmRenderCollab(){
   const el=document.getElementById('gdadm-content');
   let rows='', mesTotals=_gdadmAsesores.map(()=>0), diasTotalArr=[];
-  for(let d=1;d<=_gdadmDias;d++){
+  _gdadmDiasLista().forEach(d=>{
     let rowTotal=0;
     let cells=_gdadmAsesores.map((a,i)=>{
       const g=_gdadmGralDia(a.dias[d]);
@@ -6286,19 +6345,20 @@ function _gdadmRenderCollab(){
     }).join('');
     diasTotalArr.push(rowTotal);
     rows+=`<tr><td style="font-weight:700;">${d}</td>${cells}<td class="hi" style="font-weight:700;">${rowTotal||''}</td><td>${rowTotal?_avg(rowTotal,_gdadmAsesores.length||1):''}  </td></tr>`;
-  }
+  });
   const grandTotal=mesTotals.reduce((a,b)=>a+b,0);
   const multiTienda=new Set(_gdadmAsesores.map(a=>a.tienda)).size>1;
   const aHeaders=_gdadmAsesores.map(a=>`<th>${a.nombre.split(' ')[0]}${multiTienda?'<br><span style="font-weight:400;opacity:.6;font-size:.55rem;">🏪 '+a.tienda+'</span>':''}</th>`).join('');
   const aTotals=mesTotals.map((t,i)=>`<td class="hi">${t}</td>`).join('');
-  const aProms=mesTotals.map(t=>`<td>${_avg(t,_gdadmDias)}</td>`).join('');
-  el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO DIARIO — TOTAL GESTIONES POR COLABORADOR</div>
+  const aProms=mesTotals.map(t=>`<td>${_avg(t,_gdadmDivisor())}</td>`).join('');
+  const totLbl=_gdadmDiaSel?'TOTAL DÍA':'TOTAL MES';
+  el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO DIARIO — TOTAL GESTIONES POR COLABORADOR · ${_gdadmPeriodoLbl()}</div>
   <div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr><th>DÍA</th>${aHeaders}<th>TOTAL DÍA</th><th>PROM.</th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot>
-      <tr class="total-row"><td>TOTAL MES</td>${aTotals}<td>${grandTotal}</td><td>${_avg(grandTotal,_gdadmDias)}</td></tr>
-      <tr class="prom-row"><td>PROMEDIO</td>${aProms}<td>${_avg(grandTotal,_gdadmDias)}</td><td>${_avg(grandTotal/_gdadmAsesores.length||0,_gdadmDias)}</td></tr>
+      <tr class="total-row"><td>${totLbl}</td>${aTotals}<td>${grandTotal}</td><td>${_avg(grandTotal,_gdadmDivisor())}</td></tr>
+      <tr class="prom-row"><td>PROMEDIO</td>${aProms}<td>${_avg(grandTotal,_gdadmDivisor())}</td><td>${_avg(grandTotal/_gdadmAsesores.length||0,_gdadmDivisor())}</td></tr>
     </tfoot>
   </table></div>`;
 }
@@ -6308,7 +6368,7 @@ function _gdadmRenderTipo(){
   const el=document.getElementById('gdadm-content');
   let rows='';
   let tConf=0,tCancel=0,tSoluc=0,tRecup=0,tVwpp=0,tTotal=0;
-  for(let d=1;d<=_gdadmDias;d++){
+  _gdadmDiasLista().forEach(d=>{
     let conf=0,cancel=0,soluc=0,recup=0,vwpp=0;
     _gdadmAsesores.forEach(a=>{
       const day=a.dias[d]||{};
@@ -6319,7 +6379,7 @@ function _gdadmRenderTipo(){
     });
     const total=conf+cancel+soluc+recup+vwpp;
     tConf+=conf;tCancel+=cancel;tSoluc+=soluc;tRecup+=recup;tVwpp+=vwpp;tTotal+=total;
-    if(!total){rows+=`<tr><td style="font-weight:700;">${d}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;continue;}
+    if(!total){rows+=`<tr><td style="font-weight:700;">${d}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;return;}
     rows+=`<tr>
       <td style="font-weight:700;">${d}</td>
       <td>${conf}</td><td>${cancel?`<span class="warn">${cancel}</span>`:''}</td>
@@ -6328,16 +6388,16 @@ function _gdadmRenderTipo(){
       <td class="${conf/total>=.5?'hi':'warn'}">${_pct(conf,total)}</td>
       <td class="${cancel/total<=.06?'hi':'warn'}">${_pct(cancel,total)}</td>
     </tr>`;
-  }
+  });
   const tEfect=_pct(tConf,tTotal), tCancelPct=_pct(tCancel,tTotal);
   // KPIs
   let maxDia=0,minDia=Infinity;
-  for(let i=1;i<=_gdadmDias;i++){
+  _gdadmDiasLista().forEach(i=>{
     let t=0; _gdadmAsesores.forEach(a=>{t+=_gdadmGralDia(a.dias[i]);});
     if(t>maxDia)maxDia=t; if(t<minDia)minDia=t;
-  }
+  });
   if(minDia===Infinity)minDia=0;
-  el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO POR TIPO DE GESTIÓN</div>
+  el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO POR TIPO DE GESTIÓN · ${_gdadmPeriodoLbl()}</div>
   <div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr>
       <th>DÍA</th><th>CONFIRM.</th><th>CANCELADAS</th>

@@ -841,7 +841,9 @@ function _novRender(){
 // libres quedan atenuados y sirven para agregar. La imagen o el texto se abren
 // en el visor al hacer clic, así la fila de la tabla no crece.
 const _NOV_SLOTS=5;
-const _NOV_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+// _NOV_MESES se movió a shared/app-shared.js: el Consolidado GD del Panel Admin
+// también necesita nombrar meses, y ese panel vive en index.html, que no carga
+// este archivo. Declararlo en los dos lados sería redeclarar un const global.
 function _novSolsCell(id,n,sols){
   // Cada slot es una columna: el cuadro y, debajo, la fecha en que se gestionó.
   // Los libres llevan un hueco del mismo alto para que la fila no se desalinee.
