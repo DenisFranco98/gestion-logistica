@@ -803,7 +803,7 @@ function _novSolsCell(id,n,sols){
     const resumen=s.tipo==='img'?'Imagen':String(s.val||'').slice(0,90);
     const titulo=esc(label+' · '+(s.fechaLabel||'')+(resumen?' — '+resumen:''));
     const abrir=s.tipo==='img'
-      ? `_novVerImg(_novSolSrc('${id}',${i}))`
+      ? `_novVerImgSol('${id}',${i})`
       : `_novVerTexto(_novSolSrc('${id}',${i}))`;
     const del=s._key?`_novDelSol('${id}','${s._key}')`:s._legacyNum?`_novClearSol('${id}',${s._legacyNum})`:'';
     const btnDel=del
@@ -847,10 +847,43 @@ function _novSolsCell(id,n,sols){
 // El contenido de una evidencia se busca al abrirla (no se incrusta en el
 // onclick): las imágenes son data URIs enormes y meterlas en un atributo
 // inflaría el HTML de toda la tabla.
+// Guarda una evidencia dejando la imagen FUERA del registro. La novedad queda
+// con {img:true} y el binario va a nov_img/, así leer novedades no arrastra las
+// fotos. Devuelve la referencia para conocer la clave generada.
+// `solObj` se muta: pierde `val` y gana `img`, para que la caché en memoria
+// quede igual que lo guardado.
+async function _novGuardarSol(novId, solObj){
+  const esImg = solObj && solObj.tipo==='img' && solObj.val && String(solObj.val).startsWith('data:');
+  const ref = _db.ref(_novBasePath()+'/'+novId+'/soluciones').push();
+  if(!esImg){ await ref.set(solObj); return ref; }
+  const binario = solObj.val;
+  solObj.val=''; solObj.img=true;
+  // Primero la imagen: si falla, la evidencia no queda marcada como que la tiene.
+  await _db.ref(_novImgPath(_gdTK(), _gdMes, novId, ref.key)).set(binario);
+  await ref.set(solObj);
+  solObj._src = binario;   // para pintarla sin volver a leerla
+  return ref;
+}
+
 function _novSolSrc(id,indice){
   const sols=_novGetSols(_novData[id]||{});
   const s=sols[indice]||{};
   return s.val||'';
+}
+// Abre una evidencia de imagen. Las nuevas tienen el binario en nov_img/, así
+// que hay que ir a buscarlo; las viejas lo traen en el propio registro y se
+// muestran de una. Por eso el visor se abre primero y la imagen llega después.
+async function _novVerImgSol(id, indice){
+  const sols=_novGetSols(_novData[id]||{});
+  const s=sols[indice]||{};
+  if(s._src) return _novVerImg(s._src);              // recién subida en esta sesión
+  if(s.val && String(s.val).startsWith('data:')) return _novVerImg(s.val);
+  if(!s.img || !s._key){ toast('Esta evidencia no tiene imagen'); return; }
+  toast('Cargando imagen…',1500);
+  const src=await _novImgSrc(s, _gdTK(), _gdMes, id, s._key);
+  if(!src){ _mAlert('No se pudo abrir','La imagen de esta evidencia no está disponible.'); return; }
+  s._src=src;
+  _novVerImg(src);
 }
 
 function _novVerTexto(txt){
@@ -948,7 +981,12 @@ async function _novDelSol(id, solKey){
   if(!await _mConfirmP('¿Eliminar esta evidencia?','La gestión deja de contar para el asesor que la registró. Esta acción no se puede deshacer.','danger'))return;
   const n=_novData[id]||{};
   const {dia, ak}=_novGestionBorrada(n, (n.soluciones||{})[solKey]);
-  _db.ref(_novBasePath()+'/'+id+'/soluciones/'+solKey).remove().then(()=>{
+  // La imagen vive aparte: si no se borra también, queda ocupando espacio sin
+  // que nada la referencie.
+  Promise.all([
+    _db.ref(_novBasePath()+'/'+id+'/soluciones/'+solKey).remove(),
+    _db.ref(_novImgPath(_gdTK(), _gdMes, id, solKey)).remove().catch(()=>{})
+  ]).then(()=>{
     if(_novData[id]?.soluciones) delete _novData[id].soluciones[solKey];
     _novRender(); _novSyncGD(dia, ak);
   });
@@ -974,7 +1012,11 @@ async function _novEliminar(id){
     if(!afectados.some(a=>a.dia===g.dia&&a.ak===g.asesorKey)) afectados.push({dia:g.dia, ak:g.asesorKey});
   });
   if(!afectados.length) afectados.push({dia:(n&&n.dia)||new Date().getDate(), ak:_gdAK()});
-  _db.ref(_novBasePath()+'/'+id).remove().then(()=>{
+  Promise.all([
+    _db.ref(_novBasePath()+'/'+id).remove(),
+    // Todas las imágenes de esa novedad cuelgan del mismo nodo.
+    _db.ref(_novImgPath(_gdTK(), _gdMes, id, '')).remove().catch(()=>{})
+  ]).then(()=>{
     delete _novData[id];
     _novRender();
     afectados.forEach(a=>_novSyncGD(a.dia, a.ak));
@@ -1046,7 +1088,7 @@ async function _novGuardar(){
           btn.textContent='Guardar'; btn.disabled=false; return;
         }
         const nEvid=_novGetSols(existente.nov).length+1;
-        const solRef=await _db.ref(_novBasePath()+'/'+existente.id+'/soluciones').push(solObj);
+        const solRef=await _novGuardarSol(existente.id, solObj);
         if(!_novData[existente.id].soluciones) _novData[existente.id].soluciones={};
         _novData[existente.id].soluciones[solRef.key]=solObj;
         toast('La guía '+guia+' ya estaba registrada — se agregó como evidencia '+nEvid+' de esa novedad.',5000);
@@ -1061,9 +1103,9 @@ async function _novGuardar(){
         const ref=await _db.ref(_novBasePath()).push(novData);
         _novData[ref.key]=novData;
         if(solObj){
-          await _db.ref(_novBasePath()+'/'+ref.key+'/soluciones').push(solObj);
+          const solRef=await _novGuardarSol(ref.key, solObj);
           if(!_novData[ref.key].soluciones)_novData[ref.key].soluciones={};
-          _novData[ref.key].soluciones[Date.now()]=solObj;
+          _novData[ref.key].soluciones[solRef.key]=solObj;
         }
       }
     } else if(state.mode==='edit'){

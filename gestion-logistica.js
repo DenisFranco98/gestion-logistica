@@ -3705,8 +3705,16 @@ async function _novEvGuardar(){
     await _novGDMigrarMes(); // el registro puede seguir bajo la clave vieja
     const base=_novGDBasePath();
     const novRef=_db.ref(base+'/'+g.gdNovKey);
-    // Siempre push a soluciones/ — sin límite
-    await novRef.child('soluciones').push(solObj);
+    // Siempre push a soluciones/ — sin límite. La imagen va FUERA del registro
+    // (ver _novImgPath en app-shared.js): dentro, leer las novedades arrastraba
+    // todas las fotos aunque no se mostraran.
+    const solRef=novRef.child('soluciones').push();
+    if(solObj.tipo==='img' && solObj.val && String(solObj.val).startsWith('data:')){
+      const binario=solObj.val;
+      solObj.val=''; solObj.img=true;
+      await _db.ref(_novImgPath(_gdTK(), _getMesCargado(), g.gdNovKey, solRef.key)).set(binario);
+    }
+    await solRef.set(solObj);
     gestiones[_novEvId].gdTieneSols=true;
     guardar();_fbSyncGestion(_novEvId);
     toast('✅ Evidencia guardada en Gestiones Diarias');

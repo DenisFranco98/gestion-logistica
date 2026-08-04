@@ -730,6 +730,59 @@ window._migrarAsesor = function(nombreTienda, nombreViejo, nombreNuevo, opts){
   }).catch(e=>console.error('[MIGRAR asesor] falló (¿sesión de admin?):',e));
 };
 
+// Saca las imágenes de evidencia de dentro de las novedades y las lleva a
+// nov_img/. Guardadas en base64 dentro del registro, leer novedades/{tienda}
+// arrastraba todas las fotos: 16 MB contra 0,26 MB de datos reales, y sumando
+// ~65 KB por cada foto nueva. Después de migrar, la novedad queda con {img:true}
+// y el binario se pide solo al abrirlo.
+//
+// Va de a una imagen por vez a propósito: son varios MB y un update masivo
+// puede fallar entero. Si se corta, lo ya migrado queda hecho y se puede volver
+// a correr — es idempotente.
+//
+// Ejecutar desde la consola como admin:
+//   _migrarImagenesNovedades()                 → simulación, no escribe nada
+//   _migrarImagenesNovedades({aplicar:true})   → aplica
+window._migrarImagenesNovedades = function(opts){
+  const aplicar=!!(opts||{}).aplicar;
+  console.log('%c[IMÁGENES] leyendo...'+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');
+  Promise.all([_db.ref('novedades').once('value'), _db.ref('empresas').once('value')]).then(([sn,se])=>{
+    const nov=sn.val()||{}, emp=se.val()||{};
+    const pend=[]; let bytes=0;
+    Object.entries(nov).forEach(([tk,meses])=>Object.entries(meses||{}).forEach(([mes,regs])=>
+      Object.entries(regs||{}).forEach(([novId,n])=>{
+        Object.entries((n||{}).soluciones||{}).forEach(([solKey,s])=>{
+          if(!s||s.tipo!=='img'||!s.val||!String(s.val).startsWith('data:')) return;
+          bytes+=s.val.length;
+          pend.push({tienda:(emp[tk]||{}).nombre||tk, mes, novId, solKey, guia:(n||{}).guia||'',
+                     kb:Math.round(s.val.length/1024), _tk:tk, _val:s.val});
+        });
+      })));
+    if(!pend.length){ console.log('%c✔ No quedan imágenes dentro de las novedades.','color:#15803d;font-weight:bold'); return; }
+    console.group('%cImágenes a mover ('+pend.length+' · '+(bytes/1048576).toFixed(1)+' MB)','color:#0e7490;font-weight:bold');
+    const porTienda={};
+    pend.forEach(p=>{ porTienda[p.tienda]=(porTienda[p.tienda]||0)+1; });
+    console.table(Object.entries(porTienda).map(([tienda,n])=>({tienda, imagenes:n})));
+    console.groupEnd();
+    if(!aplicar){ console.log('%cSimulación: no se escribió nada. Para aplicar: _migrarImagenesNovedades({aplicar:true})','font-weight:bold'); return; }
+    let ok=0, fail=0;
+    pend.reduce((p,x)=>p.then(async()=>{
+      try{
+        // Primero la imagen en su nodo nuevo; recién cuando está a salvo se
+        // vacía el original. Al revés, un corte perdería la foto.
+        await _db.ref(_novImgPath(x._tk, x.mes, x.novId, x.solKey)).set(x._val);
+        await _db.ref('novedades/'+x._tk+'/'+x.mes+'/'+x.novId+'/soluciones/'+x.solKey)
+          .update({val:'', img:true});
+        ok++;
+        if(ok%25===0) console.log('  '+ok+'/'+pend.length+'...');
+      }catch(e){ fail++; console.error('  ✗ '+x.guia+' ('+x.mes+')', e.message); }
+    }), Promise.resolve()).then(()=>{
+      console.log('%c[IMÁGENES] listo: '+ok+' movidas, '+fail+' con error.','font-weight:bold;color:'+(fail?'#b91c1c':'#15803d'));
+      if(!fail) console.log('Las novedades quedan livianas. Volvé a correrlo si en el futuro entran fotos por una versión vieja de la extensión.');
+    });
+  }).catch(e=>console.error('[IMÁGENES] falló (¿sesión de admin?):',e));
+};
+
 // Borra las membresías de cuentas que ya no existen en users/. Son asesores
 // fantasma: aparecen en el panel y en los filtros, pero no hay nadie detrás.
 // Solo borra si además NO tienen datos en ninguna raíz — si los tuvieran, es
@@ -5050,13 +5103,20 @@ function _bordIndexarExtras(novTiendas, roTiendas, antTiendas){
   const ix={novPorGuia:{}, roPorGuia:{}, roPorTel:{}, antPorTel:{}, antPorCliente:{}};
   const meter=(obj,k,v)=>{ if(!k) return; (obj[k]=obj[k]||[]).push(v); };
   novTiendas.forEach(({id,val})=>Object.entries(val||{}).forEach(([mes,regs])=>
-    Object.values(regs||{}).forEach(n=>{
+    Object.entries(regs||{}).forEach(([nid,n])=>{
       if(!n||!n.guia) return;
       const sols=_novGetSols(n);
       const dev=sols.some(s=>s&&s.estado==='devuelta');
       meter(ix.novPorGuia,_bordNorm(n.guia),{mes, tienda:id, asesor:n.asesor||'', fecha:n.fecha||'',
         evidencias:sols.length, estado: dev?'devuelta':(n.solucionadaDropi||sols.some(s=>s&&s.estado==='solucionada')?'solucionada':'pendiente'),
-        tipoNovedad:n.tipoNovedad||''});
+        tipoNovedad:n.tipoNovedad||'', novId:nid,
+        // Cada evidencia con lo justo para pintarla y para ir a buscar la
+        // imagen cuando la pidan: el binario no se trae en la búsqueda.
+        sols: sols.map(s=>({ key:s._key||'', tipo:s.tipo||'txt', estado:s.estado||'',
+          fecha:s.fechaLabel||'', asesor:s.asesor||'',
+          texto: s.tipo!=='img' ? (s.val||'') : '',
+          tieneImg: s.tipo==='img' && (!!s.img || String(s.val||'').startsWith('data:')),
+          incrustada: String(s.val||'').startsWith('data:') ? s.val : '' }))});
     })));
   roTiendas.forEach(({id,val})=>Object.entries(val||{}).forEach(([mes,regs])=>
     Object.values(regs||{}).forEach(r=>{
@@ -5068,11 +5128,15 @@ function _bordIndexarExtras(novTiendas, roTiendas, antTiendas){
       meter(ix.roPorTel,_bordTel(r.telefono),fila);
     })));
   antTiendas.forEach(({id,val})=>Object.entries(val||{}).forEach(([mes,tipos])=>
-    ['con','sin'].forEach(t=>Object.values((tipos||{})[t]||{}).forEach(a=>{
+    ['con','sin'].forEach(t=>Object.entries((tipos||{})[t]||{}).forEach(([aid,a])=>{
       if(!a) return;
-      const fila={mes, tienda:id, tipo:t, cliente:a.cliente||'', telefono:a.telefono||'',
+      const fila={mes, tienda:id, tipo:t, id:aid, cliente:a.cliente||'', telefono:a.telefono||'',
         producto:a.producto||'', transporte:a.transporte||'', entrega:a.entrega||'',
-        motivo:a.motivo||'', fecha:a.fecha||'', tieneComprobante:!!a.comprobante};
+        motivo:a.motivo||'', fecha:a.fecha||'',
+        tieneComprobante: !!(a.comprobante||a.comp),
+        // Los comprobantes viejos siguen dentro del registro; los nuevos van a
+        // ant_comp/ y se piden al abrirlos.
+        compIncrustado: String(a.comprobante||'').startsWith('data:') ? a.comprobante : ''};
       meter(ix.antPorTel,_bordTel(a.telefono),fila);
       meter(ix.antPorCliente,_bordNorm(a.cliente),fila);
     }))));
@@ -5470,6 +5534,67 @@ function _bordRenderDetalle(r){
   return html;
 }
 
+// Cuadritos de evidencia de una novedad. Las imágenes no se traen en la
+// búsqueda: el cuadro solo dice que hay foto y se descarga al hacer clic.
+function _bordEvidenciasHTML(n){
+  const sols=(n&&n.sols)||[];
+  if(!sols.length) return '';
+  const cuadro=(cont,estilo,extra)=>'<div style="width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.9rem;cursor:pointer;'+estilo+'" '+(extra||'')+'>'+cont+'</div>';
+  let h='<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">';
+  sols.forEach((s,i)=>{
+    const col=s.estado==='solucionada'?'#16a34a':s.estado==='devuelta'?'#d97706':'#0891b2';
+    const fondo=s.estado==='solucionada'?'var(--success-soft)':s.estado==='devuelta'?'var(--warning-soft)':'var(--info-soft)';
+    const tit=esc([s.estado||'', s.fecha||'', s.asesor?'por '+s.asesor:''].filter(Boolean).join(' · '));
+    if(s.tipo==='img' && s.tieneImg){
+      h+=cuadro('📷','background:'+fondo+';border:1.5px solid '+col+';',
+        'title="'+tit+'" onclick="_bordVerEvidencia(\''+n.tienda+'\',\''+n.mes+'\',\''+n.novId+'\',\''+s.key+'\')"');
+    } else if(s.tipo!=='img' && s.texto){
+      h+=cuadro('📝','background:'+fondo+';border:1.5px solid '+col+';',
+        'title="'+tit+'" onclick="_bordVerTextoEvidencia('+JSON.stringify(s.texto).replace(/"/g,'&quot;')+')"');
+    }
+  });
+  return h+'</div>';
+}
+// Visor. Se crea una sola vez y se reutiliza; el panel de admin no tiene el
+// lightbox de Gestiones Diarias.
+function _bordVisor(){
+  let v=document.getElementById('bord-visor');
+  if(v) return v;
+  v=document.createElement('div');
+  v.id='bord-visor';
+  v.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000002;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;';
+  v.onclick=()=>{ v.style.display='none'; v.innerHTML=''; };
+  document.body.appendChild(v);
+  return v;
+}
+window._bordVerEvidencia=async function(tienda, mes, novId, solKey){
+  const v=_bordVisor();
+  v.innerHTML='<div style="color:#fff;font-size:.85rem;">Cargando imagen…</div>';
+  v.style.display='flex';
+  try{
+    const src=(await _db.ref(_novImgPath(tienda, mes, novId, solKey)).once('value')).val();
+    if(!src){ v.innerHTML='<div style="color:#fff;font-size:.85rem;">Esta evidencia ya no tiene imagen guardada.</div>'; return; }
+    v.innerHTML='<img src="'+src+'" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;">';
+  }catch(e){ v.innerHTML='<div style="color:#fff;font-size:.85rem;">No se pudo cargar: '+esc(e.message)+'</div>'; }
+};
+window._bordVerTextoEvidencia=function(txt){
+  const v=_bordVisor();
+  v.innerHTML='<div style="background:var(--bg-card);color:var(--text-1);border-radius:12px;padding:20px;max-width:560px;max-height:80vh;overflow:auto;white-space:pre-wrap;font-size:.85rem;line-height:1.6;cursor:auto;" onclick="event.stopPropagation()">'+esc(txt)+'</div>';
+  v.style.display='flex';
+};
+window._bordVerComprobante=async function(tienda, mes, tipo, id, incrustado){
+  const v=_bordVisor();
+  if(incrustado){ v.innerHTML='<img src="'+incrustado+'" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;">'; v.style.display='flex'; return; }
+  v.innerHTML='<div style="color:#fff;font-size:.85rem;">Cargando comprobante…</div>';
+  v.style.display='flex';
+  try{
+    const src=(await _db.ref(_antCompPath(tienda, mes, tipo, id)).once('value')).val();
+    v.innerHTML = src
+      ? '<img src="'+src+'" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;">'
+      : '<div style="color:#fff;font-size:.85rem;">Este anticipo no tiene comprobante guardado.</div>';
+  }catch(e){ v.innerHTML='<div style="color:#fff;font-size:.85rem;">No se pudo cargar: '+esc(e.message)+'</div>'; }
+};
+
 // Bloques de novedades, R.O. y anticipos del pedido. Van al final del detalle,
 // después de la trayectoria del kanban, porque son el contexto de lo que pasó
 // con el pedido más allá de las llamadas.
@@ -5489,7 +5614,8 @@ function _bordRenderExtras(guia, tel, nombre){
       h+=caja(col,'<div style="font-size:.78rem;font-weight:600;color:var(--text-1);">'+et+
         (n.tipoNovedad?' · '+esc(n.tipoNovedad):'')+'</div>'+
         menor([n.fecha, n.asesor?'por '+esc(n.asesor):'', n.evidencias+' evidencia'+(n.evidencias===1?'':'s'),
-               nomTienda(n.tienda)?'🏪 '+nomTienda(n.tienda):''].filter(Boolean).join(' · ')));
+               nomTienda(n.tienda)?'🏪 '+nomTienda(n.tienda):''].filter(Boolean).join(' · '))+
+        _bordEvidenciasHTML(n));
     });
     h+='</div>';
   }
@@ -5509,12 +5635,15 @@ function _bordRenderExtras(guia, tel, nombre){
     h+='<div style="margin-bottom:14px;">'+titulo('💵 Anticipos ('+x.anticipos.length+')')+
       '<div style="font-size:.62rem;color:var(--text-3);margin-bottom:6px;">Los anticipos no guardan número de guía: se vinculan por teléfono o nombre del cliente, así que pueden ser de otro pedido de la misma persona.</div>';
     x.anticipos.forEach(a=>{
+      const verComp = a.tieneComprobante
+        ? '<div style="margin-top:7px;"><button onclick="_bordVerComprobante(\''+a.tienda+'\',\''+a.mes+'\',\''+a.tipo+'\',\''+a.id+'\',\''+(a.compIncrustado||'')+'\')" '+
+          'style="background:var(--info-soft);color:#0891b2;border:1.5px solid #0891b2;border-radius:7px;padding:4px 10px;font-size:.68rem;font-weight:700;cursor:pointer;">📎 Ver comprobante</button></div>'
+        : menor('Sin comprobante adjunto');
       h+=caja('#0891b2','<div style="font-size:.78rem;font-weight:600;color:var(--text-1);">'+
-        (a.tipo==='con'?'Con anticipo':'Sin anticipo')+(a.producto?' · '+esc(a.producto):'')+
-        (a.tieneComprobante?' · 📎':'')+'</div>'+
+        (a.tipo==='con'?'Con anticipo':'Sin anticipo')+(a.producto?' · '+esc(a.producto):'')+'</div>'+
         menor([a.fecha, a.transporte?esc(a.transporte):'', a.entrega?'entrega: '+esc(a.entrega):'',
                nomTienda(a.tienda)?'🏪 '+nomTienda(a.tienda):''].filter(Boolean).join(' · '))+
-        (a.motivo?menor('🗒️ '+esc(a.motivo)):''));
+        (a.motivo?menor('🗒️ '+esc(a.motivo)):'')+verComp);
     });
     h+='</div>';
   }
@@ -5951,6 +6080,39 @@ function _novGetSols(n){
     return Object.entries(n.soluciones).sort((a,b)=>(a[1].ts||0)-(b[1].ts||0)).map(([k,s])=>({...s,_key:k}));
   }
   return [n.sol1,n.sol2,n.sol3].filter(Boolean).map((s,i)=>({...s,_legacyNum:i+1}));
+}
+
+// ── Imágenes de evidencias, fuera del registro ───────────────────────────
+// Las fotos de evidencia se guardaban en base64 DENTRO de la novedad, así que
+// leer novedades/{tienda} traía todas las imágenes aunque no se mostraran: 16 MB
+// contra 0,26 MB de datos reales, y creciendo ~65 KB por cada foto nueva. Ahora
+// el binario vive en nov_img/ y la evidencia solo guarda una marca.
+//   nov_img/{tienda}/{mes}/{novedadId}/{solKey} = "data:image/jpeg;base64,..."
+// Compatibilidad: las evidencias anteriores siguen con la imagen en `val`, y se
+// leen igual. _novImgSrc resuelve las dos formas.
+// Sin solKey devuelve el nodo de toda la novedad, para borrarla entera. La
+// barra final rompe la ruta en Firebase, así que solo se agrega si hay clave.
+function _novImgPath(tk, mes, novId, solKey){
+  return 'nov_img/'+tk+'/'+mes+'/'+novId+(solKey?'/'+solKey:'');
+}
+// Devuelve la imagen de una evidencia, venga del registro (formato viejo) o del
+// nodo aparte (formato nuevo). Siempre asíncrona para que el llamador no tenga
+// que saber cuál de los dos es.
+function _novImgSrc(sol, tk, mes, novId, solKey){
+  const s=sol||{};
+  if(s.val && String(s.val).startsWith('data:')) return Promise.resolve(s.val);   // formato viejo
+  if(!s.img) return Promise.resolve('');
+  return _db.ref(_novImgPath(tk, mes, novId, solKey)).once('value')
+    .then(sn=>sn.val()||'').catch(()=>'');
+}
+// Comprobante de un anticipo, misma idea.
+function _antCompPath(tk, mes, tipo, id){ return 'ant_comp/'+tk+'/'+mes+'/'+tipo+'/'+id; }
+function _antCompSrc(reg, tk, mes, tipo, id){
+  const r=reg||{};
+  if(r.comprobante && String(r.comprobante).startsWith('data:')) return Promise.resolve(r.comprobante);
+  if(!r.comp) return Promise.resolve('');
+  return _db.ref(_antCompPath(tk, mes, tipo, id)).once('value')
+    .then(sn=>sn.val()||'').catch(()=>'');
 }
 
 // ── Gestiones de novedades: la unidad que suma en Gestiones Diarias ──────

@@ -545,6 +545,24 @@
         dia: s.dia || (n || {}).dia || 0
       }));
   }
+  // Guarda una evidencia dejando la imagen FUERA del registro, en
+  // nov_img/{tienda}/{mes}/{novedadId}/{solKey}. Dentro, cada foto quedaba
+  // incrustada en la novedad y leer novedades/{tienda} arrastraba todas: eran
+  // 16 MB contra 0,26 MB de datos reales. Tiene que coincidir con _novImgPath
+  // de shared/app-shared.js.
+  async function guardarEvidencia(mes, novedadId, solObj) {
+    const base = 'novedades/' + tienda.key + '/' + mes + '/' + novedadId + '/soluciones';
+    const esImg = solObj.tipo === 'img' && solObj.val && String(solObj.val).startsWith('data:');
+    if (!esImg) return agregarDB(base, auth, solObj);
+    const binario = solObj.val;
+    solObj.val = ''; solObj.img = true;
+    // La evidencia se crea primero para conocer su clave, y recién ahí se sabe
+    // dónde guardar la imagen.
+    const solKey = await agregarDB(base, auth, solObj);
+    await escribirDB('nov_img/' + tienda.key + '/' + mes + '/' + novedadId + '/' + solKey, auth, binario);
+    return solKey;
+  }
+
   async function sincronizarGD(mes, dia, asesorKeyForzado) {
     const asesorKey = asesorKeyForzado || gdKey(asesorNombre);
     const [novedadesMes, dayDataActual] = await Promise.all([
@@ -622,7 +640,7 @@
         const dia = new Date().getDate();
         const novData = { guia, fecha: fmtFecha(mFecha.value) || mFecha.value, asesor: mAsesor.value.trim(), dia, ts: Date.now() };
         const id = await agregarDB('novedades/' + tienda.key + '/' + mes, auth, novData);
-        if (solObj) await agregarDB('novedades/' + tienda.key + '/' + mes + '/' + id + '/soluciones', auth, solObj);
+        if (solObj) await guardarEvidencia(mes, id, solObj);
         // Día de la GESTIÓN, mes del NODO: las novedades y el contador viven en
         // 'novedades/{tienda}/{mes}', así que hay que leer ahí para encontrarla.
         // Sin evidencia no hubo gestión y no hay nada que recontar.
@@ -631,7 +649,7 @@
         guiaParaNota = guia;
       } else {
         if (!solObj) throw new Error('Agrega una imagen o un texto de evidencia.');
-        await agregarDB('novedades/' + tienda.key + '/' + target.mes + '/' + target.id + '/soluciones', auth, solObj);
+        await guardarEvidencia(target.mes, target.id, solObj);
         await sincronizarGD(target.mes, solObj.dia);
       }
 
