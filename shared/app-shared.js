@@ -2629,6 +2629,11 @@ let _admPresenceRenderTimer = null;
 // Tick que reevalúa el "en línea" contra el reloj, aunque no llegue nada nuevo
 // de Firebase (ver _admRepintarPresencia).
 let _admPresenceTick = null;
+// Nombres de tienda para "Buscar orden". Se cachean al abrir el panel: la
+// búsqueda puede mirar varias tiendas a la vez y hay que poder decir de cuál
+// salió cada resultado. Declarada acá arriba porque se asigna en
+// _admCargarDashboard, mucho antes de donde se usa.
+let _bordEmpresas = {};
 
 function _admTab(tab){
   ['enlive','ranking','equipo','analitica','empresas','buscar','gdconsolid','auditoria','reportes','negocio'].forEach(t=>{
@@ -2792,6 +2797,8 @@ function _admCargarDashboard(){
   // Las fotos de perfil viven aparte de users/ y se leen una sola vez; cuando
   // llegan se repintan las tarjetas, que hasta entonces muestran iniciales.
   if(typeof window._cargarFotos==='function') window._cargarFotos().then(()=>_admRepintarPresencia());
+  // Nombres de tienda para "Buscar orden", que ahora puede mirar varias a la vez.
+  _db.ref('empresas').once('value').then(s=>{ _bordEmpresas=s.val()||{}; }).catch(()=>{});
   _admCargarNegocio(); // refresca nombre/logo del negocio en el encabezado
 
   if(!adminId){
@@ -5039,11 +5046,26 @@ function _admBuscarOrden(){
   const qN = _bordNorm(q);
   const esNumero = /^[\d\s\-]+$/.test(q.replace(/\s/g,''));
 
-  // gestiones_sync ahora es por tienda — una sola lectura cubre todos los asesores
-  _db.ref('gestiones_sync/'+empresaId).once('value', snapGest=>{
-    const gestTienda = snapGest.val()||{};
+  // Con "Todas las tiendas" el selector vale '__todas__', y leer
+  // gestiones_sync/__todas__ devolvía vacío: la búsqueda decía que el pedido no
+  // existía cuando en realidad estaba mirando un nodo inexistente. Se resuelve
+  // a las tiendas del admin y se busca en todas.
+  const adminId = localStorage.getItem('lgs_admin_id');
+  const resolverTiendas = (empresaId==='__todas__' && adminId)
+    ? _db.ref('admin_empresas/'+adminId).once('value').then(s=>Object.keys(s.val()||{}))
+    : Promise.resolve([empresaId]);
+
+  resolverTiendas.then(ids=>Promise.all(
+    ids.map(id=>_db.ref('gestiones_sync/'+id).once('value').then(s=>({id, val:s.val()||{}})))
+  )).then(porTienda=>{
+    // Se juntan las gestiones de todas las tiendas consultadas, recordando de
+    // cuál viene cada una para poder mostrarlo en el resultado.
+    const gestTienda={}, tiendaDe={};
+    porTienda.forEach(({id,val})=>Object.entries(val).forEach(([k,g])=>{
+      gestTienda[k]=g; tiendaDe[k]=id;
+    }));
     const resultadosPorGuia = {};
-    const _debug = {asesores:1, gests: Object.keys(gestTienda).length};
+    const _debug = {asesores: porTienda.length, gests: Object.keys(gestTienda).length};
 
     Object.entries(gestTienda).forEach(([dropiKey, g])=>{
       const matchKey    = _bordNorm(dropiKey).includes(qN);
@@ -5057,7 +5079,8 @@ function _admBuscarOrden(){
           resultadosPorGuia[displayGuia]={guia:displayGuia,nombre:g._nombre||'',asesores:{}};
         const asesorKey = g._asesor||'—';
         if(!resultadosPorGuia[displayGuia].asesores[asesorKey])
-          resultadosPorGuia[displayGuia].asesores[asesorKey]={nombreAsesor:asesorKey,tiendaAsesor:'',notas:[],gestion:null,events:[]};
+          resultadosPorGuia[displayGuia].asesores[asesorKey]={nombreAsesor:asesorKey,
+            tiendaAsesor:(_bordEmpresas[tiendaDe[dropiKey]]||{}).nombre||'',notas:[],gestion:null,events:[]};
         const slot = resultadosPorGuia[displayGuia].asesores[asesorKey];
         slot.gestion = g;
         if(g.notas&&Array.isArray(g.notas)) g.notas.forEach(n=>slot.notas.push(n));
@@ -5065,6 +5088,9 @@ function _admBuscarOrden(){
       }
     });
     _bordMostrarResultados(resultadosPorGuia, q, _debug);
+  }).catch(e=>{
+    document.getElementById('bord-results').innerHTML=
+      '<div class="adm-empty" style="color:var(--danger);">No se pudo buscar: '+esc(e.message)+'</div>';
   });
 }
 
