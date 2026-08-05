@@ -505,7 +505,10 @@ function _gdTab(tab){
 // ── CONSOLIDADO ─────────────────────────────────────────────────────────
 // _consoPend: campos tocados y todavía sin guardar, como rutas relativas al día
 // ('5pm/confDropi/pendConfirmacion' → 12). Ver _consoGuardar.
-let _consoData={}, _consoDia=1, _consoSaveTimer=null, _consoPend={};
+// _consoDia arranca en 0 -no en 1- porque el selector usa (_consoDia||hoy):
+// con 1, que es truthy, nunca llegaba a 'hoy' y el Consolidado se abria
+// siempre en el dia 1 del mes.
+let _consoData={}, _consoDia=0, _consoSaveTimer=null, _consoPend={};
 
 const _CS={
   confDropi:{
