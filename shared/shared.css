@@ -1396,3 +1396,18 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 /* Total de anticipos del mes, al pie de la tabla CON ANTICIPO */
 .ant-total-row td{background:var(--bg-elevated);border-top:2px solid var(--border-strong);padding:8px 9px;font-size:.75rem;color:var(--text-1);}
 .ant-monto{font-variant-numeric:tabular-nums;}
+
+/* ══ Catálogo de productos (pestaña Anticipos) ══════════════════════
+   Plegado por defecto: es una consulta ocasional y no debe robarle sitio a
+   las tablas, que es a lo que se entra. */
+.cat-box{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:14px;overflow:hidden;}
+.cat-hdr{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;background:none;border:none;padding:10px 14px;cursor:pointer;font-family:inherit;font-size:.74rem;font-weight:800;color:var(--text-1);text-align:left;letter-spacing:.3px;}
+.cat-hdr:hover{background:var(--bg-hover);}
+.cat-count{color:var(--text-2);font-weight:700;}
+.cat-hint{font-size:.62rem;font-weight:600;color:var(--text-3);text-transform:none;letter-spacing:0;}
+.cat-body{border-top:1px solid var(--border);padding:6px 8px;max-height:230px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px;}
+.cat-item{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;border-radius:7px;font-size:.72rem;color:var(--text-1);}
+.cat-item:hover{background:var(--bg-hover);}
+.cat-nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cat-vacio{grid-column:1/-1;padding:14px;text-align:center;font-size:.72rem;color:var(--text-3);}
+@media(max-width:760px){ .cat-hint{display:none;} }

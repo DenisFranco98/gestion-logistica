@@ -1683,13 +1683,56 @@ function _catCargar(){
     _catPintarLista();
   }).catch(e=>console.warn('[catálogo]',e));
 }
-function _catPintarLista(){
-  const dl=document.getElementById('ant-prod-list');
-  if(!dl) return;
-  const nombres=[...new Set(Object.values(_catProductos).map(p=>(p&&p.nombre)||'').filter(Boolean))]
-    .sort((a,b)=>a.localeCompare(b,'es'));
-  dl.innerHTML=nombres.map(n=>'<option value="'+esc(n)+'"></option>').join('');
+// Los productos ordenados, como se muestran en los dos lados: las sugerencias
+// del campo y el bloque del catálogo.
+function _catLista(){
+  return Object.entries(_catProductos)
+    .filter(([,p])=>p&&p.nombre)
+    .sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre,'es'));
 }
+function _catPintarLista(){
+  const lista=_catLista();
+  const dl=document.getElementById('ant-prod-list');
+  if(dl) dl.innerHTML=lista.map(([,p])=>'<option value="'+esc(p.nombre)+'"></option>').join('');
+  _catRender(lista);
+}
+// Bloque plegable de Anticipos: la lista con su contador y el botón de borrar.
+function _catRender(lista){
+  lista=lista||_catLista();
+  const cnt=document.getElementById('cat-count');
+  if(cnt) cnt.textContent='('+lista.length+')';
+  const body=document.getElementById('cat-body');
+  if(!body) return;
+  body.innerHTML = lista.length
+    ? lista.map(([k,p])=>
+        '<div class="cat-item"><span class="cat-nom">'+esc(p.nombre)+'</span>'+
+        '<button class="ant-del-btn" title="Quitar del catálogo" onclick="_catEliminar(\''+k.replace(/'/g,"\\'")+'\')">🗑️</button></div>'
+      ).join('')
+    : '<div class="cat-vacio">Todavía no hay productos. Se van agregando solos al escribir en la columna PRODUCTO.</div>';
+}
+window._catToggle=function(){
+  const body=document.getElementById('cat-body');
+  const flecha=document.getElementById('cat-arrow');
+  if(!body) return;
+  const abierto=body.style.display!=='none';
+  // Cadena vacia y no 'block': al desplegar hay que QUITAR el display inline
+  // para que mande el del CSS, que es grid. Con 'block' la lista salia en una
+  // sola columna a lo largo de toda la pantalla.
+  body.style.display=abierto?'none':'';
+  if(flecha) flecha.textContent=abierto?'▸':'▾';
+  if(!abierto) _catRender();
+};
+// Quitarlo del catálogo NO toca los anticipos que ya lo usan: solo deja de
+// ofrecerse como sugerencia.
+window._catEliminar=async function(k){
+  const p=_catProductos[k];
+  if(!p) return;
+  if(!await _mConfirmP('¿Quitar "'+p.nombre+'" del catálogo?',
+      'Deja de aparecer como sugerencia. Los anticipos que ya lo tienen escrito no se modifican.','danger')) return;
+  delete _catProductos[k];
+  _catPintarLista();
+  if(typeof _db!=='undefined') _db.ref(_catBase()+'/'+k).remove().catch(e=>console.warn('[catálogo]',e));
+};
 // Guarda el producto si es nuevo. Conserva el texto tal como se escribió la
 // primera vez; las veces siguientes solo se reconoce, no se pisa.
 function _catAgregar(nombre){

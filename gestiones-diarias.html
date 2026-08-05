@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260805k">
+<link rel="stylesheet" href="shared/shared.css?v=20260805m">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -911,6 +911,16 @@ window._sbEstadosToggle=function(){
     <div style="text-align:center;background:#131920;color:white;border-radius:10px;padding:10px 16px;margin-bottom:14px;">
       <div style="font-size:.82rem;font-weight:900;letter-spacing:.4px;">SEGUIMIENTO DE GUÍAS CON PAGO ANTICIPADO</div>
     </div>
+    <!-- Catalogo de productos de la tienda. Se arma solo con lo que se escribe
+         en la columna PRODUCTO de las tablas de abajo (ver _catAgregar). Va
+         plegado: es una consulta ocasional, no algo que estorbe cada dia. -->
+    <div class="cat-box">
+      <button type="button" class="cat-hdr" onclick="_catToggle()">
+        <span><span id="cat-arrow">▸</span> 📦 CATÁLOGO DE PRODUCTOS <span id="cat-count" class="cat-count"></span></span>
+        <span class="cat-hint">se llena solo al escribir en PRODUCTO</span>
+      </button>
+      <div id="cat-body" class="cat-body" style="display:none;"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;overflow-x:auto;min-width:0;">
       <div class="ant-section">
         <div class="ant-hdr" style="background:#dc2626;">GUÍAS CON ANTICIPO</div>
@@ -1366,8 +1376,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260805k"></script>
-<script src="gestiones-diarias.js?v=20260805k"></script>
+<script src="shared/app-shared.js?v=20260805m"></script>
+<script src="gestiones-diarias.js?v=20260805m"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión
