@@ -694,14 +694,31 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 /* ── GESTIONES DIARIAS ───────────────────────── */
 #gd-panel{display:none;position:fixed;inset:0;background:var(--bg);z-index:201;flex-direction:column;overflow:hidden;}
 /* ── Tabla Remisión Mensual (rediseño REDKING) ── */
+/* ══ Colores de la tabla de Gestión ══════════════════════════════════
+   Van como variables y no fijos en el JS porque cada tema necesita su
+   versión: un color legible sobre el fondo oscuro se vuelve ilegible sobre
+   blanco, y al revés. Medidos con el contraste WCAG contra el fondo real de
+   la tabla (--bg-card). Los de aquí quedan en ~7:1 y los del tema claro en
+   ~5:1; antes, el azul (4.2) y el morado (4.5) no llegaban al mínimo sobre
+   el fondo oscuro, y sobre blanco fallaban el verde (1.9), el amarillo
+   (2.1) y el naranja (3.0). Al cambiar alguno, volver a medirlo. */
+:root{
+  --gd-conf:#39E67A; --gd-cancel:#EF7C85; --gd-nov:#769DEE; --gd-carr:#B889ED;
+  --gd-wpp:#E7843E;  --gd-tot:#E6B539;    --gd-obs:#8EA0B7;
+}
+[data-theme="light"]{
+  --gd-conf:#107F3A; --gd-cancel:#D91B2A; --gd-nov:#2A66E4; --gd-carr:#8F46E3;
+  --gd-wpp:#AE5616;  --gd-tot:#8C6912;    --gd-obs:#5A708D;
+}
 .gdx-wrap{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--bg-card);}
-#gd-table{border-collapse:collapse;font-size:.72rem;min-width:760px;width:100%;font-family:var(--f-mono);}
+/* .78rem y no .72: son cifras que se leen de un vistazo todo el día. */
+#gd-table{border-collapse:collapse;font-size:.78rem;min-width:760px;width:100%;font-family:var(--f-mono);}
 #gd-table th,#gd-table td{border-bottom:1px solid var(--border);}
 #gd-table td{padding:4px 5px;text-align:center;border-right:1px solid var(--border);}
 #gd-table td:last-child{border-right:none;}
 .gdx-g{background:var(--bg-elevated);padding:8px 6px;text-align:center;white-space:nowrap;font-size:.58rem;font-weight:800;letter-spacing:.7px;font-family:var(--f-body);}
 .gdx-s{background:var(--bg-card);color:var(--text-3);padding:6px 4px;text-align:center;white-space:nowrap;font-size:.55rem;font-weight:700;letter-spacing:.4px;font-family:var(--f-body);}
-.gdx-day{background:var(--bg-elevated);color:var(--text-2);font-weight:700;font-size:.7rem;position:sticky;left:0;z-index:1;min-width:42px;}
+.gdx-day{background:var(--bg-elevated);color:var(--text-1);font-weight:800;font-size:.76rem;position:sticky;left:0;z-index:1;min-width:42px;}
 .gdx-day-h{position:sticky;left:0;z-index:3;color:var(--text-2)!important;}
 .gdx-row td{background:transparent;}
 .gdx-row:hover td{background:var(--bg-hover);}
@@ -711,14 +728,14 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 .gdx-hoy td{background:rgba(57,113,230,.07);}
 .gdx-hoy .gdx-day{color:var(--accent);background:rgba(57,113,230,.14);}
 .gdx-hoy-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-right:4px;vertical-align:middle;animation:pulse-dot 1.4s ease infinite;}
-.gdx-auto{font-weight:800;font-size:.72rem;cursor:not-allowed;background:rgba(255,255,255,.025)!important;}
+.gdx-auto{font-weight:800;font-size:.78rem;cursor:not-allowed;background:rgba(255,255,255,.025)!important;}
 .gdx-row:hover .gdx-auto{background:var(--bg-hover)!important;}
-.gdx-total-dia{font-size:.76rem;}
+.gdx-total-dia{font-size:.84rem;font-weight:900;}
 .gdx-obs{text-align:left!important;}
-.gdx-totales td{background:var(--bg-elevated);font-weight:800;font-size:.74rem;padding:8px 5px;border-top:2px solid var(--border-strong);}
+.gdx-totales td{background:var(--bg-elevated);font-weight:900;font-size:.8rem;padding:8px 5px;border-top:2px solid var(--border-strong);}
 .gdx-totales .gdx-day{background:var(--bg-elevated);color:var(--text-3);}
 [data-theme="light"] .gdx-auto{background:rgba(0,0,0,.03)!important;}
-#gd-table input[type=number]{width:100%;border:none;background:transparent;text-align:center;font-size:.73rem;font-weight:700;padding:4px 2px;outline:none;-moz-appearance:textfield;font-family:var(--f-mono);}
+#gd-table input[type=number]{width:100%;border:none;background:transparent;text-align:center;font-size:.79rem;font-weight:800;padding:4px 2px;outline:none;-moz-appearance:textfield;font-family:var(--f-mono);}
 #gd-table input[type=number]::-webkit-inner-spin-button,#gd-table input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 #gd-table input[type=number]::placeholder{color:var(--text-3);opacity:.35;}
 #gd-table input[type=number]:focus{background:rgba(57,113,230,.12);border-radius:4px;box-shadow:0 0 0 1.5px var(--accent);}

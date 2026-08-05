@@ -171,18 +171,23 @@ function _gdRenderResumen(){
   document.getElementById('gd-resumen').innerHTML=`
     <div style="font-size:.58rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📊 Resumen del mes (auto-calculado)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      ${card('Confirmaciones',`<span style="color:#39E67A">${t.conf}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">+</span><span style="color:#E63946">${t.cancel}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">=</span><span style="color:#39E67A;font-size:1rem">${t.totalConf}</span>`,'#39E67A')}
-      ${card('Novedades',`<span style="color:#3971E6" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">sol</span><span style="color:#E63946" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:var(--text-3);margin-left:2px">dev</span>`,'#3971E6')}
-      ${card('Carritos',`<span style="color:#9B59E6">${t.recupCarri}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">|</span><span style="color:var(--text-2)">${t.contNoRecup}</span>`,'#9B59E6')}
-      ${card('Ventas WPP',`<span style="color:#E6823A;font-size:1rem">${t.ventasWpp}</span>`,'#E6823A')}
-      ${card('General',`<span style="color:#E6B539;font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:#E6B539;font-weight:600">${avg}/día</span>`,'#E6B539')}
+      ${card('Confirmaciones',`<span style="color:var(--gd-conf)">${t.conf}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">+</span><span style="color:var(--gd-cancel)">${t.cancel}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">=</span><span style="color:var(--gd-conf);font-size:1rem">${t.totalConf}</span>`,'var(--gd-conf)')}
+      ${card('Novedades',`<span style="color:var(--gd-nov)" title="Solucionadas">${t.soluc}</span><span style="font-size:.55rem;color:var(--text-3);margin:0 2px">sol</span><span style="color:var(--gd-cancel)" title="Devoluciones">${t.devuelt}</span><span style="font-size:.55rem;color:var(--text-3);margin-left:2px">dev</span>`,'var(--gd-nov)')}
+      ${card('Carritos',`<span style="color:var(--gd-carr)">${t.recupCarri}</span><span style="font-size:.65rem;font-weight:400;color:var(--text-3)">|</span><span style="color:var(--text-2)">${t.contNoRecup}</span>`,'var(--gd-carr)')}
+      ${card('Ventas WPP',`<span style="color:var(--gd-wpp);font-size:1rem">${t.ventasWpp}</span>`,'var(--gd-wpp)')}
+      ${card('General',`<span style="color:var(--gd-tot);font-size:1rem">${t.gral}</span><span style="font-size:.68rem;color:var(--gd-tot);font-weight:600">${avg}/día</span>`,'var(--gd-tot)')}
     </div>`;
 }
 
 function _gdRenderTabla(){
   const total=_gdDiasEnMes(_gdMes);
   // Colores de grupo (acentos REDKING): verde conf · azul novedades · púrpura carritos · naranja wpp · amarillo total
-  const C={conf:'#39E67A',nov:'#3971E6',carr:'#9B59E6',wpp:'#E6823A',tot:'#E6B539',obs:'#8B9DB5',cancel:'#E63946'};
+  // Los colores salen de variables CSS (ver shared.css) y no van fijos acá: el
+  // tema claro necesita versiones más oscuras de los mismos tonos, y con el
+  // valor escrito en el JS la tabla se pintaba igual en los dos fondos —sobre
+  // blanco, el verde y el amarillo quedaban casi invisibles—.
+  const C={conf:'var(--gd-conf)',nov:'var(--gd-nov)',carr:'var(--gd-carr)',wpp:'var(--gd-wpp)',
+           tot:'var(--gd-tot)',obs:'var(--gd-obs)',cancel:'var(--gd-cancel)'};
   const gh=(label,color,colspan,extra)=>
     `<th colspan="${colspan||1}" class="gdx-g" style="border-bottom:2px solid ${color};color:${color};${extra||''}">${label}</th>`;
   const sh=(label,extra)=>`<th class="gdx-s" style="${extra||''}">${label}</th>`;
@@ -225,7 +230,7 @@ function _gdRenderTabla(){
       <td class="gdx-auto" style="color:${C.nov};" title="Auto-calculado desde Novedades" id="gd-soluc-${d}">${r.soluc||''}</td>
       <td class="gdx-auto" style="color:${C.cancel};" title="Auto-calculado desde Novedades" id="gd-devuelt-${d}">${r.devuelt||''}</td>
       <td>${n('recupCarri',r.recupCarri,C.carr)}</td>
-      <td>${n('contNoRecup',r.contNoRecup,'#8B9DB5')}</td>
+      <td>${n('contNoRecup',r.contNoRecup,'var(--gd-obs)')}</td>
       <td>${n('ventasWpp',r.ventasWpp,C.wpp)}</td>
       <td class="gdx-auto gdx-total-dia" style="color:${C.tot};" id="gd-tg-${d}">${tg||''}</td>
       <td class="gdx-obs"><textarea rows="1" placeholder="—" oninput="_gdCambio(${d},'obs',this.value)">${esc(r.obs||'')}</textarea></td>
@@ -241,7 +246,7 @@ function _gdRenderTabla(){
     <td style="color:${C.nov};" id="gdt-soluc">${t.soluc}</td>
     <td style="color:${C.cancel};" id="gdt-devuelt">${t.devuelt}</td>
     <td style="color:${C.carr};" id="gdt-recupCarri">${t.recupCarri}</td>
-    <td style="color:#8B9DB5;" id="gdt-contNoRecup">${t.contNoRecup}</td>
+    <td style="color:var(--gd-obs);" id="gdt-contNoRecup">${t.contNoRecup}</td>
     <td style="color:${C.wpp};" id="gdt-ventasWpp">${t.ventasWpp}</td>
     <td style="color:${C.tot};font-size:.8rem;" id="gdt-gral">${t.gral}</td>
     <td></td>
