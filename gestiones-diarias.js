@@ -1630,18 +1630,22 @@ const _ANT_TRANSPORTES=[
 ];
 // Estados de un anticipo. Solo los usa la tabla CON ANTICIPO: la de buen
 // historial sigue con su casilla de entrega.
+// Los tonos son mas oscuros que los habituales de la paleta porque encima va
+// texto blanco: el ambar #d97706 y el verde #16a34a se quedaban en 3.2-3.3:1.
 const _ANT_ESTADOS=[
-  {val:'PENDIENTE', bg:'#64748b'},
-  {val:'PAGADO',    bg:'#15803D'},
-  {val:'ENTREGADO', bg:'#1d4ed8'},
-  {val:'CANCELADO', bg:'#dc2626'}
+  {val:'EN PROCESO', bg:'#B45309'},
+  {val:'ENTREGADO',  bg:'#15803D'},
+  {val:'DEVUELTO',   bg:'#C1121F'},
+  {val:'SIN ENVIAR', bg:'#4B5563'}
 ];
 // Los registros anteriores al cambio no tienen `estado`, pero sí la casilla
 // `entrega`: se traduce en vez de mostrarlos vacíos, así no se pierde el
 // trabajo ya marcado.
 function _antEstadoDe(r){
   if(r.estado) return r.estado;
-  return r.entrega ? 'ENTREGADO' : 'PENDIENTE';
+  // Sin marcar queda EN PROCESO y no SIN ENVIAR: el registro existe porque la
+  // guía ya se generó, así que lo que falta es la entrega, no el envío.
+  return r.entrega ? 'ENTREGADO' : 'EN PROCESO';
 }
 // El monto se guarda como número y se muestra en pesos.
 function _antMontoFmt(v){
