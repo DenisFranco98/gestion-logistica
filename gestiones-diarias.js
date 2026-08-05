@@ -703,13 +703,34 @@ async function _consoCapturar(corteId){
     if(cab) cab.style.display='block';
     // Fondo sólido: sin esto el PNG sale transparente y en WhatsApp se ve negro.
     const fondo=getComputedStyle(document.body).backgroundColor||'#ffffff';
-    // NOTA: aqui hubo un onclone que cambiaba cada <input> por un <span> para
-    // corregir que html2canvas dibuja corrido el texto de los campos. Rompio la
-    // captura entera -el layout se aplanaba y los campos salian como cajas
-    // blancas gigantes-, asi que se retiro. Si se vuelve a intentar, probarlo
-    // ANTES sobre un corte real: el problema original (numeros un poco pegados
-    // al borde) es mucho menor que perder la imagen completa.
-    const canvas=await html2canvas(cont,{backgroundColor:fondo,scale:2,logging:false,useCORS:true});
+    // html2canvas no ubica bien el texto que va DENTRO de un <input>: no calcula
+    // su linea base y lo dibuja corrido hacia abajo, y el borde del campo lo
+    // recorta. Se ve comparando con los TOTAL y con los campos bloqueados, que
+    // son <span> y salen enteros.
+    //
+    // onclone actua sobre la copia que html2canvas fotografia -el DOM real no se
+    // toca-: cada campo se cambia por un <span> con el mismo valor y las MEDIDAS
+    // COMPUTADAS del original. Un intento anterior tomaba las medidas con
+    // getBoundingClientRect y aplicaba las propiedades sueltas: eso aplanaba el
+    // layout y arruinaba la imagen. Esta version se probo con html2canvas real
+    // sobre una copia del consolidado antes de publicarla.
+    const canvas=await html2canvas(cont,{backgroundColor:fondo,scale:2,logging:false,useCORS:true,
+      onclone:doc=>{
+        doc.querySelectorAll('#conso-corte-'+corteId+' .conso-inp').forEach(inp=>{
+          if(inp.tagName!=='INPUT')return;          // los bloqueados ya son <span>
+          const cs=getComputedStyle(inp);
+          const s=doc.createElement('span');
+          s.className=inp.className;
+          s.textContent=inp.value||inp.placeholder||'';
+          s.style.cssText='display:inline-block;box-sizing:border-box;text-align:right;'+
+            'white-space:nowrap;overflow:hidden;width:'+cs.width+';height:'+cs.height+';'+
+            'line-height:'+cs.height+';padding:0 '+cs.paddingRight+';';
+          // Despues del cssText, que lo pisaria: un campo sin cargar se ve
+          // atenuado, para que la imagen no diga que se cargo un cero.
+          if(!inp.value) s.style.opacity='.45';
+          inp.parentNode.replaceChild(s,inp);
+        });
+      }});
     const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
     if(!blob) throw new Error('no se pudo generar la imagen');
     const nombreArch='Consolidado_'+corteId+'_'+_gdMes+'-'+String(_consoDia).padStart(2,'0')+'.png';
