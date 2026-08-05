@@ -844,6 +844,155 @@ window._recontarNovedades = function(opts){
   }).catch(e=>console.error('[RECONTAR novedades] falló (¿sesión de admin?):',e));
 };
 
+// Deja UNA sola carpeta por persona en gestiones_diarias, la del uid.
+//
+// Una misma persona podía tener dos: la del uid y la vieja del slug de su
+// nombre, porque la extensión y el Gestor Logístico acreditaban por nombre. En
+// Paquetin, DALILA salía el 5 de agosto con 89 gestiones en una carpeta y 43 en
+// la otra. El origen ya está corregido; esto ordena lo que quedó guardado.
+//
+// Hace DOS cosas, y las dos hacen falta:
+//   A) rellena `asesorUid` en las evidencias viejas, que solo traen el nombre.
+//      Sin esto, el primer recuento vuelve a crear la carpeta del slug y la
+//      unificación se deshace sola.
+//   B) suma los días de la carpeta vieja en la del uid y borra la vieja.
+//
+// NO toca:
+//   · las carpetas viejas SIN uid equivalente en esa tienda — son el único
+//     acceso a ese historial, y borrarlas perdería las gestiones;
+//   · los casos ambiguos, dos cuentas distintas cuyo nombre da el mismo slug;
+//   · el consolidado de la tienda, que es de la tienda y no de nadie.
+//
+// Ejecutar desde la consola como admin:
+//   _unificarCarpetasAsesor()                → simulación, no escribe nada
+//   _unificarCarpetasAsesor({aplicar:true})  → descarga el respaldo y aplica
+window._unificarCarpetasAsesor = async function(opts){
+  const aplicar=!!(opts||{}).aplicar;
+  console.log('%c[UNIFICAR carpetas]'+(aplicar?'':' (simulación - no escribe)'),'font-weight:bold');
+  try{
+    const [uSnap,eSnap,gSnap]=await Promise.all([
+      _db.ref('users').once('value'),
+      _db.ref('empresas').once('value'),
+      _db.ref('gestiones_diarias').once('value')
+    ]);
+    const users=uSnap.val()||{}, empresas=eSnap.val()||{}, gd=gSnap.val()||{};
+    const nomTienda=tk=>((empresas[tk]||{}).nombre)||tk;
+    const plan=[], ambiguos=[], soloViejas=[];
+
+    Object.entries(gd).forEach(([tk,meses])=>{
+      Object.entries(meses||{}).forEach(([mes,carpetas])=>{
+        if(!carpetas||typeof carpetas!=='object') return;
+        const pers=Object.entries(carpetas)
+          .filter(([k,v])=>v&&typeof v==='object'&&v.dias&&!_GD_NO_ASESOR.has(k));
+        const nombreDe=e=>String(e[1]._nombre||(users[e[0]]||{}).asesor||e[0]).trim();
+        // Es carpeta vieja si su clave ES el slug de su propio nombre. La del
+        // uid nunca coincide consigo misma: el uid no se deriva del nombre.
+        const esSlug=e=>_gdKey(nombreDe(e))===e[0];
+        const porSlug={};
+        pers.forEach(e=>{ if(esSlug(e)) return;
+          const s=_gdKey(nombreDe(e)); (porSlug[s]=porSlug[s]||[]).push(e[0]); });
+        pers.forEach(e=>{
+          if(!esSlug(e)) return;
+          const [k,v]=e, destinos=porSlug[k]||[];
+          if(!destinos.length){
+            soloViejas.push({tienda:nomTienda(tk),mes,carpeta:k,nombre:nombreDe(e)}); return; }
+          if(destinos.length>1){
+            ambiguos.push({tienda:nomTienda(tk),mes,carpeta:k,candidatos:destinos.join(' · ')}); return; }
+          const uid=destinos[0], dias=v.dias||{}, dstDias=((carpetas[uid]||{}).dias)||{};
+          let gest=0; const listaDias=[], seSuman=[];
+          Object.entries(dias).forEach(([d,x])=>{
+            if(!x||typeof x!=='object') return;
+            gest+=(x.soluc||0)+(x.devuelt||0);
+            listaDias.push(d);
+            if(dstDias[d]) seSuman.push(d);
+          });
+          plan.push({tienda:nomTienda(tk), _tk:tk, mes, nombre:nombreDe(e).toUpperCase(),
+            de:k, a:uid, dias:listaDias.join(','), gestiones:gest,
+            diasQueSeSuman:seSuman.join(',')||'—'});
+        });
+      });
+    });
+
+    if(!plan.length){ console.log('%cNo hay carpetas para unificar.','color:#15803d'); }
+    else { console.group('%cSe unificarían '+plan.length+' carpetas','color:#b45309;font-weight:bold');
+      console.table(plan.map(p=>({tienda:p.tienda,mes:p.mes,asesor:p.nombre,
+        'carpeta vieja':p.de,'queda en (uid)':p.a,días:p.dias,
+        'gestiones que mueve':p.gestiones,'días que se suman':p.diasQueSeSuman})));
+      console.groupEnd(); }
+    if(soloViejas.length){
+      console.group('%cCarpetas viejas SIN uid equivalente ('+soloViejas.length+') — NO se tocan','color:#2563eb');
+      console.log('Son el único acceso a ese historial. Se siguen viendo en el Consolidado GD.');
+      console.table(soloViejas); console.groupEnd(); }
+    if(ambiguos.length){
+      console.group('%cAmbiguos ('+ambiguos.length+') — NO se tocan','color:#b91c1c');
+      console.log('Dos cuentas distintas cuyo nombre da el mismo slug: hay que resolverlas a mano.');
+      console.table(ambiguos); console.groupEnd(); }
+    if(!aplicar){
+      console.log('%cSimulación. Para aplicar: _unificarCarpetasAsesor({aplicar:true})','font-weight:bold');
+      return plan; }
+    if(!plan.length) return plan;
+
+    // ── Aplicar ──
+    const respaldo={ts:Date.now(), fecha:new Date().toString(), plan, carpetas:{}, evidencias:[]};
+    plan.forEach(p=>{
+      respaldo.carpetas['gestiones_diarias/'+p._tk+'/'+p.mes+'/'+p.de]=((gd[p._tk]||{})[p.mes]||{})[p.de]||null;
+      respaldo.carpetas['gestiones_diarias/'+p._tk+'/'+p.mes+'/'+p.a]=((gd[p._tk]||{})[p.mes]||{})[p.a]||null;
+    });
+
+    // A) asesorUid en las evidencias viejas de esas personas.
+    const pares=[...new Set(plan.map(p=>p._tk+'|'+p.mes))];
+    let evi=0;
+    for(const par of pares){
+      const tk=par.split('|')[0], mes=par.split('|')[1];
+      const slugs={}; plan.filter(p=>p._tk===tk&&p.mes===mes).forEach(p=>{slugs[p.de]=p.a;});
+      const novs=(await _db.ref('novedades/'+tk+'/'+mes).once('value')).val()||{};
+      const upd={};
+      Object.entries(novs).forEach(([nid,n])=>{
+        Object.entries((n||{}).soluciones||{}).forEach(([sk,s])=>{
+          if(!s||typeof s!=='object'||s.asesorUid) return;
+          const uid=slugs[_gdKey(s.asesor||(n||{}).asesor||'')];
+          if(!uid) return;
+          upd['novedades/'+tk+'/'+mes+'/'+nid+'/soluciones/'+sk+'/asesorUid']=uid;
+          respaldo.evidencias.push({path:'novedades/'+tk+'/'+mes+'/'+nid+'/soluciones/'+sk,
+            asesor:s.asesor||null, asesorUidPuesto:uid});
+        });
+      });
+      if(Object.keys(upd).length){ await _db.ref().update(upd); evi+=Object.keys(upd).length; }
+    }
+
+    // Respaldo ANTES de borrar nada irreversible.
+    try{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([JSON.stringify(respaldo,null,2)],{type:'application/json'}));
+      a.download='unificar-carpetas-respaldo-'+_hoyLocal()+'.json';
+      a.click(); URL.revokeObjectURL(a.href);
+      console.log('Respaldo descargado: '+a.download);
+    }catch(e){ console.warn('No se pudo descargar el respaldo, queda en window._unifRespaldo',e); }
+    window._unifRespaldo=respaldo;
+
+    // B) sumar los días en la carpeta del uid y borrar la vieja.
+    const updGD={};
+    plan.forEach(p=>{
+      const nodo=((gd[p._tk]||{})[p.mes])||{};
+      const fus={};
+      _gdadmSumarDias(fus,(nodo[p.a]||{}).dias);   // primero el destino: su texto manda
+      _gdadmSumarDias(fus,(nodo[p.de]||{}).dias);
+      Object.entries(fus).forEach(([d,v])=>{
+        updGD['gestiones_diarias/'+p._tk+'/'+p.mes+'/'+p.a+'/dias/'+d]=v; });
+      // El nombre, por si la carpeta del uid no lo tenía.
+      if(!(nodo[p.a]||{})._nombre && (nodo[p.de]||{})._nombre)
+        updGD['gestiones_diarias/'+p._tk+'/'+p.mes+'/'+p.a+'/_nombre']=(nodo[p.de]||{})._nombre;
+      updGD['gestiones_diarias/'+p._tk+'/'+p.mes+'/'+p.de]=null;
+    });
+    await _db.ref().update(updGD);
+
+    console.log('%c[UNIFICAR carpetas] listo: '+plan.length+' carpetas unificadas, '+evi+
+      ' evidencias con asesorUid.','font-weight:bold;color:#15803d');
+    console.log('El respaldo tiene las carpetas como estaban y cada evidencia tocada.');
+    return plan;
+  }catch(e){ console.error('[UNIFICAR carpetas] falló (¿sesión de admin?):',e); }
+};
+
 // Audita de quién son realmente los números de la tabla de Gestión de una
 // tienda. Responde a "¿estas confirmaciones son de esta asesora o de alguien
 // más?", que tiene dos formas posibles de mezclarse:

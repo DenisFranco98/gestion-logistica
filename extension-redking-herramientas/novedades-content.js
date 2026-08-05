@@ -541,7 +541,10 @@
       .filter(s => !mes || !s.mes || s.mes === mes)
       .map(s => ({
         estado: s.estado,
-        asesorKey: gdKey(s.asesor || (n || {}).asesor || ''),
+        // El uid manda, igual que en _novGestionesDe de la app. Las evidencias
+        // anteriores no lo traen y caen al slug del nombre, que es la clave con
+        // la que se guardaron en su momento.
+        asesorKey: s.asesorUid || gdKey(s.asesor || (n || {}).asesor || ''),
         dia: s.dia || (n || {}).dia || 0
       }));
   }
@@ -564,7 +567,18 @@
   }
 
   async function sincronizarGD(mes, dia, asesorKeyForzado) {
-    const asesorKey = asesorKeyForzado || gdKey(asesorNombre);
+    // El contador se escribe en la carpeta del uid, que es la clave canónica.
+    // Antes iba a la del slug del nombre: eso le abría a la misma persona una
+    // SEGUNDA carpeta en gestiones_diarias, y como además solo se contaban las
+    // evidencias de esa clave, sus gestiones del día quedaban repartidas entre
+    // las dos. En el consolidado del admin salía dos veces, con números
+    // distintos. Ver _novRecontarDiaGD en gestion-logistica.js, que hace esto
+    // mismo desde la app.
+    const asesorKey = asesorKeyForzado || auth.uid;
+    // Se cuentan las DOS claves de la persona: las evidencias viejas se
+    // guardaron con el nombre y las nuevas con el uid.
+    const claves = asesorKeyForzado ? [asesorKeyForzado]
+                                    : [auth.uid, gdKey(asesorNombre)].filter(Boolean);
     const [novedadesMes, dayDataActual] = await Promise.all([
       leerDB('novedades/' + tienda.key + '/' + mes, auth).then(d => d || {}),
       leerDB('gestiones_diarias/' + tienda.key + '/' + mes + '/' + asesorKey + '/dias/' + dia, auth).then(d => d || {})
@@ -572,7 +586,7 @@
     let soluc = 0, devuelt = 0;
     Object.values(novedadesMes).forEach(n => {
       gestionesDe(n, mes).forEach(g => {
-        if (g.dia !== dia || g.asesorKey !== asesorKey) return;
+        if (g.dia !== dia || claves.indexOf(g.asesorKey) < 0) return;
         if (g.estado === 'devuelta') devuelt++; else soluc++;
       });
     });
