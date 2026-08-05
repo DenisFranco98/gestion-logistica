@@ -993,6 +993,104 @@ window._unificarCarpetasAsesor = async function(opts){
   }catch(e){ console.error('[UNIFICAR carpetas] falló (¿sesión de admin?):',e); }
 };
 
+// Recorre TODA la base y dice qué nodos siguen indexados por NOMBRE en vez de
+// por uid (personas) o empresaId (tiendas). Solo lee, nunca escribe.
+//
+// Lista las claves con ?shallow=true de la API REST, que devuelve los nombres
+// de los hijos sin bajar su contenido. Es obligatorio: nov_img pesa megas en
+// imágenes y leerlo entero para mirar sus claves colgaría el navegador.
+//
+// Ejecutar desde la consola como admin:  _auditarClavesPorNombre()
+window._auditarClavesPorNombre = async function(){
+  console.log('%c[AUDITAR claves] solo lectura','font-weight:bold');
+  try{
+    const [uSnap,eSnap]=await Promise.all([
+      _db.ref('users').once('value'), _db.ref('empresas').once('value')]);
+    const users=uSnap.val()||{}, empresas=eSnap.val()||{};
+    const quien=u=>((users[u]||{}).asesor)||((users[u]||{}).email)||u;
+    const slugAsesor={}, slugEmpresa={};
+    Object.entries(users).forEach(([uid,u])=>{ const s=_gdKey((u||{}).asesor||'');
+      if(s&&s!=='_') (slugAsesor[s]=slugAsesor[s]||[]).push(uid); });
+    Object.entries(empresas).forEach(([id,e])=>{ const s=_gdKey((e||{}).nombre||'');
+      if(s&&s!=='_') (slugEmpresa[s]=slugEmpresa[s]||[]).push(id); });
+
+    const dbURL=((_db.app||{}).options||{}).databaseURL||'';
+    let token=null;
+    try{ const cu=firebase.auth().currentUser; if(cu) token=await cu.getIdToken(); }catch(e){}
+    const claves=async path=>{
+      try{
+        const r=await fetch(dbURL+'/'+path+'.json?shallow=true'+(token?'&auth='+token:''));
+        if(!r.ok) return null;
+        const j=await r.json();
+        return (j&&typeof j==='object')?Object.keys(j):[];
+      }catch(e){ return null; }
+    };
+
+    // Nodos cuyo primer nivel es una PERSONA y cuáles una TIENDA.
+    const PERSONA=['users','admins','user_tiendas','admin_empresas','presence',
+                   'session_hist','session_reports','historial_diario'];
+    const TIENDA=['gestiones_diarias','novedades','anticipos','ro','control_financiero',
+                  'gestiones_sync','nov_img','logistica_guias','empresa_asesores'];
+    const filas=[], sanos=[];
+
+    for(const nodo of PERSONA.concat(TIENDA)){
+      const esPersona=PERSONA.indexOf(nodo)>=0;
+      const ks=await claves(nodo);
+      if(ks===null){ filas.push({nodo,clave:'(sin acceso)',tipo:'?',dato:''}); continue; }
+      let ok=0;
+      ks.forEach(k=>{
+        if(esPersona ? !!users[k] : !!empresas[k]){ ok++; return; }
+        const dueños=esPersona?slugAsesor[k]:slugEmpresa[k];
+        filas.push({nodo, clave:k,
+          tipo: dueños ? (esPersona?'NOMBRE de asesor':'NOMBRE de tienda') : 'desconocida',
+          dato: dueños ? ('existe como '+(esPersona?'uid':'empresaId')+': '+dueños.join(' · ')) : ''});
+      });
+      sanos.push({nodo, tipo:esPersona?'por persona':'por tienda',
+        'claves correctas':ok, 'claves a revisar':ks.length-ok});
+    }
+
+    console.group('%cResumen por nodo','font-weight:bold');
+    console.table(sanos); console.groupEnd();
+    if(filas.length){
+      console.group('%cClaves que NO son uid/empresaId ('+filas.length+')','color:#b45309;font-weight:bold');
+      console.table(filas); console.groupEnd();
+    } else console.log('%cTodos los primeros niveles usan uid o empresaId.','color:#15803d');
+
+    // gestiones_diarias tiene la persona en el TERCER nivel: /{tienda}/{mes}/{asesor}
+    const gdRes=[];
+    for(const tk of (await claves('gestiones_diarias'))||[]){
+      for(const mes of (await claves('gestiones_diarias/'+tk))||[]){
+        const aks=(await claves('gestiones_diarias/'+tk+'/'+mes))||[];
+        let uid=0, nom=0, otras=0;
+        aks.forEach(k=>{ if(_GD_NO_ASESOR.has(k)) return;
+          if(users[k]) uid++; else if(slugAsesor[k]) nom++; else otras++; });
+        if(nom||otras) gdRes.push({tienda:((empresas[tk]||{}).nombre)||tk, mes,
+          'por uid':uid, 'por NOMBRE':nom, 'sin dueño conocido':otras});
+      }
+    }
+    if(gdRes.length){
+      console.group('%cgestiones_diarias · carpetas de asesor por nombre','color:#b45309;font-weight:bold');
+      console.log('Las de "por NOMBRE" son las que unifica _unificarCarpetasAsesor().');
+      console.table(gdRes); console.groupEnd();
+    } else console.log('%cgestiones_diarias: todas las carpetas de asesor son uid.','color:#15803d');
+
+    console.log('%cNo se revisan: login_audit (va por correo a propósito, registra intentos de '+
+      'gente que puede no tener cuenta) e historial_diario, que dentro del uid abre una rama por '+
+      'nombre — ver el detalle abajo.','color:#6b7280');
+    const hd=[];
+    for(const u of (await claves('historial_diario'))||[]){
+      const ramas=(await claves('historial_diario/'+u))||[];
+      if(ramas.length>1) hd.push({uid:u, asesor:quien(u), ramas:ramas.join(' · ')});
+    }
+    if(hd.length){
+      console.group('%chistorial_diario con más de una rama de nombre ('+hd.length+')','color:#b45309');
+      console.log('Misma persona, historial partido: pasa si le cambiaron o le escribieron distinto el nombre.');
+      console.table(hd); console.groupEnd();
+    }
+    return {filas, gdRes, hd};
+  }catch(e){ console.error('[AUDITAR claves] falló (¿sesión de admin?):',e); }
+};
+
 // Audita de quién son realmente los números de la tabla de Gestión de una
 // tienda. Responde a "¿estas confirmaciones son de esta asesora o de alguien
 // más?", que tiene dos formas posibles de mezclarse:
