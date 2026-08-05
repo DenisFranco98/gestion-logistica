@@ -1392,3 +1392,7 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .mod-hdr-btn:hover{background:var(--header-hover);}
 .mod-hdr-nav{width:28px;height:28px;font-size:.85rem;padding:0;}
 .mod-hdr-txt{padding:5px 11px;font-size:.7rem;font-weight:600;color:var(--header-muted);}
+
+/* Total de anticipos del mes, al pie de la tabla CON ANTICIPO */
+.ant-total-row td{background:var(--bg-elevated);border-top:2px solid var(--border-strong);padding:8px 9px;font-size:.75rem;color:var(--text-1);}
+.ant-monto{font-variant-numeric:tabular-nums;}

@@ -1433,7 +1433,7 @@ function _novResizeImg(file,maxW,quality){
 
 // ── FILTROS POR PESTAÑA ─────────────────────────────────────────────────
 let _roFilter={q:'',estado:''};
-let _antFilter={con:{q:'',transport:'',entrega:''},sin:{q:'',transport:'',entrega:''}};
+let _antFilter={con:{q:'',transport:'',entrega:'',estado:''},sin:{q:'',transport:'',entrega:'',estado:''}};
 let _novFilter={q:'',sol:''};
 
 let _roSearchTimer=null;
@@ -1455,6 +1455,14 @@ function _antTransChip(tipo,t,btn){
 }
 function _antEntChip(tipo,e,btn){
   _antFilter[tipo].entrega=e;
+  const grp=btn&&btn.closest('.tab-chips');
+  if(grp)grp.querySelectorAll('.tab-chip').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  _antRender(tipo);
+}
+// Filtro por estado — reemplaza al de transportadora en CON ANTICIPO.
+function _antEstChip(tipo,e,btn){
+  _antFilter[tipo].estado=e;
   const grp=btn&&btn.closest('.tab-chips');
   if(grp)grp.querySelectorAll('.tab-chip').forEach(b=>b.classList.remove('on'));
   if(btn)btn.classList.add('on');
@@ -1620,6 +1628,27 @@ const _ANT_TRANSPORTES=[
   {val:'SERVIENTREGA', bg:'#7c3aed'},
   {val:'OTRO', bg:'#64748b'}
 ];
+// Estados de un anticipo. Solo los usa la tabla CON ANTICIPO: la de buen
+// historial sigue con su casilla de entrega.
+const _ANT_ESTADOS=[
+  {val:'PENDIENTE', bg:'#64748b'},
+  {val:'PAGADO',    bg:'#15803D'},
+  {val:'ENTREGADO', bg:'#1d4ed8'},
+  {val:'CANCELADO', bg:'#dc2626'}
+];
+// Los registros anteriores al cambio no tienen `estado`, pero sí la casilla
+// `entrega`: se traduce en vez de mostrarlos vacíos, así no se pierde el
+// trabajo ya marcado.
+function _antEstadoDe(r){
+  if(r.estado) return r.estado;
+  return r.entrega ? 'ENTREGADO' : 'PENDIENTE';
+}
+// El monto se guarda como número y se muestra en pesos.
+function _antMontoFmt(v){
+  const n=parseInt(v,10);
+  if(!n) return '';
+  return '$ '+n.toLocaleString('es-CO');
+}
 let _antData={con:{},sin:{}}, _antST={};
 
 function _antBase(tipo,tk){ return 'anticipos/'+(tk||_gdTK())+'/'+_gdMes+'/'+tipo; }
@@ -1644,8 +1673,11 @@ function _antRender(tipo){
   const allEntries=Object.entries(_antData[tipo]).sort((a,b)=>(a[1].ts||0)-(b[1].ts||0));
   const entries=allEntries.filter(([,r])=>{
     if(_af.transport&&r.transporte!==_af.transport)return false;
-    if(_af.entrega==='si'&&!r.entrega)return false;
-    if(_af.entrega==='no'&&r.entrega)return false;
+    // En CON ANTICIPO el filtro es por estado; en la otra tabla sigue siendo la
+    // casilla de entrega.
+    if(tipo==='con'&&_af.estado&&_antEstadoDe(r)!==_af.estado)return false;
+    if(tipo!=='con'&&_af.entrega==='si'&&!r.entrega)return false;
+    if(tipo!=='con'&&_af.entrega==='no'&&r.entrega)return false;
     if(_af.entrega==='comp'&&!r.comprobante)return false;
     if(_aq&&![(r.telefono||''),(r.cliente||''),(r.motivo||''),(r.producto||''),(r.fecha||'')].some(v=>v.toLowerCase().includes(_aq)))return false;
     return true;
@@ -1665,6 +1697,25 @@ function _antRender(tipo){
           </div>`
         :`<button onclick="_antSubirComp('${id}')" style="background:none;border:1.5px dashed #cbd5e1;border-radius:5px;padding:5px 8px;cursor:pointer;font-size:.85rem;color:var(--text-3);" title="Adjuntar comprobante">📎</button>`
     }</td>`:'';
+    // CON ANTICIPO: Fecha · Teléfono · Motivo · Producto · Monto · Comprobante ·
+    // Estado. Se fueron Cliente y Transportadora (los datos siguen en la base,
+    // solo dejan de mostrarse) y la casilla de entrega la reemplaza el estado.
+    if(esCon){
+      const est=_antEstadoDe(r);
+      const eBg=(_ANT_ESTADOS.find(e=>e.val===est)||{bg:'#64748b'}).bg;
+      return `<tr>
+        <td><input class="ant-inp" value="${r.fecha||''}" placeholder="Fecha" onchange="_antCambio('${tipo}','${id}','fecha',this.value)" style="min-width:72px;"></td>
+        <td><input class="ant-inp" value="${r.telefono||''}" placeholder="Teléfono" onchange="_antCambio('${tipo}','${id}','telefono',this.value)" style="min-width:82px;"></td>
+        <td><input class="ant-inp" value="${(r.motivo||'').replace(/"/g,'&quot;')}" placeholder="Motivo" onchange="_antCambio('${tipo}','${id}','motivo',this.value)" style="min-width:110px;"></td>
+        <td><input class="ant-inp" value="${(r.producto||'').replace(/"/g,'&quot;')}" placeholder="Producto" onchange="_antCambio('${tipo}','${id}','producto',this.value)" style="min-width:110px;"></td>
+        <td><input class="ant-inp ant-monto" value="${r.monto||''}" placeholder="0" inputmode="numeric" title="${_antMontoFmt(r.monto)}" onchange="_antMontoCambio('${tipo}','${id}',this)" style="min-width:88px;text-align:right;"></td>
+        ${compCell}
+        <td><select class="ant-sel" id="ant-est-${id}" onchange="_antEstCambio('${tipo}','${id}',this)" style="background:${eBg};color:#fff;min-width:112px;">
+          ${_ANT_ESTADOS.map(e=>`<option value="${e.val}"${e.val===est?' selected':''}>${e.val}</option>`).join('')}
+        </select></td>
+        <td><button class="ant-del-btn" onclick="_antEliminar('${tipo}','${id}')">🗑️</button></td>
+      </tr>`;
+    }
     return `<tr>
       <td><input class="ant-inp" value="${r.fecha||''}" placeholder="Fecha" onchange="_antCambio('${tipo}','${id}','fecha',this.value)" style="min-width:72px;"></td>
       <td><input class="ant-inp" value="${(r.cliente||'').replace(/"/g,'&quot;')}" placeholder="Cliente" onchange="_antCambio('${tipo}','${id}','cliente',this.value)" style="min-width:100px;"></td>
@@ -1674,19 +1725,27 @@ function _antRender(tipo){
       </select></td>
       <td><input class="ant-inp" value="${(r.motivo||'').replace(/"/g,'&quot;')}" placeholder="Motivo" onchange="_antCambio('${tipo}','${id}','motivo',this.value)" style="min-width:100px;"></td>
       <td><input class="ant-inp" value="${(r.producto||'').replace(/"/g,'&quot;')}" placeholder="Producto" onchange="_antCambio('${tipo}','${id}','producto',this.value)" style="min-width:100px;"></td>
-      ${compCell}
       <td style="text-align:center;"><input type="checkbox" ${r.entrega?'checked':''} onchange="_antCambio('${tipo}','${id}','entrega',this.checked)" style="cursor:pointer;width:14px;height:14px;"></td>
       <td><button class="ant-del-btn" onclick="_antEliminar('${tipo}','${id}')">🗑️</button></td>
     </tr>`;
   }).join('');
-  const cols=esCon?9:8;
+  const cols=esCon?8:8;
+  const cab=esCon
+    ? '<th>FECHA</th><th>TELÉFONO</th><th>MOTIVO</th><th>PRODUCTO</th><th>MONTO</th><th>COMPROBANTE</th><th>ESTADO</th><th></th>'
+    : '<th>FECHA</th><th>CLIENTE</th><th>TELÉFONO</th><th>TRANSPORT.</th><th>MOTIVO</th><th>PRODUCTO</th><th>ENTREGA</th><th></th>';
+  // Total de lo que se está viendo: si hay un filtro puesto, suma lo filtrado,
+  // igual que el contador de registros de arriba.
+  const pie=esCon
+    ? `<tfoot><tr class="ant-total-row">
+         <td colspan="4" style="text-align:right;font-weight:800;">TOTAL${entries.length<allEntries.length?' (filtrado)':''}</td>
+         <td style="text-align:right;font-weight:900;">${_antMontoFmt(entries.reduce((s,[,r])=>s+(parseInt(r.monto,10)||0),0))||'$ 0'}</td>
+         <td colspan="3"></td>
+       </tr></tfoot>`
+    : '';
   el.innerHTML=`<table class="ant-tbl">
-    <thead><tr>
-      <th>FECHA</th><th>CLIENTE</th><th>TELÉFONO</th><th>TRANSPORT.</th><th>MOTIVO</th><th>PRODUCTO</th>
-      ${esCon?'<th>COMPROBANTE</th>':''}
-      <th>ENTREGA</th><th></th>
-    </tr></thead>
+    <thead><tr>${cab}</tr></thead>
     <tbody>${rows||`<tr><td colspan="${cols}" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Sin registros</td></tr>`}</tbody>
+    ${pie}
   </table>`;
   entries.forEach(([id,r])=>{
     const sel=document.getElementById('ant-sel-'+id);
@@ -1722,6 +1781,22 @@ async function _antDelComp(id){
   _antRender('con');
 }
 
+function _antEstCambio(tipo,id,sel){
+  const e=_ANT_ESTADOS.find(x=>x.val===sel.value);
+  sel.style.background=e?e.bg:'#64748b';
+  sel.style.color='#fff';
+  _antCambio(tipo,id,'estado',sel.value);
+}
+
+// El monto se teclea con o sin puntos y se guarda como número limpio; el total
+// del pie se recalcula al vuelo.
+function _antMontoCambio(tipo,id,inp){
+  const n=parseInt(String(inp.value).replace(/[^\d]/g,''),10)||0;
+  inp.title=_antMontoFmt(n);
+  _antCambio(tipo,id,'monto',n);
+  _antRender(tipo);
+}
+
 function _antSelCambio(tipo,id,sel){
   const t=_ANT_TRANSPORTES.find(x=>x.val===sel.value);
   sel.style.background=t?t.bg:'white';
@@ -1743,8 +1818,11 @@ function _antCambio(tipo,id,campo,valor){
 function _antAgregar(tipo){
   if(typeof _db==='undefined')return;
   const hoy=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'});
-  const ref=_db.ref(_antPath(tipo)).push({fecha:hoy,cliente:'',telefono:'',transporte:'',motivo:'',producto:'',entrega:false,ts:Date.now()});
-  _antData[tipo][ref.key]={fecha:hoy,cliente:'',telefono:'',transporte:'',motivo:'',producto:'',entrega:false,ts:Date.now()};
+  const base={fecha:hoy,cliente:'',telefono:'',transporte:'',motivo:'',producto:'',entrega:false,ts:Date.now()};
+  // CON ANTICIPO usa monto y estado en vez de la casilla de entrega.
+  if(tipo==='con'){ base.monto=0; base.estado='PENDIENTE'; }
+  const ref=_db.ref(_antPath(tipo)).push(base);
+  _antData[tipo][ref.key]=Object.assign({},base);
   _antRender(tipo);
   // Scroll al final
   const wrap=document.getElementById('ant-'+tipo+'-wrap');
