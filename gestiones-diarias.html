@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260805j">
+<link rel="stylesheet" href="shared/shared.css?v=20260805k">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -935,6 +935,9 @@ window._sbEstadosToggle=function(){
             <button class="tab-chip" onclick="_antEntChip('con','comp',this)" style="border-color:var(--accent);color:var(--accent);">Con comprobante</button>
           </div>
         </div>
+        <!-- Sugerencias del catalogo de productos de la tienda: lo comparten las dos
+             tablas de anticipos y se llena solo desde _catCargar. -->
+        <datalist id="ant-prod-list"></datalist>
         <div style="overflow-x:auto;"><div id="ant-con-wrap"></div></div>
         <button class="ant-add-btn" onclick="_antAgregar('con')">+ Agregar guía</button>
       </div>
@@ -1363,8 +1366,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260805j"></script>
-<script src="gestiones-diarias.js?v=20260805j"></script>
+<script src="shared/app-shared.js?v=20260805k"></script>
+<script src="gestiones-diarias.js?v=20260805k"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

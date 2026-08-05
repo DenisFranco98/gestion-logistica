@@ -1662,7 +1662,49 @@ let _antData={con:{},sin:{}}, _antST={};
 function _antBase(tipo,tk){ return 'anticipos/'+(tk||_gdTK())+'/'+_gdMes+'/'+tipo; }
 function _antPath(tipo){ return _antBase(tipo); }
 
+// ── CATÁLOGO DE PRODUCTOS ────────────────────────────────────────────────
+// Se arma solo: cada producto que alguien escribe en Anticipos queda guardado
+// para su tienda, y desde la próxima vez aparece como sugerencia al escribir.
+// No hay alta manual ni pantalla de administración; si entra uno mal escrito,
+// queda en la lista (decisión tomada a sabiendas el 2026-08-05).
+//
+// Es de CADA TIENDA: cuelga de catalogo_productos/{empresaId}, porque cada una
+// vende cosas distintas y una lista común sería larga y ajena.
+let _catProductos={};
+function _catBase(tk){ return 'catalogo_productos/'+(tk||_gdTK()); }
+// La clave normaliza para no duplicar: los productos vienen con espacios de
+// sobra y en mayúsculas o minúsculas según quién escriba (" Botas en cuero -
+// BOOTMEN " y "botas en cuero - bootmen" son el mismo).
+function _catKey(nombre){ return _gdKey(nombre); }
+function _catCargar(){
+  if(typeof _db==='undefined'||!window._currentUsername) return;
+  _db.ref(_catBase()).once('value').then(snap=>{
+    _catProductos=snap.val()||{};
+    _catPintarLista();
+  }).catch(e=>console.warn('[catálogo]',e));
+}
+function _catPintarLista(){
+  const dl=document.getElementById('ant-prod-list');
+  if(!dl) return;
+  const nombres=[...new Set(Object.values(_catProductos).map(p=>(p&&p.nombre)||'').filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'es'));
+  dl.innerHTML=nombres.map(n=>'<option value="'+esc(n)+'"></option>').join('');
+}
+// Guarda el producto si es nuevo. Conserva el texto tal como se escribió la
+// primera vez; las veces siguientes solo se reconoce, no se pisa.
+function _catAgregar(nombre){
+  const limpio=String(nombre||'').trim().replace(/\s+/g,' ');
+  if(!limpio) return;
+  const k=_catKey(limpio);
+  if(!k||k==='_'||_catProductos[k]) return;
+  _catProductos[k]={nombre:limpio, ts:Date.now()};
+  _catPintarLista();
+  if(typeof _db==='undefined'||!_tiendaLista('catálogo de productos')) return;
+  _db.ref(_catBase()+'/'+k).set(_catProductos[k]).catch(e=>console.warn('[catálogo]',e));
+}
+
 function _antInit(){
+  _catCargar();
   ['con','sin'].forEach(tipo=>{
     document.getElementById('ant-'+tipo+'-wrap').innerHTML='<div style="padding:12px;color:var(--text-3);font-size:.72rem;text-align:center;">Cargando...</div>';
     if(typeof _db==='undefined'){_antData[tipo]={};_antRender(tipo);return;}
@@ -1715,7 +1757,7 @@ function _antRender(tipo){
         <td><input class="ant-inp" value="${r.fecha||''}" placeholder="Fecha" onchange="_antCambio('${tipo}','${id}','fecha',this.value)" style="min-width:72px;"></td>
         <td><input class="ant-inp" value="${r.telefono||''}" placeholder="Teléfono" onchange="_antCambio('${tipo}','${id}','telefono',this.value)" style="min-width:82px;"></td>
         <td><input class="ant-inp" value="${(r.motivo||'').replace(/"/g,'&quot;')}" placeholder="Motivo" onchange="_antCambio('${tipo}','${id}','motivo',this.value)" style="min-width:110px;"></td>
-        <td><input class="ant-inp" value="${(r.producto||'').replace(/"/g,'&quot;')}" placeholder="Producto" onchange="_antCambio('${tipo}','${id}','producto',this.value)" style="min-width:110px;"></td>
+        <td><input class="ant-inp" list="ant-prod-list" value="${(r.producto||'').replace(/"/g,'&quot;')}" placeholder="Producto" onchange="_antCambio('${tipo}','${id}','producto',this.value)" style="min-width:110px;"></td>
         <td><input class="ant-inp ant-monto" value="${r.monto||''}" placeholder="0" inputmode="numeric" title="${_antMontoFmt(r.monto)}" onchange="_antMontoCambio('${tipo}','${id}',this)" style="min-width:88px;text-align:right;"></td>
         ${compCell}
         <td><select class="ant-sel" id="ant-est-${id}" onchange="_antEstCambio('${tipo}','${id}',this)" style="background:${eBg};color:#fff;min-width:112px;">
@@ -1732,7 +1774,7 @@ function _antRender(tipo){
         <option value="">—</option>${opts}
       </select></td>
       <td><input class="ant-inp" value="${(r.motivo||'').replace(/"/g,'&quot;')}" placeholder="Motivo" onchange="_antCambio('${tipo}','${id}','motivo',this.value)" style="min-width:100px;"></td>
-      <td><input class="ant-inp" value="${(r.producto||'').replace(/"/g,'&quot;')}" placeholder="Producto" onchange="_antCambio('${tipo}','${id}','producto',this.value)" style="min-width:100px;"></td>
+      <td><input class="ant-inp" list="ant-prod-list" value="${(r.producto||'').replace(/"/g,'&quot;')}" placeholder="Producto" onchange="_antCambio('${tipo}','${id}','producto',this.value)" style="min-width:100px;"></td>
       <td style="text-align:center;"><input type="checkbox" ${r.entrega?'checked':''} onchange="_antCambio('${tipo}','${id}','entrega',this.checked)" style="cursor:pointer;width:14px;height:14px;"></td>
       <td><button class="ant-del-btn" onclick="_antEliminar('${tipo}','${id}')">🗑️</button></td>
     </tr>`;
@@ -1815,6 +1857,8 @@ function _antSelCambio(tipo,id,sel){
 function _antCambio(tipo,id,campo,valor){
   if(!_antData[tipo][id])return;
   _antData[tipo][id][campo]=valor;
+  // Cada producto escrito alimenta el catalogo de la tienda.
+  if(campo==='producto') _catAgregar(valor);
   const key=tipo+id;
   if(_antST[key])clearTimeout(_antST[key]);
   _antST[key]=setTimeout(()=>{
