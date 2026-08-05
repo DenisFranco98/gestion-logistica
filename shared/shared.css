@@ -731,6 +731,10 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
   /* Para texto sobre su propio fondo -soft (pildoras, filas de resumen) */
   --success-strong:#39E67A;--warning-strong:#E6B539;--danger-strong:#EF7C85;
   --pill-off:#8896A9;--info-strong:#769DEE;
+  /* Pantalla de carga entre paginas: cada salto de modulo es una carga
+     completa, asi que este fondo se ve varias veces por sesion. */
+  --splash-bg:linear-gradient(130deg,#070A0E 0%,#0D1117 45%,#131920 100%);
+  --splash-ring:rgba(255,255,255,.15);
 }
 [data-theme="light"]{
   --gd-conf:#107F3A; --gd-cancel:#D91B2A; --gd-nov:#2A66E4; --gd-carr:#8F46E3;
@@ -738,6 +742,8 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
   --badge-bg:#2456C4;
   --success-strong:#0F7A3D;--warning-strong:#8A6410;--danger-strong:#B01F2B;
   --pill-off:#5B626B;--info-strong:#2456C4;
+  --splash-bg:linear-gradient(130deg,#F5F7FA 0%,#FFFFFF 45%,#EDF0F4 100%);
+  --splash-ring:rgba(0,0,0,.12);
 }
 .gdx-wrap{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--bg-card);}
 /* .78rem y no .72: son cifras que se leen de un vistazo todo el día. */
@@ -1257,9 +1263,9 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 @keyframes loginGlow{from{transform:translate(0,0) scale(1);}to{transform:translate(-40px,30px) scale(1.15);}}
 #login-screen.visible{display:flex;}
 #login-screen.hidden{display:none;}
-#app-splash{position:fixed;inset:0;z-index:10000;background:linear-gradient(130deg,#070A0E 0%,#0D1117 45%,#131920 100%);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+#app-splash{position:fixed;inset:0;z-index:10000;background:var(--splash-bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
 #app-splash .splash-logo{font-size:2.8rem;}
-#app-splash .splash-spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:rgba(230,57,70,.85);border-radius:50%;animation:spin .7s linear infinite;}
+#app-splash .splash-spinner{width:36px;height:36px;border:3px solid var(--splash-ring);border-top-color:rgba(230,57,70,.85);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .login-box{position:relative;background:rgba(255,255,255,.06);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:48px 40px;width:100%;max-width:410px;box-shadow:0 30px 80px rgba(0,0,0,.55);text-align:center;animation:loginEnter .5s cubic-bezier(.2,.8,.25,1);}
 @keyframes loginEnter{from{opacity:0;transform:translateY(26px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
