@@ -1358,14 +1358,14 @@ window._sbEstadosToggle=function(){
 <!-- Barra superior: identidad + controles de sistema (estructura Centro de Operaciones) -->
 <div id="topnav">
   <h1>🚚 Gestión Logística</h1>
-  <div class="sb-status"><div id="fecha"></div><span id="save-st"></span><span id="build-tag" style="font-size:.58rem;color:rgba(255,255,255,.35);font-family:var(--f-mono);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:1px 6px;" title="Versión del build local"></span></div>
+  <div class="sb-status"><div id="fecha"></div><span id="save-st"></span><span id="build-tag" style="font-size:.58rem;color:var(--header-faint);font-family:var(--f-mono);border:1px solid var(--header-btn-bd);border-radius:6px;padding:1px 6px;" title="Versión del build local"></span></div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
-    <div id="empresa-switcher" style="display:none;align-items:center;gap:6px;"><span style="font-size:.66rem;color:rgba(255,255,255,.5);">Empresa:</span><select id="empresa-select" onchange="_cambiarEmpresa(this.value)" style="background:#131920;color:white;border:1px solid var(--border-strong);border-radius:7px;padding:5px 10px;font-size:.74rem;cursor:pointer;outline:none;"></select></div>
-    <button onclick="irAPagina('/');" title="Volver al menú principal" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.85);padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">← Menú principal</button>
+    <div id="empresa-switcher" style="display:none;align-items:center;gap:6px;"><span style="font-size:.66rem;color:var(--header-muted);">Empresa:</span><select id="empresa-select" onchange="_cambiarEmpresa(this.value)" style="background:var(--header-elev);color:var(--header-text);border:1px solid var(--border-strong);border-radius:7px;padding:5px 10px;font-size:.74rem;cursor:pointer;outline:none;"></select></div>
+    <button onclick="irAPagina('/');" title="Volver al menú principal" class="mod-hdr-btn" style="padding:6px 12px;font-size:.72rem;font-weight:600;">← Menú principal</button>
     <button id="btn-pausa" onclick="togglePausa()" style="background:rgba(230,181,57,.18);border:1px solid rgba(230,181,57,.35);color:#E6B539;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:700;">⏸ Pausa</button>
-    <button class="theme-toggle-btn" onclick="_toggleTheme()" title="Cambiar tema" style="background:rgba(255,255,255,.08);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;">🌙</button>
-    <button onclick="abrirConfig()" style="background:rgba(255,255,255,.08);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">⚙️</button>
-    <button id="btn-volver-roles-topnav" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.85);padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">🎭 Cambiar perfil</button>
+    <button class="theme-toggle-btn mod-hdr-btn" onclick="_toggleTheme()" title="Cambiar tema" style="padding:6px 12px;font-size:.72rem;">🌙</button>
+    <button onclick="abrirConfig()" class="mod-hdr-btn" style="padding:6px 12px;font-size:.72rem;font-weight:600;">⚙️</button>
+    <button id="btn-volver-roles-topnav" onclick="_volverSelectorRol()" class="mod-hdr-btn" style="display:none;padding:6px 12px;font-size:.72rem;font-weight:600;">🎭 Cambiar perfil</button>
     <button onclick="_cerrarSesion()" title="Cerrar sesión" style="background:rgba(230,57,70,.18);border:1px solid rgba(230,57,70,.35);color:#E63946;padding:6px 12px;border-radius:8px;font-size:.72rem;cursor:pointer;font-weight:600;">⏻ Salir</button>
   </div>
 </div>
