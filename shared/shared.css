@@ -724,6 +724,29 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 #gd-table input[type=number]:focus{background:rgba(57,113,230,.12);border-radius:4px;box-shadow:0 0 0 1.5px var(--accent);}
 #gd-table input[type=text]{width:100%;min-width:170px;border:none;background:transparent;font-size:.7rem;padding:3px 6px;outline:none;color:var(--text-2);font-family:var(--f-body);}
 #gd-table input[type=text]:focus{background:rgba(57,113,230,.08);border-radius:4px;}
+/* OBSERVACIONES ASESOR — comportamiento tipo celda de Excel.
+   En reposo ocupa UNA línea, igual que antes, para que la tabla no cambie de
+   alto ni haya que hacer scroll de más. Al hacer clic se abre y muestra el
+   texto completo en varias líneas.
+   Crece la celda en vez de flotar por encima: .gdx-wrap es overflow:hidden (lo
+   necesita para las esquinas redondeadas), así que un panel superpuesto se
+   recortaría justo en las últimas filas, que es donde más se escribe. Creciendo
+   la fila nunca se corta y además no tapa los días vecinos. */
+#gd-table .gdx-obs textarea{
+  width:100%;min-width:170px;border:none;background:transparent;
+  font-size:.7rem;padding:3px 6px;outline:none;color:var(--text-2);
+  font-family:var(--f-body);line-height:15px;height:21px;
+  resize:none;overflow:hidden;display:block;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  transition:height .12s ease;
+}
+#gd-table .gdx-obs textarea::placeholder{color:var(--text-3);opacity:.35;}
+#gd-table .gdx-obs textarea:focus{
+  height:96px;overflow-y:auto;
+  background:var(--bg-card);border-radius:5px;
+  box-shadow:0 0 0 1.5px var(--accent);
+  color:var(--text-1);
+}
 /* ── GD ADMIN CONSOLIDADO ─────────────── */
 .gdadm-stab{border:none;background:none;padding:8px 16px;font-size:.75rem;font-weight:600;color:var(--text-2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;font-family:inherit;}
 .gdadm-stab.active{color:var(--text-1);border-bottom-color:var(--text-1);}

@@ -228,7 +228,7 @@ function _gdRenderTabla(){
       <td>${n('contNoRecup',r.contNoRecup,'#8B9DB5')}</td>
       <td>${n('ventasWpp',r.ventasWpp,C.wpp)}</td>
       <td class="gdx-auto gdx-total-dia" style="color:${C.tot};" id="gd-tg-${d}">${tg||''}</td>
-      <td class="gdx-obs"><input type="text" value="${(r.obs||'').replace(/"/g,'&quot;')}" placeholder="—" oninput="_gdCambio(${d},'obs',this.value)"></td>
+      <td class="gdx-obs"><textarea rows="1" placeholder="—" oninput="_gdCambio(${d},'obs',this.value)">${esc(r.obs||'')}</textarea></td>
     </tr>`;
   }
 
