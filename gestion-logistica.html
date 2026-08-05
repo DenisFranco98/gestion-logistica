@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="shared/shared.css">
+<link rel="stylesheet" href="shared/shared.css?v=20260805">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1383,7 +1383,7 @@ window._sbEstadosToggle=function(){
     <button class="btn-topbar" onclick="generarPDF()">📋 Informe</button>
     <div id="btn-reportes-wrap" style="display:none;position:relative;">
       <button class="btn-topbar" onclick="toggleReportesMenu()">
-        📊 Reportes <span id="reportes-badge-total" style="background:var(--accent);color:var(--accent-text);border-radius:10px;padding:0 6px;font-size:.65rem;font-weight:800;">0</span> <span style="font-size:.6rem;opacity:.7;margin-left:auto;">▸</span>
+        📊 Reportes <span id="reportes-badge-total" style="background:var(--badge-bg);color:#fff;border-radius:10px;padding:0 6px;font-size:.65rem;font-weight:800;">0</span> <span style="font-size:.6rem;opacity:.7;margin-left:auto;">▸</span>
       </button>
       <div id="reportes-menu" style="display:none;position:absolute;left:calc(100% + 10px);top:0;background:var(--bg-card);border:1.5px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);min-width:210px;z-index:200;overflow:hidden;">
         <button onclick="toggleReportesMenu();abrirSinGuia()" style="width:100%;background:none;border:none;padding:10px 14px;text-align:left;font-size:.78rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border);color:var(--text-1);">
@@ -1768,8 +1768,8 @@ window._sbEstadosToggle=function(){
   </div>
 </div>
 
-<script src="shared/app-shared.js"></script>
-<script src="gestion-logistica.js"></script>
+<script src="shared/app-shared.js?v=20260805"></script>
+<script src="gestion-logistica.js?v=20260805"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestión Logística tras un login/restauración de sesión

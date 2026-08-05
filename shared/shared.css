@@ -725,10 +725,14 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 :root{
   --gd-conf:#39E67A; --gd-cancel:#EF7C85; --gd-nov:#769DEE; --gd-carr:#B889ED;
   --gd-wpp:#E7843E;  --gd-tot:#E6B539;    --gd-obs:#8EA0B7;  --gd-cpa:#67E8F9;
+  /* Fondo de los contadores: blanco encima da 5.7:1, con margen sobre el
+     minimo. Con --accent a secas quedaba en 4.49, al filo. */
+  --badge-bg:#2E5FD0;
 }
 [data-theme="light"]{
   --gd-conf:#107F3A; --gd-cancel:#D91B2A; --gd-nov:#2A66E4; --gd-carr:#8F46E3;
   --gd-wpp:#AE5616;  --gd-tot:#8C6912;    --gd-obs:#5A708D;  --gd-cpa:#0E7490;
+  --badge-bg:#2456C4;
 }
 .gdx-wrap{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--bg-card);}
 /* .78rem y no .72: son cifras que se leen de un vistazo todo el día. */
