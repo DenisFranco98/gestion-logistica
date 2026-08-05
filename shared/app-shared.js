@@ -714,6 +714,58 @@ window._fusionarAnticipos = function(){
 //   _recontarNovedades()                    → simulación, no escribe nada
 //   _recontarNovedades({aplicar:true})      → aplica las correcciones
 //   _recontarNovedades({mes:'2026-08'})     → limita a un mes
+// Fusiona las evidencias que quedaron partidas en dos: hasta el 2026-08-05, una
+// gestion con foto Y texto se guardaba como DOS evidencias, y como la unidad que
+// suma es la evidencia, contaba 2 gestiones y pintaba 2 cuadros. Ya no pasa, pero
+// las anteriores siguen duplicadas.
+//
+// Se reconocen por como se creaban: misma novedad, una tipo img y otra txt, del
+// mismo asesor, mismo dia y mismo estado, con ts a menos de 5 segundos (se
+// escribian con Date.now() y Date.now()+1). Se conserva la de imagen y el texto
+// pasa a su campo `nota`; la de texto se borra.
+//
+// Ejecutar desde la consola como admin:
+//   _novFusionarEvidencias()                 -> simulacion, no escribe nada
+//   _novFusionarEvidencias({aplicar:true})   -> aplica
+window._novFusionarEvidencias = function(opts){
+  const aplicar=!!(opts||{}).aplicar;
+  console.log('%c[FUSIONAR evidencias]'+(aplicar?'':' (simulacion - no escribe)'),'font-weight:bold');
+  _db.ref('novedades').once('value').then(snap=>{
+    const todo=snap.val()||{};
+    const pares=[], updates={};
+    Object.entries(todo).forEach(([tienda,meses])=>{
+      Object.entries(meses||{}).forEach(([mes,novs])=>{
+        Object.entries(novs||{}).forEach(([novId,n])=>{
+          const sols=Object.entries((n&&n.soluciones)||{});
+          const imgs=sols.filter(([,x])=>x&&x.tipo==='img');
+          const txts=sols.filter(([,x])=>x&&x.tipo==='txt');
+          imgs.forEach(([ki,si])=>{
+            if(si.nota) return;                     // ya fusionada
+            const par=txts.find(([kt,st])=>
+              !updates['novedades/'+tienda+'/'+mes+'/'+novId+'/soluciones/'+kt] &&
+              st.estado===si.estado && st.dia===si.dia &&
+              (st.asesorUid||st.asesor)===(si.asesorUid||si.asesor) &&
+              Math.abs((st.ts||0)-(si.ts||0))<5000);
+            if(!par) return;
+            const [kt,st]=par;
+            const base='novedades/'+tienda+'/'+mes+'/'+novId+'/soluciones/';
+            updates[base+ki+'/nota']=st.val||'';
+            updates[base+kt]=null;
+            pares.push({tienda,mes,guia:(n.guia||''),dia:si.dia,asesor:si.asesor||'',texto:String(st.val||'').slice(0,42)});
+          });
+        });
+      });
+    });
+    if(!pares.length){ console.log('No hay evidencias partidas en dos. Nada que hacer.'); return; }
+    console.table(pares);
+    console.log(pares.length+' gestiones estaban contando doble.');
+    if(!aplicar){ console.log('%cSimulacion: no se escribio nada. Para aplicar: _novFusionarEvidencias({aplicar:true})','color:#b45309'); return; }
+    return _db.ref().update(updates).then(()=>{
+      console.log('%cListo: '+pares.length+' fusionadas. Corre _recontarNovedades({aplicar:true}) para bajar los contadores.','color:#15803d;font-weight:bold');
+    });
+  }).catch(e=>console.error('[FUSIONAR] fallo (¿sesion de admin?):',e));
+};
+
 window._recontarNovedades = function(opts){
   const o=opts||{}, aplicar=!!o.aplicar, mesFiltro=o.mes||null;
   console.log('%c[RECONTAR novedades] leyendo...'+(aplicar?'':' (simulación — no escribe)'),'font-weight:bold');

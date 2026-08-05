@@ -927,8 +927,13 @@ function _novSolsCell(id,n,sols){
     // El tercer caso solo aparece en soluciones guardadas antes de retirar el
     // estado "en gestión"; ya no se puede elegir al registrar.
     const label=s.estado==='solucionada'?'✅ Solucionada':s.estado==='devuelta'?'🔄 Devuelta':'📋 Pendiente';
-    const icono=s.tipo==='img'?'📷':'📝';
-    const resumen=s.tipo==='img'?'Imagen':String(s.val||'').slice(0,90);
+    // Una evidencia puede traer foto Y nota (van juntas desde el mismo guardado):
+    // se marca con el clip para que se note que hay más que la imagen.
+    const conNota=s.tipo==='img'&&!!(s.nota&&String(s.nota).trim());
+    const icono=s.tipo==='img'?(conNota?'📎':'📷'):'📝';
+    const resumen=s.tipo==='img'
+      ? (conNota?'Imagen + nota: '+String(s.nota).slice(0,80):'Imagen')
+      : String(s.val||'').slice(0,90);
     const titulo=esc(label+' · '+(s.fechaLabel||'')+(resumen?' — '+resumen:''));
     const abrir=s.tipo==='img'
       ? `_novVerImgSol('${id}',${i})`
@@ -1004,21 +1009,27 @@ function _novSolSrc(id,indice){
 async function _novVerImgSol(id, indice){
   const sols=_novGetSols(_novData[id]||{});
   const s=sols[indice]||{};
-  if(s._src) return _novVerImg(s._src);              // recién subida en esta sesión
-  if(s.val && String(s.val).startsWith('data:')) return _novVerImg(s.val);
+  if(s._src) return _novVerImg(s._src, s.nota);      // recién subida en esta sesión
+  if(s.val && String(s.val).startsWith('data:')) return _novVerImg(s.val, s.nota);
   if(!s.img || !s._key){ toast('Esta evidencia no tiene imagen'); return; }
   toast('Cargando imagen…',1500);
   const src=await _novImgSrc(s, _gdTK(), _gdMes, id, s._key);
   if(!src){ _mAlert('No se pudo abrir','La imagen de esta evidencia no está disponible.'); return; }
   s._src=src;
-  _novVerImg(src);
+  _novVerImg(src, s.nota);
 }
 
 function _novVerTexto(txt){
   const img=document.getElementById('nov-lb-img');
   const cont=document.getElementById('nov-lb-txt');
   if(img) img.style.display='none';
-  if(cont){ cont.textContent=txt||''; cont.style.display='block'; }
+  if(cont){
+    cont.textContent=txt||'';
+    cont.style.display='block';
+    // Se limpian los ajustes que pone _novVerImg cuando la evidencia trae nota:
+    // sin esto, un texto suelto abierto después quedaría recortado a 26vh.
+    cont.style.marginTop=''; cont.style.maxHeight=''; cont.style.overflowY='';
+  }
   document.getElementById('nov-lightbox').classList.add('open');
   const hint=document.getElementById('nov-lb-hint');
   if(hint) hint.style.display='none';
@@ -1192,16 +1203,30 @@ async function _novGuardar(){
     // gestión dejaría de atribuirse a la misma persona. El nombre se guarda
     // igual para poder mostrarlo sin tener que resolver el uid.
     const meta={asesor:gestorNom, asesorUid:_gdAK(), dia:fechaBase.getDate(), mes:solMes};
-    // Se miran los DOS campos: si cargó foto y además escribió la nota, quedan
-    // las dos evidencias. Antes solo se guardaba la del tipo seleccionado y la
-    // otra se perdía sin aviso.
+    // Foto y nota de la misma gestión van en UNA sola evidencia. Antes se
+    // guardaban como dos, y como la unidad que cuenta es la evidencia, adjuntar
+    // las dos cosas sumaba 2 gestiones al contador y pintaba 2 cuadros en la
+    // fila, como si fueran dos trabajos distintos sobre la misma novedad.
+    //   · foto (+ nota si la hay) → {tipo:'img', val:<imagen>, nota:'...'}
+    //   · solo nota              → {tipo:'txt', val:'...'}
+    // Las evidencias anteriores al cambio siguen leyéndose igual: una de tipo
+    // img o txt sin `nota` es exactamente lo que había.
     const solObjs=[];
     const fi=document.getElementById('nov-m-img');
-    if(fi && fi.files.length)
-      solObjs.push({estado:_novEstadoActivo,tipo:'img',val:await _novResizeImg(fi.files[0],800,.72),fechaLabel,ts:Date.now(),...meta});
-    const txt=(document.getElementById('nov-m-txt')||{}).value||'';
-    if(txt.trim())
-      solObjs.push({estado:_novEstadoActivo,tipo:'txt',val:txt.trim(),fechaLabel,ts:Date.now()+1,...meta});
+    const txt=((document.getElementById('nov-m-txt')||{}).value||'').trim();
+    const hayImg=!!(fi && fi.files.length);
+    if(hayImg||txt){
+      const sol={estado:_novEstadoActivo, fechaLabel, ts:Date.now(), ...meta};
+      if(hayImg){
+        sol.tipo='img';
+        sol.val=await _novResizeImg(fi.files[0],800,.72);
+        if(txt) sol.nota=txt;
+      } else {
+        sol.tipo='txt';
+        sol.val=txt;
+      }
+      solObjs.push(sol);
+    }
     // solObj: la primera, para el resto del flujo (mensajes y recálculo).
     const solObj=solObjs[0]||null;
     const _fmtFecha=v=>{if(!v)return'';const d=new Date(v+'T12:00:00');return isNaN(d)?v:d.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});};
@@ -1331,11 +1356,21 @@ async function _novSyncGD(dia, asesorKey){
 let _lbZoom=1,_lbX=0,_lbY=0,_lbDragging=false,_lbDragPrev={x:0,y:0};
 let _lbPinchStart=null,_lbZoomStart=1,_lbSetup=false;
 
-function _novVerImg(src){
+// nota: cuando la evidencia trae foto Y texto, se ven juntos -es una sola
+// gestion, no dos-. Sin nota, se comporta igual que siempre.
+function _novVerImg(src, nota){
   const img=document.getElementById('nov-lb-img');
   // El visor se comparte con las evidencias de texto: restaurar la imagen
   const cont=document.getElementById('nov-lb-txt');
-  if(cont) cont.style.display='none';
+  const hayNota=!!(nota&&String(nota).trim());
+  if(cont){
+    cont.textContent=hayNota?String(nota):'';
+    cont.style.display=hayNota?'block':'none';
+    // Debajo de la imagen y mas contenido que el visor de solo texto.
+    cont.style.marginTop=hayNota?'12px':'';
+    cont.style.maxHeight=hayNota?'26vh':'';
+    cont.style.overflowY=hayNota?'auto':'';
+  }
   img.style.display='';
   img.src=src; _lbZoom=1; _lbX=0; _lbY=0; _lbUpdate();
   document.getElementById('nov-lightbox').classList.add('open');
