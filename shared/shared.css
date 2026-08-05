@@ -907,7 +907,7 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 .conso-inp{width:60px;border:1px solid var(--border);border-radius:5px;padding:2px 5px;font-size:.72rem;font-weight:700;text-align:right;outline:none;background:var(--bg-hover);font-family:inherit;-moz-appearance:textfield;}
 /* Solo existe dentro de la captura: reemplaza al <input> por texto plano, que
    html2canvas sí sabe ubicar. Ver _consoCapturar. */
-.conso-inp-cap{display:inline-block;box-sizing:border-box;text-align:right;white-space:nowrap;overflow:hidden;vertical-align:middle;}
+
 .conso-inp::-webkit-inner-spin-button,.conso-inp::-webkit-outer-spin-button{-webkit-appearance:none;}
 .conso-inp:focus{border-color:#3b82f6;background:var(--bg-card);}
 /* Campo que no se escribe acá: se toma de la tabla de Gestión de ese día */
