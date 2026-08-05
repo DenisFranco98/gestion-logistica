@@ -64,7 +64,7 @@ window._sbEstadosToggle=function(){
     </div>
     <div class="adm-header-right">
       <div class="adm-live-badge"><span class="adm-live-dot"></span>EN VIVO</div>
-      <button id="btn-volver-roles-adm" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🎭 Cambiar perfil</button>
+      <button id="btn-volver-roles-adm" onclick="_volverSelectorRol()" class="mod-hdr-btn" style="display:none;padding:6px 14px;font-size:.72rem;font-weight:600;">🎭 Cambiar perfil</button>
       <button class="adm-logout" onclick="_admLogout()">Salir</button>
     </div>
   </div>
@@ -749,13 +749,13 @@ window._sbEstadosToggle=function(){
   <div class="cf-hdr">
     <div>
       <div style="font-size:.85rem;font-weight:900;letter-spacing:.5px;">💹 CONTROL FINANCIERO</div>
-      <div id="cf-hdr-sub" style="font-size:.58rem;opacity:.5;margin-top:1px;">Matrix ER · Dashboard · Órdenes</div>
+      <div id="cf-hdr-sub" class="mod-hdr-sub">Matrix ER · Dashboard · Órdenes</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <button onclick="_cfPrevMes()" style="background:rgba(255,255,255,.1);border:none;color:white;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.8rem;">&#8249;</button>
+      <button onclick="_cfPrevMes()" class="mod-hdr-btn" style="padding:5px 10px;font-size:.8rem;">&#8249;</button>
       <span id="cf-mes-lbl" style="font-size:.72rem;font-weight:700;min-width:80px;text-align:center;"></span>
-      <button onclick="_cfNextMes()" style="background:rgba(255,255,255,.1);border:none;color:white;padding:5px 10px;border-radius:7px;cursor:pointer;font-size:.8rem;">&#8250;</button>
-      <button onclick="_cfVolver()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.72rem;font-weight:700;">← Menú principal</button>
+      <button onclick="_cfNextMes()" class="mod-hdr-btn" style="padding:5px 10px;font-size:.8rem;">&#8250;</button>
+      <button onclick="_cfVolver()" class="mod-hdr-btn" style="padding:6px 14px;font-size:.72rem;font-weight:700;">← Menú principal</button>
     </div>
   </div>
   <!-- Cuerpo: sidebar de funciones + contenido (estructura Centro de Operaciones) -->
@@ -1096,7 +1096,7 @@ window._sbEstadosToggle=function(){
     <div class="adm-header-right">
       <button onclick="_superAdmCargar()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🔄 Actualizar</button>
       <button onclick="_migCargar()" style="background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:#fbbf24;padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🔀 Migrar usuarios</button>
-      <button id="btn-volver-roles-sa" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🎭 Cambiar perfil</button>
+      <button id="btn-volver-roles-sa" onclick="_volverSelectorRol()" class="mod-hdr-btn" style="display:none;padding:6px 14px;font-size:.72rem;font-weight:600;">🎭 Cambiar perfil</button>
       <button class="adm-logout" onclick="_superAdmLogout()">Cerrar sesión</button>
     </div>
   </div>

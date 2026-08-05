@@ -68,7 +68,7 @@ window._sbEstadosToggle=function(){
     </div>
     <div class="adm-header-right">
       <div class="adm-live-badge"><span class="adm-live-dot"></span>EN VIVO</div>
-      <button id="btn-volver-roles-adm" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🎭 Cambiar perfil</button>
+      <button id="btn-volver-roles-adm" onclick="_volverSelectorRol()" class="mod-hdr-btn" style="display:none;padding:6px 14px;font-size:.72rem;font-weight:600;">🎭 Cambiar perfil</button>
       <button class="adm-logout" onclick="_admLogout()">Salir</button>
     </div>
   </div>
@@ -828,23 +828,23 @@ window._sbEstadosToggle=function(){
 <!-- ===== GESTIONES DIARIAS ===== -->
 <div id="gd-panel">
   <!-- Header -->
-  <div style="background:#131920;color:white;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;flex-shrink:0;">
+  <div class="mod-hdr">
     <div style="min-width:0;">
       <div id="gd-title" style="font-size:.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">REMISIÓN MENSUAL</div>
-      <div style="font-size:.6rem;opacity:.45;margin-top:1px;">Confirmaciones + Novedades + Carritos + Ventas WPP</div>
+      <div class="mod-hdr-sub">Confirmaciones + Novedades + Carritos + Ventas WPP</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-      <button onclick="_gdPrevMes()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:white;width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:.85rem;">←</button>
+      <button onclick="_gdPrevMes()" class="mod-hdr-btn mod-hdr-nav">←</button>
       <span id="gd-mes-label" style="font-size:.78rem;font-weight:700;min-width:90px;text-align:center;">—</span>
-      <button onclick="_gdNextMes()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:white;width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:.85rem;">→</button>
+      <button onclick="_gdNextMes()" class="mod-hdr-btn mod-hdr-nav">→</button>
       <span id="gd-save-st" style="font-size:.62rem;opacity:.5;margin-left:4px;"></span>
-      <button onclick="_gdVolver()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.75);padding:5px 11px;border-radius:7px;font-size:.7rem;cursor:pointer;font-weight:600;margin-left:4px;">← Menú principal</button>
+      <button onclick="_gdVolver()" class="mod-hdr-btn mod-hdr-txt" style="margin-left:4px;">← Menú principal</button>
     </div>
   </div>
   <!-- Info strip -->
-  <div style="background:#0D1117;padding:5px 18px;display:flex;gap:18px;font-size:.67rem;color:rgba(255,255,255,.5);flex-shrink:0;">
-    <span>👤 <strong id="gd-nombre" style="color:rgba(255,255,255,.85);">—</strong></span>
-    <span>🏷️ <span id="gd-rol" style="color:rgba(255,255,255,.55);">ASESOR GENERAL</span></span>
+  <div class="mod-strip">
+    <span>👤 <strong id="gd-nombre">—</strong></span>
+    <span>🏷️ <span id="gd-rol">ASESOR GENERAL</span></span>
   </div>
   <!-- Cuerpo: sidebar de funciones + contenido (estructura Centro de Operaciones) -->
   <div class="panel-body">
@@ -1094,7 +1094,7 @@ window._sbEstadosToggle=function(){
     <div class="adm-header-right">
       <button onclick="_superAdmCargar()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🔄 Actualizar</button>
       <button onclick="_migCargar()" style="background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:#fbbf24;padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🔀 Migrar usuarios</button>
-      <button id="btn-volver-roles-sa" onclick="_volverSelectorRol()" style="display:none;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);padding:6px 14px;border-radius:7px;font-size:.72rem;font-weight:600;cursor:pointer;">🎭 Cambiar perfil</button>
+      <button id="btn-volver-roles-sa" onclick="_volverSelectorRol()" class="mod-hdr-btn" style="display:none;padding:6px 14px;font-size:.72rem;font-weight:600;">🎭 Cambiar perfil</button>
       <button class="adm-logout" onclick="_superAdmLogout()">Cerrar sesión</button>
     </div>
   </div>
