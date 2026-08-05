@@ -2921,7 +2921,13 @@ async function _novSyncSolucionadaGD(id, solucionada){
 
   if(solucionada){
     const today=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'});
-    const solObj={estado:'solucionada',tipo:'txt',val:'✅ Solucionada en Dropi',fechaLabel:today,ts:Date.now(),fromLogistica:true};
+    // Sin asesor propio, esta gestión se acreditaba a quien REGISTRÓ la novedad
+    // (por el nombre suelto, o sea el slug) y no a quien la marcó como resuelta.
+    // El día se mantiene en el de la novedad, que es el que reconta después
+    // _novRecontarDiaGD(diaReal).
+    const gestorNom=window.getLoginAsesor?window.getLoginAsesor():'';
+    const solObj={estado:'solucionada',tipo:'txt',val:'✅ Solucionada en Dropi',fechaLabel:today,ts:Date.now(),fromLogistica:true,
+      asesor:gestorNom, asesorUid:_gdAK(), dia:diaReal};
     await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').push(solObj);
     await _db.ref(novBasePath+'/'+gdNovKey).update({solucionadaDropi:true});
   } else {
@@ -3478,7 +3484,10 @@ async function _novMarcarDevueltaGD(id, razon){
         val: razon||'Producto devuelto',
         fechaLabel: hoy.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'}),
         ts: Date.now(), fromLogistica:true,
-        asesor: gestorNom, dia: diaGestion, mes: mesGestion
+        // asesorUid además del nombre: sin él esta gestión se acreditaba al slug
+        // del nombre y no al uid, así que la misma persona quedaba partida en
+        // dos carpetas de gestiones_diarias y salía dos veces en el consolidado.
+        asesor: gestorNom, asesorUid: _gdAK(), dia: diaGestion, mes: mesGestion
       });
     }
     // Una novedad devuelta ya no está solucionada en Dropi
@@ -3734,6 +3743,13 @@ async function _novEvGuardar(){
     const evFechaVal=document.getElementById('nov-ev-fecha')?.value;
     const evFechaBase=evFechaVal?new Date(evFechaVal+'T12:00:00'):new Date();
     const fechaLabel=evFechaBase.toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+    // Identidad de quien adjunta, igual que en Gestiones Diarias. Hoy esta
+    // evidencia nace con estado '' y por eso no suma como gestión, pero si
+    // después se le define resultado tiene que acreditarse a su uid y no al
+    // slug del nombre, que es lo que partía a una persona en dos carpetas.
+    const evMeta={asesor:window.getLoginAsesor?window.getLoginAsesor():'', asesorUid:_gdAK(),
+      dia:evFechaBase.getDate(),
+      mes:evFechaBase.getFullYear()+'-'+String(evFechaBase.getMonth()+1).padStart(2,'0')};
     let solObj=null;
     if(_novEvTipoActivo==='img'){
       const fi=document.getElementById('nov-ev-img');
@@ -3742,11 +3758,11 @@ async function _novEvGuardar(){
       let val;
       if(typeof _novResizeImg==='function'){val=await _novResizeImg(fi.files[0],800,.72);}
       else{val=await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(fi.files[0]);});}
-      solObj={estado,tipo:'img',val,fechaLabel,ts:Date.now()};
+      solObj={estado,tipo:'img',val,fechaLabel,ts:Date.now(),...evMeta};
     } else {
       const txt=document.getElementById('nov-ev-txt').value.trim();
       if(!txt){toast('⚠️ Escribe la evidencia');btn.textContent='Guardar';btn.disabled=false;return;}
-      solObj={estado,tipo:'txt',val:txt,fechaLabel,ts:Date.now()};
+      solObj={estado,tipo:'txt',val:txt,fechaLabel,ts:Date.now(),...evMeta};
     }
     await _novGDMigrarMes(); // el registro puede seguir bajo la clave vieja
     const base=_novGDBasePath();

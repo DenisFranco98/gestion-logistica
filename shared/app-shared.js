@@ -6264,6 +6264,23 @@ function _gdadmActualizarLabel(){
   } else lbl.textContent=n+' tiendas seleccionadas';
 }
 
+// Vuelca los días de una carpeta de asesor sobre otra, sumando los contadores.
+// `dias` llega como array cuando las claves son 1..N seguidas y como objeto
+// cuando hay huecos: Object.entries recorre bien las dos formas, y el resto del
+// módulo lee dias[d] igual en un caso y en el otro.
+function _gdadmSumarDias(destino, origen){
+  Object.entries(origen||{}).forEach(([dia,val])=>{
+    if(!val||typeof val!=='object') return;
+    if(!destino[dia]) destino[dia]={};
+    Object.entries(val).forEach(([campo,n])=>{
+      // Los números se suman; lo demás (observaciones, notas) no se puede
+      // sumar, así que se conserva lo primero que haya en vez de pisarlo.
+      if(typeof n==='number') destino[dia][campo]=(destino[dia][campo]||0)+n;
+      else if(destino[dia][campo]===undefined) destino[dia][campo]=n;
+    });
+  });
+}
+
 function _gdadmCargar(){
   const mes=document.getElementById('gdadm-mes').value;
   const tiendas=_gdadmTiendasDisponibles.filter(t=>_gdadmTiendasSel.has(t.key));
@@ -6285,13 +6302,37 @@ function _gdadmCargar(){
     results.forEach(({tienda,snap})=>{
       if(!snap.exists()) return;
       const raw=snap.val()||{};
-      Object.entries(raw).forEach(([aKey,aVal])=>{
-        if(!aVal||!aVal.dias) return;
+      // Del mes solo son personas las carpetas de asesor: 'consolidado' y
+      // 'notasHist' cuelgan del mismo nodo pero son de la tienda entera.
+      const carpetas=Object.entries(raw).filter(([k,v])=>v&&v.dias&&!_GD_NO_ASESOR.has(k));
+      // Una misma persona puede tener DOS carpetas en la tienda: la nueva por
+      // uid y la vieja por slug del nombre. Salían como dos asesores con
+      // gestiones distintas —DALILA con 89 y con 43 el mismo día en Paquetin—
+      // porque cada vía acredita en una: las evidencias con asesorUid van a la
+      // del uid y las que solo traían el nombre (extensión y Gestor Logístico,
+      // hasta que se les agregó el uid) caían a la del slug. Acá se suman en la
+      // del uid. Sin esto, arreglar el origen no repara lo ya guardado.
+      const nombreDe=e=>String(e[1]._nombre||e[0]).trim();
+      // Es carpeta vieja si su clave ES el slug de su propio nombre; la del uid
+      // nunca coincide consigo misma porque el uid no se deriva del nombre.
+      const esSlug=e=>_gdKey(nombreDe(e))===e[0];
+      const destinoDe={};
+      carpetas.forEach(e=>{ if(!esSlug(e)) destinoDe[_gdKey(nombreDe(e))]=e[0]; });
+      const acum={};
+      carpetas.forEach(e=>{
+        const [aKey,aVal]=e;
+        const destino=(esSlug(e)&&destinoDe[aKey])||aKey;
+        if(!acum[destino]) acum[destino]={nombre:'',dias:{}};
+        // El nombre lo pone la carpeta destino; la vieja solo sirve de respaldo.
+        if(destino===aKey||!acum[destino].nombre) acum[destino].nombre=nombreDe(e).toUpperCase();
+        _gdadmSumarDias(acum[destino].dias, aVal.dias);
+      });
+      Object.entries(acum).forEach(([aKey,v])=>{
         _gdadmAsesores.push({
           key:tienda.key+'/'+aKey,
-          nombre:(aVal._nombre||aKey).toUpperCase(),
+          nombre:v.nombre||aKey.toUpperCase(),
           tienda:tienda.nombre,
-          dias:aVal.dias||{}
+          dias:v.dias
         });
       });
     });
@@ -6396,8 +6437,14 @@ function _gdadmRenderRanking(){
   const sinRegistro=[];
   const visibles=!_gdadmDiaSel ? _gdadmAsesores : _gdadmAsesores.filter(a=>{
     if((a.dias||{})[_gdadmDiaSel]) return true;
-    sinRegistro.push(a.nombre); return false;
+    sinRegistro.push(a); return false;
   });
+  // Una persona puede tener cuenta en varias tiendas y ahí no hay nada que
+  // fusionar —son equipos distintos—, pero el nombre repetido a secas se lee
+  // como un error ("YISETH · YISETH"). Se aclara la tienda solo a los repetidos.
+  const vecesSinReg={};
+  sinRegistro.forEach(a=>{ vecesSinReg[a.nombre]=(vecesSinReg[a.nombre]||0)+1; });
+  const sinRegistroLbl=sinRegistro.map(a=>vecesSinReg[a.nombre]>1?a.nombre+' ('+a.tienda+')':a.nombre);
   visibles.forEach((a,i)=>{
     const t=_gdadmDayTotals(a.dias);
     // La columna NOVEDADES muestra solucionadas + devueltas, y CARRITOS
@@ -6423,7 +6470,7 @@ function _gdadmRenderRanking(){
     </tr>`;
   });
   el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">EQUIPO · RANKING · BONIFICACIONES · ${_gdadmPeriodoLbl()}</div>
-  ${sinRegistro.length?`<div style="font-size:.68rem;color:var(--text-3);margin-bottom:8px;">Sin registro ese día (${sinRegistro.length}): ${esc(sinRegistro.join(' · '))}</div>`:''}
+  ${sinRegistro.length?`<div style="font-size:.68rem;color:var(--text-3);margin-bottom:8px;">Sin registro ese día (${sinRegistro.length}): ${esc(sinRegistroLbl.join(' · '))}</div>`:''}
   <div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr>
       <th>#</th><th>NOMBRE</th><th>TIENDA</th><th>TOTAL GEST.</th>

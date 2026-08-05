@@ -617,6 +617,11 @@
       const fSol = solFecha.value ? new Date(solFecha.value + 'T12:00:00') : new Date();
       const solMeta = {
         asesor: asesorNombre,
+        // El uid es la identidad que cuenta: sin él, la gestión se acredita al
+        // slug del nombre y la misma persona termina con DOS carpetas en
+        // gestiones_diarias —la del uid y la del nombre—, apareciendo dos veces
+        // en el consolidado del admin con las gestiones repartidas entre ambas.
+        asesorUid: auth.uid,
         dia: fSol.getDate(),
         mes: fSol.getFullYear() + '-' + String(fSol.getMonth() + 1).padStart(2, '0')
       };
