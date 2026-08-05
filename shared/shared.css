@@ -161,9 +161,9 @@ body.data-loaded #sidebar-actions{display:flex;}
 .progress-bar{height:6px;background:var(--bg-inset);border-radius:4px;overflow:hidden;}
 .progress-fill{height:100%;background:linear-gradient(90deg,#3971E6,#5688FF);border-radius:4px;transition:width .4s;}
 .topbar-actions{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap;}
-.btn-topbar{display:flex;align-items:center;gap:7px;background:var(--header-btn-bg);color:var(--header-strong);border:1px solid rgba(255,255,255,.1);padding:9px 12px;border-radius:9px;font-size:.76rem;font-weight:600;cursor:pointer;white-space:nowrap;line-height:1;width:100%;text-align:left;transition:all .15s;}
-.btn-topbar:hover{background:rgba(57,113,230,.22);border-color:rgba(57,113,230,.4);color:white;}
-.btn-topbar.bt-dark{background:rgba(57,113,230,.25);border-color:rgba(57,113,230,.35);}
+.btn-topbar{display:flex;align-items:center;gap:7px;background:var(--header-btn-bg);color:var(--header-strong);border:1px solid var(--header-btn-bd);padding:9px 12px;border-radius:9px;font-size:.76rem;font-weight:600;cursor:pointer;white-space:nowrap;line-height:1;width:100%;text-align:left;transition:all .15s;}
+.btn-topbar:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--header-text);}
+.btn-topbar.bt-dark{background:var(--accent-soft);border-color:var(--accent);}
 .btn-topbar.bt-light{background:transparent;color:var(--header-muted);border:1px dashed var(--header-btn-bd);}
 .btn-topbar.bt-light:hover{color:var(--header-text);border-color:var(--header-btn-bd);background:var(--header-hover);}
 .btn-export{display:inline-flex;align-items:center;gap:5px;background:#1A2230;color:white;border:none;padding:6px 13px;border-radius:7px;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;}
@@ -287,7 +287,7 @@ body.card-gestionando #card-float-wrap .card{opacity:1;filter:none;}
 /* Vista toggle */
 .vista-toggle{display:flex;gap:2px;background:rgba(0,0,0,.25);padding:3px;border-radius:9px;border:1px solid rgba(255,255,255,.08);}
 .btn-vista{background:none;border:none;padding:5px 10px;border-radius:6px;font-size:.74rem;cursor:pointer;color:var(--text-2);transition:all .15s;flex:1;}
-.btn-vista.activo{background:rgba(57,113,230,.3);color:white;font-weight:700;}
+.btn-vista.activo{background:var(--accent-soft);color:var(--header-text);font-weight:700;}
 .card{background:var(--bg-card);border-radius:var(--radius-md);padding:15px;border:1px solid var(--border);border-left:5px solid;box-shadow:var(--shadow-sm);transition:all .2s cubic-bezier(.2,.8,.25,1);}
 .card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);border-color:var(--border-strong);}
 #card-float-wrap .card{margin:0;transform:none!important;}
@@ -865,7 +865,7 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 #gd-tabbar{display:flex;flex-direction:column;gap:3px;width:190px;flex-shrink:0;background:var(--header-bg);border-right:1px solid var(--border);padding:14px 8px;overflow-y:auto;}
 .gd-tab-btn{border:none;background:none;padding:10px 12px;font-size:.76rem;font-weight:600;color:var(--header-muted);cursor:pointer;border-left:2px solid transparent;border-radius:9px;transition:all .15s;font-family:inherit;text-align:left;width:100%;}
 .gd-tab-btn:hover{background:var(--header-hover);color:var(--header-strong);}
-.gd-tab-btn.active{background:rgba(57,113,230,.16);color:white;border-left-color:#3971E6;}
+.gd-tab-btn.active{background:var(--accent-soft);color:var(--header-active);border-left-color:var(--accent);}
 /* ── CONSOLIDADO ──────────────────────── */
 #gd-tab-consolidado{display:none;flex:1;overflow:auto;padding:12px 14px 40px;}
 /* Cada corte (8 AM / 12 PM / 5 PM) es su propio bloque para poder capturarlo
