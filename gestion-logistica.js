@@ -1720,9 +1720,16 @@ function renderCards(){
     const gr=pedidos.filter(p=>p.estadoKey===est.key&&(filtroTiendas.length===0||filtroTiendas.includes(p.tienda)));if(!gr.length)return;
     const subFiltro=filtrosSeccion[est.key]||[];
     const grFiltrado=subFiltro.length>0?gr.filter(p=>subFiltro.includes(p.estadoRaw)):gr;
-    const pendientes=grFiltrado.filter(p=>!estaCompleta(p));
+    // Guía generada: solo las que llevan MÁS DE UN DÍA desde que se generó.
+    // Las de hoy y las de ayer todavía no son gestionables —la transportadora
+    // aún puede estar recogiendo— y llenaban la sección de cards sin acción.
+    // `dias` se cuenta desde la fecha de guía generada del Excel.
+    const grPorDias=(est.key==='reparto')
+      ? grFiltrado.filter(p=>(p.dias||0)>=2)
+      : grFiltrado;
+    const pendientes=grPorDias.filter(p=>!estaCompleta(p));
     pendientes.sort((a,b)=>urgenciaScore(b)-urgenciaScore(a));
-    const gestionados=grFiltrado.filter(p=>estaCompleta(p));
+    const gestionados=grPorDias.filter(p=>estaCompleta(p));
     const sec=document.createElement('div');sec.className='status-section';
     const hdr=document.createElement('div');hdr.className='section-header';hdr.style.borderColor=est.color;
     hdr.innerHTML='<span style="font-size:1.2rem">'+est.icon+'</span>'+
@@ -1916,14 +1923,64 @@ function renderCards(){
         sec.appendChild(barML);sec.appendChild(listML);
       }
     } else if(est.key==='transito'){
-      // Mostrar todos los activos juntos (incluidos los que tienen novedad en tránsito)
+      // Dos columnas fijas en vez de agrupar por días: "para recomendar" y
+      // "para reportar". El grupo lo decide el ESTADO que trae Dropi, con la
+      // misma regla que la vista de Seguimiento a transportadoras
+      // (_transpGrupoDe), para que las dos vistas no se contradigan.
+      // Dentro de cada columna se ordena por días sin movimiento, del más
+      // estancado al menos: lo que más tiempo lleva quieto va primero.
       const conAccAll=pendientes.filter(p=>!sinAccion(p));
       const pFondo=conAccAll.filter(p=>gestiones[p.id]?.mensajes_listos);
       const conAcc=conAccAll.filter(p=>!gestiones[p.id]?.mensajes_listos);
+      const diasQuieto=p=>(p.diasSinMov!=null)?p.diasSinMov:(p.dias||0);
+      const cols={recomendar:[], reportar:[], sinGrupo:[]};
+      conAcc.forEach(p=>{ const gr=_transpGrupoDe(p); (cols[gr||'sinGrupo']).push(p); });
+      ['recomendar','reportar','sinGrupo'].forEach(k=>
+        cols[k].sort((a,b)=>diasQuieto(b)-diasQuieto(a)));
+
       if(conAcc.length){
-        const grid=_mkGrid();
-        conAcc.forEach(p=>grid.appendChild(_mkCardEl(p,est,false)));
-        sec.appendChild(grid);
+        // Se reusan las clases de la vista por columnas (.cards-cols/.day-col),
+        // que ya están resueltas para scroll y para los dos temas.
+        const wrap=document.createElement('div');
+        wrap.className='cards-cols';
+        ['recomendar','reportar'].forEach(k=>{
+          const meta=TRANSP_GRUPOS[k];
+          const col=document.createElement('div');
+          col.className='day-col';
+          const h=document.createElement('div');
+          h.className='day-col-hdr';
+          // El color va por variable de tema, no por el de TRANSP_GRUPOS: esos
+          // (#0e7490 y #b91c1c) están pensados para el fondo claro de la vista
+          // de Seguimiento y sobre el fondo oscuro del kanban quedaban en
+          // 2,97:1, por debajo del mínimo legible. Medido en los dos temas.
+          const cvar = k==='reportar' ? 'var(--danger-strong)' : 'var(--info-strong)';
+          h.style.color=cvar;
+          h.innerHTML='<span>'+meta.icon+' '+esc(meta.label)+'</span>'+
+                      '<span class="day-col-count" style="background:'+meta.border+'22;color:'+cvar+'">'+cols[k].length+'</span>';
+          const body=document.createElement('div');
+          body.className='day-col-body';
+          if(!cols[k].length){
+            const em=document.createElement('div');
+            em.className='empty-s'; em.style.margin='0';
+            em.textContent='Sin guías en este grupo';
+            body.appendChild(em);
+          } else cols[k].forEach(p=>body.appendChild(_mkCardEl(p,est,false)));
+          col.appendChild(h); col.appendChild(body);
+          wrap.appendChild(col);
+        });
+        sec.appendChild(wrap);
+        // Los estados que no caen en ninguno de los dos grupos no se pierden:
+        // se listan aparte para que alguien decida si hay que clasificarlos.
+        if(cols.sinGrupo.length){
+          const bar=document.createElement('div');bar.className='gest-bar';
+          bar.innerHTML='<span>❔ '+cols.sinGrupo.length+' sin clasificar (estado no está en recomendar ni reportar)</span><span class="ver">ver ›</span>';
+          const list=document.createElement('div');list.className='gest-list';
+          const g2=_mkGrid();
+          cols.sinGrupo.forEach(p=>g2.appendChild(_mkCardEl(p,est,false)));
+          list.appendChild(g2);
+          bar.onclick=()=>{list.classList.toggle('open');bar.querySelector('.ver').textContent=list.classList.contains('open')?'ocultar ‹':'ver ›';};
+          sec.appendChild(bar);sec.appendChild(list);
+        }
       }
       if(false){
         const lbl=document.createElement('div');
@@ -2004,7 +2061,11 @@ function crearCard(p,est,esGest){
   const editando=_editandoGestion.has(p.id);
   const ncPend=!esGest&&g.llamada==='no_contestó'&&!g.gestion_final;
   const card=document.createElement('div');
-  card.className='card'+((esGest&&!editando)?' gest':ncPend?' nc-pend':'');
+  // Las de tránsito quedaron con dos botones y nada más, así que la altura fija
+  // de 295px del kanban les dejaba media card vacía. Con esta clase crecen solo
+  // lo que ocupan.
+  card.className='card'+((esGest&&!editando)?' gest':ncPend?' nc-pend':'')+
+                 (est.key==='transito'?' card-corta':'');
   card.dataset.dias=_diasCard(p);
   const tiendaColor=p.tienda?getTiendaColor(p.tienda):null;
   card.style.borderLeftColor=(esGest&&!editando)?'var(--text-3)':est.color;
@@ -2241,26 +2302,22 @@ function crearCard(p,est,esGest){
       btnExp.onclick=exportarPendientes;
       sec.appendChild(btnExp);
     } else if(est.key==='transito'){
-      // Mismo patrón de Oficina: 1) cómo fue el contacto (dropdown)  2) nota  3) resultado (dropdown)
-      const wi=getWAInfo(p,est.key);
-      const contactoActualTr=g.contacto_metodo||(g.chatepro?'chatepro':g.wa_enviado?'whatsapp':'');
-      const resultadoActualTr=g.transito_gestionado?'gestionado':(g.devolucion?'devolver':g.mensajes_listos?'fondo':'');
-      const contactoOptsTr=[{value:'',label:'— Selecciona —'},{value:'llamada',label:'📞 Llamada'},{value:'chatepro',label:'💬 ChateaPro'},{value:'whatsapp',label:'📲 WhatsApp'}];
-      const resultadoOptsTr=[
-        {value:'',label:'— Selecciona —'},
-        {value:'gestionado',label:'✅ Gestionado en CAS'},
-        {value:'fondo',label:'⏬ Pasar al fondo'},
-        {value:'devolver',label:'🔄 Devolución'}
-      ];
-
-      html+='<div style="font-size:.68rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">📋 ¿Cómo fue el contacto?</div>';
-      html+=_fselHtml('tr-contacto-'+p.id,contactoOptsTr,contactoActualTr,'_trSetContacto('+p.id+',this.value)');
-      html+='<div style="margin-top:6px;">'+waBoton(p,est.key,wi,g.wa_enviado)+'</div>';
-
-      html+='<div class="notas-wrap" style="margin-top:12px;">'+notaInputRowHtml(p.id)+'</div>';
-
-      html+='<div style="font-size:.68rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px;">➡️ Resultado de la gestión</div>';
-      html+=_fselHtml('tr-resultado-'+p.id,resultadoOptsTr,resultadoActualTr,'_trSetResultado('+p.id+',this.value)');
+      // Estos pedidos NO se gestionan hablando con el cliente: se reportan en
+      // el CAS, que es otra plataforma. Por eso la card queda con dos botones y
+      // nada más — antes tenía desplegable de contacto, botón de WhatsApp, nota
+      // y desplegable de resultado, todo para un flujo que acá no aplica.
+      // "Gestionado" marca transito_gestionado, que es lo que ya cuenta como
+      // gestión del día (ver estaCompleta).
+      const casIdTr='cas-tr-'+p.id;
+      html+='<div style="display:flex;flex-direction:column;gap:8px;">'+
+        '<button class="btn-cas" id="'+casIdTr+'" style="margin:0;" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
+        // Verde sólido con texto blanco: sobre --success-soft el texto quedaba
+        // en 4,3:1 en tema claro. Este #15803D es el mismo tono ya validado
+        // para los estados de Anticipos.
+        '<button id="btn-trg-'+p.id+'" onclick="marcarTransitoGestionado('+p.id+',this)" '+
+          'style="width:100%;padding:10px 6px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;'+
+          'background:#15803D;color:#fff;cursor:pointer;font-family:inherit;">✅ Gestionado</button>'+
+      '</div>';
     } else if(est.key==='rechazado'){
       html+=notaWidgetHtml(p.id);
       html+='<div style="display:flex;gap:8px;margin-top:8px;">'+

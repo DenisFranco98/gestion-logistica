@@ -205,6 +205,9 @@ body.data-loaded #sidebar-actions{display:flex;}
 .day-col-body{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;flex:1;padding-right:3px;}
 /* ── Cards de tamaño uniforme (vista cuadros) ── */
 .cards-cols .card,.cards-grid .card{height:295px;position:relative;overflow:hidden;padding-bottom:46px;flex-shrink:0;}
+/* Transito: la card solo lleva los dos botones del flujo CAS, asi que no se
+   fuerza la altura del kanban - si no, queda media card en blanco. */
+.cards-cols .card.card-corta,.cards-grid .card.card-corta{height:auto;padding-bottom:12px;}
 .cards-cols .card .card-expand-hint,.cards-grid .card .card-expand-hint{position:absolute;left:12px;right:12px;bottom:10px;margin-top:0;background:var(--bg-elevated);}
 /* Líneas largas: una sola línea con elipsis para mantener la altura */
 .cards-cols .card .card-name,.cards-grid .card .card-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
@@ -531,7 +534,7 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 .btn-transp-topbar:hover{opacity:.9;}
 .transp-badge-count{background:var(--bg-card);color:var(--gd-cpa);border-radius:10px;padding:0 5px;font-size:.68rem;font-weight:800;}
 .nov-parada-badge{display:inline-flex;align-items:center;gap:5px;font-size:.71rem;font-weight:800;padding:4px 10px;border-radius:8px;margin-top:6px;background:var(--danger-soft);color:var(--danger-strong);border:1.5px solid #fca5a5;animation:pulse 1.4s infinite;}
-.btn-cas{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:7px 10px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,181,57,.35);color:var(--warning);background:transparent;cursor:pointer;margin-top:6px;transition:all .15s;}
+.btn-cas{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:7px 10px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,181,57,.35);color:var(--warning-strong);background:transparent;cursor:pointer;margin-top:6px;transition:all .15s;}
 .btn-cas:hover{background:var(--warning-soft);border-color:#d97706;}
 .cas-preview{font-size:.69rem;color:var(--text-2);background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;padding:5px 8px;margin-top:4px;line-height:1.5;white-space:pre-wrap;display:none;}
 .cas-preview.show{display:block;}
