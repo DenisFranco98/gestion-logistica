@@ -1004,10 +1004,16 @@ window._unificarCarpetasAsesor = async function(opts){
 window._auditarClavesPorNombre = async function(){
   console.log('%c[AUDITAR claves] solo lectura','font-weight:bold');
   try{
-    const [uSnap,eSnap]=await Promise.all([
-      _db.ref('users').once('value'), _db.ref('empresas').once('value')]);
-    const users=uSnap.val()||{}, empresas=eSnap.val()||{};
-    const quien=u=>((users[u]||{}).asesor)||((users[u]||{}).email)||u;
+    // /admins además de /users: un administrador NO está en /users, así que
+    // comparando solo contra ahí sus nodos salían como "desconocidos" — y son
+    // cuentas activas. tY0ZAbs… es admin de 13 tiendas y figuraba para borrar.
+    const [uSnap,eSnap,aSnap]=await Promise.all([
+      _db.ref('users').once('value'), _db.ref('empresas').once('value'),
+      _db.ref('admins').once('value')]);
+    const users=uSnap.val()||{}, empresas=eSnap.val()||{}, admins=aSnap.val()||{};
+    const esPersonaConocida=k=>!!users[k]||!!admins[k];
+    const quien=u=>((users[u]||{}).asesor)||((users[u]||{}).email)||
+                   ((admins[u]||{}).username)||((admins[u]||{}).email)||u;
     const slugAsesor={}, slugEmpresa={};
     Object.entries(users).forEach(([uid,u])=>{ const s=_gdKey((u||{}).asesor||'');
       if(s&&s!=='_') (slugAsesor[s]=slugAsesor[s]||[]).push(uid); });
@@ -1039,7 +1045,7 @@ window._auditarClavesPorNombre = async function(){
       if(ks===null){ filas.push({nodo,clave:'(sin acceso)',tipo:'?',dato:''}); continue; }
       let ok=0;
       ks.forEach(k=>{
-        if(esPersona ? !!users[k] : !!empresas[k]){ ok++; return; }
+        if(esPersona ? esPersonaConocida(k) : !!empresas[k]){ ok++; return; }
         const dueños=esPersona?slugAsesor[k]:slugEmpresa[k];
         filas.push({nodo, clave:k,
           tipo: dueños ? (esPersona?'NOMBRE de asesor':'NOMBRE de tienda') : 'desconocida',
@@ -1222,9 +1228,13 @@ function _invMedir(v){
 window._inventarioClavesViejas = async function(){
   console.log('%c[INVENTARIO claves viejas] solo lectura','font-weight:bold');
   try{
-    const [uSnap,eSnap]=await Promise.all([
-      _db.ref('users').once('value'), _db.ref('empresas').once('value')]);
-    const users=uSnap.val()||{}, empresas=eSnap.val()||{};
+    // /admins además de /users, por lo mismo que en _auditarClavesPorNombre:
+    // un admin no está en /users y sus nodos aparecían como candidatos a borrar.
+    const [uSnap,eSnap,aSnap]=await Promise.all([
+      _db.ref('users').once('value'), _db.ref('empresas').once('value'),
+      _db.ref('admins').once('value')]);
+    const users=uSnap.val()||{}, empresas=eSnap.val()||{}, admins=aSnap.val()||{};
+    const esPersonaConocida=k=>!!users[k]||!!admins[k];
     const PERSONA=['admins','user_tiendas','admin_empresas','presence',
                    'session_hist','session_reports','historial_diario'];
     const TIENDA=['gestiones_diarias','novedades','anticipos','ro','control_financiero',
@@ -1247,7 +1257,7 @@ window._inventarioClavesViejas = async function(){
       const ks=await claves(nodo);
       if(!ks) continue;
       for(const k of ks){
-        if(esPersona ? !!users[k] : !!empresas[k]) continue;   // clave correcta
+        if(esPersona ? esPersonaConocida(k) : !!empresas[k]) continue;   // clave correcta
         // nov_img son imágenes: se cuenta por shallow, nunca se baja.
         let val=null, hijos=0, medida={hojas:0,desde:null,hasta:null};
         if(nodo==='nov_img'){ hijos=((await claves(nodo+'/'+k))||[]).length; }
