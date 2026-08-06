@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260806h">
+<link rel="stylesheet" href="shared/shared.css?v=20260806i">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1057,13 +1057,6 @@ window._sbEstadosToggle=function(){
           <button class="nov-tipo-btn" id="nov-estado-dev" onclick="_novSetEstado('devuelta')">📦 Producto devuelto</button>
         </div>
       </div>
-      <!-- Tipo evidencia: solo visible si es solucionada -->
-      <div id="nov-tipo-wrap">
-        <div class="nov-tipo-row">
-          <button class="nov-tipo-btn active" id="nov-tipo-img" onclick="_novSetTipo('img')">📷 Imagen de evidencia</button>
-          <button class="nov-tipo-btn" id="nov-tipo-txt" onclick="_novSetTipo('txt')">✍️ Texto descriptivo</button>
-        </div>
-      </div>
       <div id="nov-m-img-wrap"><div style="font-size:.66rem;font-weight:700;color:var(--text-2);margin-bottom:4px;">📷 Imagen (opcional)</div>
         <input type="file" id="nov-m-img" accept="image/*" class="nov-form-input" style="padding:7px;font-size:.75rem;">
         <div style="font-size:.62rem;color:var(--text-3);margin-top:5px;">Se comprimirá automáticamente · Tamaño máximo recomendado: 5 MB</div>
@@ -1378,8 +1371,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260806h"></script>
-<script src="gestiones-diarias.js?v=20260806h"></script>
+<script src="shared/app-shared.js?v=20260806i"></script>
+<script src="gestiones-diarias.js?v=20260806i"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

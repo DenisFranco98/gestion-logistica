@@ -803,7 +803,7 @@ function _consoGuardar(){
 }
 
 // ── NOVEDADES ───────────────────────────────────────────────────────────
-let _novData={}, _novModalState={mode:'new',id:null,solNum:1}, _novTipoActivo='img', _novEstadoActivo='solucionada';
+let _novData={}, _novModalState={mode:'new',id:null,solNum:1}, _novEstadoActivo='solucionada';
 
 function _novBase(tk){ return 'novedades/'+(tk||_gdTK())+'/'+_gdMes; }
 function _novBasePath(){ return _novBase(); }
@@ -1172,17 +1172,11 @@ function _novSetEstado(estado){
 }
 
 // Los dos campos quedan siempre a la vista: se puede adjuntar la foto, escribir
-// la nota, o las dos cosas. El selector de tipo se retiró — obligaba a elegir
-// uno y hacía perder el otro.
-function _novSetTipo(tipo){
-  _novTipoActivo=tipo||'ambos';
-  const wImg=document.getElementById('nov-m-img-wrap');
-  const wTxt=document.getElementById('nov-m-txt-wrap');
-  if(wImg) wImg.style.display='block';
-  if(wTxt) wTxt.style.display='block';
-  const tw=document.getElementById('nov-tipo-wrap');
-  if(tw) tw.style.display='none';
-}
+// la nota, o las dos cosas. El selector "Imagen de evidencia / Texto
+// descriptivo" se eliminó (código y HTML): desde que imagen y texto son UNA
+// sola evidencia no tenía nada que decidir, pero seguía en pantalla y parecía
+// un segundo lugar para subir la foto. Su función solo mostraba los dos campos
+// —que ya estaban visibles— y se ocultaba a sí misma al primer clic.
 
 async function _novGuardar(){
   const btn=document.getElementById('nov-m-save-btn');
