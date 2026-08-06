@@ -1187,6 +1187,115 @@ window._moverGestionesSync = async function(opts){
   }catch(e){ console.error('[MOVER gestiones_sync] falló (¿sesión de admin?):',e); }
 };
 
+// Mide un nodo sin saber su forma: cuántas hojas tiene y entre qué fechas va.
+// Las fechas salen de dos lados, porque conviven los dos formatos: números que
+// parecen timestamps en ms, y claves con forma AAAA-MM-DD (historial_diario).
+function _invMedir(v){
+  let hojas=0, min=Infinity, max=0;
+  const FECHA=/^\d{4}-\d{2}-\d{2}$/;
+  (function rec(x){
+    if(x===null||x===undefined) return;
+    if(typeof x!=='object'){
+      hojas++;
+      if(typeof x==='number'&&x>1.4e12&&x<2.2e12){ min=Math.min(min,x); max=Math.max(max,x); }
+      return;
+    }
+    Object.entries(x).forEach(([k,val])=>{
+      if(FECHA.test(k)){ const t=Date.parse(k+'T12:00:00');
+        if(t){ min=Math.min(min,t); max=Math.max(max,t); } }
+      rec(val);
+    });
+  })(v);
+  return {hojas, desde:min===Infinity?null:min, hasta:max||null};
+}
+
+// Inventario de TODO lo que quedó guardado bajo una clave que no es uid ni
+// empresaId, para poder decidir qué se borra con el dato a la vista y no a
+// ciegas. Solo lee, y descarga un respaldo con el contenido completo.
+//
+// Existe por un motivo concreto: en la auditoría, la clave
+// oB2NSeO2P4bbTT7GSOLHSuVIFw63 figuraba como "desconocida" y resultó tener 180
+// gestiones reales de TATIANA con sus notas. Una clave rara no es basura hasta
+// que se mira qué hay adentro.
+//
+// Ejecutar desde la consola como admin:  _inventarioClavesViejas()
+window._inventarioClavesViejas = async function(){
+  console.log('%c[INVENTARIO claves viejas] solo lectura','font-weight:bold');
+  try{
+    const [uSnap,eSnap]=await Promise.all([
+      _db.ref('users').once('value'), _db.ref('empresas').once('value')]);
+    const users=uSnap.val()||{}, empresas=eSnap.val()||{};
+    const PERSONA=['admins','user_tiendas','admin_empresas','presence',
+                   'session_hist','session_reports','historial_diario'];
+    const TIENDA=['gestiones_diarias','novedades','anticipos','ro','control_financiero',
+                  'gestiones_sync','nov_img','logistica_guias','empresa_asesores'];
+    const dbURL=((_db.app||{}).options||{}).databaseURL||'';
+    let token=null;
+    try{ const cu=firebase.auth().currentUser; if(cu) token=await cu.getIdToken(); }catch(e){}
+    const claves=async path=>{
+      try{
+        const r=await fetch(dbURL+'/'+path+'.json?shallow=true'+(token?'&auth='+token:''));
+        if(!r.ok) return null;
+        const j=await r.json();
+        return (j&&typeof j==='object')?Object.keys(j):[];
+      }catch(e){ return null; }
+    };
+
+    const filas=[], respaldo={ts:Date.now(), fecha:new Date().toString(), nodos:{}};
+    for(const nodo of PERSONA.concat(TIENDA)){
+      const esPersona=PERSONA.indexOf(nodo)>=0;
+      const ks=await claves(nodo);
+      if(!ks) continue;
+      for(const k of ks){
+        if(esPersona ? !!users[k] : !!empresas[k]) continue;   // clave correcta
+        // nov_img son imágenes: se cuenta por shallow, nunca se baja.
+        let val=null, hijos=0, medida={hojas:0,desde:null,hasta:null};
+        if(nodo==='nov_img'){ hijos=((await claves(nodo+'/'+k))||[]).length; }
+        else{
+          val=(await _db.ref(nodo+'/'+k).once('value')).val();
+          hijos=(val&&typeof val==='object')?Object.keys(val).length:(val==null?0:1);
+          medida=_invMedir(val);
+          respaldo.nodos[nodo+'/'+k]=val;
+        }
+        // ¿De quién es? presence guarda asesor y tienda de la última sesión y
+        // es una lectura chica: es la forma barata de ponerle nombre a un
+        // nodo huérfano. El username puede mentir (ver "3D Company").
+        let due='';
+        try{
+          const p=(await _db.ref('presence/'+k).once('value')).val();
+          if(p) due=(p.asesor||'?')+' · '+(p.tienda||'?');
+        }catch(e){}
+        // _hoyLocal y no toISOString: en UTC una sesión de las 7 de la tarde
+        // colombiana ya figura al día siguiente.
+        const f=t=>t?_hoyLocal(new Date(t)):'';
+        filas.push({nodo, clave:k, 'de quién es':due||'(sin presence)',
+          registros:hijos, datos:medida.hojas,
+          desde:f(medida.desde), hasta:f(medida.hasta),
+          '¿tiene trabajo?': medida.hojas>0 ? 'SÍ' : 'vacío'});
+      }
+    }
+
+    const conDatos=filas.filter(f=>f['¿tiene trabajo?']==='SÍ');
+    const vacias=filas.filter(f=>f['¿tiene trabajo?']!=='SÍ');
+    console.group('%cClaves viejas con datos adentro ('+conDatos.length+') — NO borrar sin mirar','color:#b45309;font-weight:bold');
+    console.table(conDatos); console.groupEnd();
+    if(vacias.length){
+      console.group('%cClaves vacías o sin datos útiles ('+vacias.length+') — seguras de borrar','color:#15803d');
+      console.table(vacias); console.groupEnd();
+    }
+    try{
+      const el=document.createElement('a');
+      el.href=URL.createObjectURL(new Blob([JSON.stringify(respaldo,null,2)],{type:'application/json'}));
+      el.download='inventario-claves-viejas-'+_hoyLocal()+'.json';
+      el.click(); URL.revokeObjectURL(el.href);
+      console.log('Respaldo con el contenido completo descargado: '+el.download);
+    }catch(e){ console.warn('Queda en window._invRespaldo',e); }
+    window._invRespaldo=respaldo;
+    console.log('Nada se borró. Con esta lista decidimos qué sí y qué no.');
+    return filas;
+  }catch(e){ console.error('[INVENTARIO claves viejas] falló (¿sesión de admin?):',e); }
+};
+
 // Audita de quién son realmente los números de la tabla de Gestión de una
 // tienda. Responde a "¿estas confirmaciones son de esta asesora o de alguien
 // más?", que tiene dos formas posibles de mezclarse:
