@@ -2070,7 +2070,7 @@ function crearCard(p,est,esGest){
   const editando=_editandoGestion.has(p.id);
   const ncPend=!esGest&&g.llamada==='no_contestó'&&!g.gestion_final;
   const card=document.createElement('div');
-  // Guía generada y Tránsito no se expanden: su gestión es un par de botones y
+  // Guía generada y Tránsito no se expanden: su gestión son un par de botones y
   // se muestran directo en la card, sin el "▾ Gestionar" ni la card flotante.
   // Como todas llevan el mismo contenido, la altura automática las deja del
   // mismo tamaño, y la fija de 295px del kanban les dejaba media card vacía.
@@ -2178,9 +2178,190 @@ function crearCard(p,est,esGest){
           '\uD83D\uDD0D Validar dónde está realmente el paquete</a>';
       }
     } else if(est.key==='reparto'){
+      if(p.diasSinMov==null){
+        html+='<div class="dias-badge" style="background:var(--bg-inset);color:var(--text-3);">📅 Sin dato de movimiento</div>';
+      } else {
+      const dRep = p.diasSinMov;
+      let clsR,txtR;
+      if(dRep>=3){clsR='d-rojo';txtR='🚨 '+dRep+(dRep===1?' día':' días')+' en guía generada — ESCALAR';}
+      else if(dRep>=2){clsR='d-amarillo';txtR='⚠️ '+dRep+' días en guía generada — revisar';}
+      else if(dRep===1){clsR='d-amarillo';txtR='📦 1 día en guía generada';}
+      else{clsR='d-verde';txtR='🚚 Entró en Guía Generada hoy';}
+      html+='<div class="dias-badge '+clsR+'">'+txtR+'</div>';
+      // Aviso CAS si lleva +3 días en reparto
+      if(dRep>=3){
+        const casIdR='cas-rep-'+p.id;
+        _accUrgente+='<div style="background:var(--bg-hover);border:1px solid rgba(230,181,57,.3);border-radius:8px;padding:8px 10px;margin-top:6px;">'+
+          '<div style="font-size:.7rem;font-weight:700;color:var(--warning);margin-bottom:5px;">📋 Abrir caso en Dropi → CAS</div>'+
+          '<div style="font-size:.68rem;color:var(--text-2);margin-bottom:6px;font-style:italic;">Órdenes sin movimiento</div>'+
+          '<button class="btn-cas" id="'+casIdR+'" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
+        '</div>';
+      }
+      } // cierre else diasSinMov
+    } else if(false&&est.key==='transito'&&(p.dias||0)>=4){
+      // Badge de días de urgencia en tránsito desactivado
+      const cls=p.dias>=7?'d-rojo':'d-amarillo';
+      const txt=p.dias>=7?'🔴 '+p.dias+' dias — urgente':'🟡 '+p.dias+' dias en transito';
+      html+='<div class="dias-badge '+cls+'">'+txt+'</div>';
+      const diasHist=histDiasDesde(p.guia);
+      if(diasHist!==null&&diasHist<2){
+        html+='<div class="dias-badge" style="background:var(--warning-soft);color:var(--warning);margin-left:4px">\uD83D\uDCE8 Enviado hace '+diasHist+(diasHist===1?' dia':' dias')+'</div>';
+      }
+    }
+  }
+
+  // ── ZONA DE GESTIÓN (oculta hasta expandir la card) ──
+  html+='<div class="card-gestion">';
+  html+=_accUrgente;
+  // El aviso CAS de tránsito vive ahora en el bloque de los dos botones, más
+  // abajo: acá salía además del de allá y la card mostraba "Copiar texto para
+  // CAS" dos veces.
+
+  if(esGest&&!editando){
+    const _ultG=getUltimaNota(p.id);
+    if(_ultG){
+      html+='<div style="margin-top:8px;padding:6px 10px;background:var(--bg-hover);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;font-size:.73rem;">'+
+        '<span style="color:var(--accent);margin-right:4px;">📝</span>'+
+        '<span style="color:var(--text-3);">'+(_ultG.fecha||'')+'&nbsp;·&nbsp;</span>'+
+        '<span style="color:var(--text-1);word-break:break-word;">'+_ultG.texto.replace(/</g,'&lt;')+'</span>'+
+      '</div>';
+    }
+    if(est.key!=='rechazado'){
+      html+='<button class="btn-dev" onclick="marcarDevolucion('+p.id+')" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid '+(g.devolucion?'var(--danger)':'var(--border-strong)')+';background:'+(g.devolucion?'var(--danger)':'transparent')+';color:'+(g.devolucion?'white':'var(--text-2)')+';cursor:pointer;">'+
+        (g.devolucion?'🔄 Marcado para devolución — clic para desmarcar':'🔄 Pedido para devolución')+'</button>';
+    }
+    html+='<div style="display:flex;gap:8px;margin-top:8px;">'+
+      '<button onclick="editarGestion('+p.id+')" style="flex:1;padding:8px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;">✏️ Editar gestión</button>'+
+      '<button onclick="eliminarGestion('+p.id+')" style="flex:1;padding:8px;border-radius:8px;font-size:.73rem;font-weight:700;border:1px solid rgba(230,57,70,.4);background:transparent;color:var(--danger);cursor:pointer;">🗑️ Eliminar y devolver</button>'+
+    '</div>';
+    html+=_btnHistHtml(p);
+  }
+
+  if(!esGest||editando){
+    if(editando){
+      html+='<div style="font-size:.7rem;font-weight:700;color:var(--accent);background:var(--bg-hover);border-radius:6px;padding:5px 8px;margin-bottom:6px;">✏️ Editando gestión — este pedido sigue en Gestionadas</div>';
+    }
+    // Tránsito queda fuera: su banner decía "Enviar WhatsApp de seguimiento" y
+    // en esta sección ya no se contacta al cliente, se reporta en el CAS.
+    if(est.key!=='pendiente_sin_guia'&&est.key!=='oficina'&&est.key!=='transito') html+=queSigueBanner(p,est.key);
+    html+='<div class="acciones">';
+    if(est.key==='pendiente_sin_guia'){
+      const p_ok2  =pendientes.filter(p=>(horasDesde(p.fechaOrden)||0)<24);
+      const p_warn2=pendientes.filter(p=>{const h=horasDesde(p.fechaOrden)||0;return h>=24&&h<48;});
+      const p_urg2 =pendientes.filter(p=>(horasDesde(p.fechaOrden)||0)>=48);
+      const antigBox2=document.createElement('div');
+      antigBox2.style.cssText='display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 14px;';
+      const mkA=(emoji,label,count,bg,color)=>{
+        if(!count)return;
+        const d=document.createElement('div');
+        d.style.cssText='flex:1;min-width:130px;background:'+bg+';border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:3px;';
+        d.innerHTML='<span style="font-size:1.5rem;font-weight:800;color:'+color+'">'+count+'</span>'+
+          '<span style="font-size:.72rem;font-weight:700;color:'+color+'">'+emoji+' '+label+'</span>';
+        antigBox2.appendChild(d);
+      };
+      mkA('🟢','Menos de 1 día',  p_ok2.length,  'var(--bg-inset)','var(--text-2)');
+      mkA('⚠️','1 día — Revisar',p_warn2.length,'var(--warning-soft)','var(--warning)');
+      mkA('🚨','Más de 2 días — Escalar YA',p_urg2.length,'var(--danger-soft)','var(--danger)');
+      sec.appendChild(antigBox2);
+      // ── Resumen por producto ──
+      const byProd2={};
+      pendientes.forEach(p=>{
+        const prod=getProductoSimple(p.productos)||'Sin producto';
+        const h=horasDesde(p.fechaOrden)||0;
+        if(!byProd2[prod])byProd2[prod]={total:0,ok:0,warn:0,urg:0};
+        byProd2[prod].total++;
+        if(h<24)byProd2[prod].ok++;
+        else if(h<48)byProd2[prod].warn++;
+        else byProd2[prod].urg++;
+      });
+      const prodTitle2=document.createElement('div');
+      prodTitle2.style.cssText='font-size:.74rem;font-weight:700;color:var(--text-2);margin-bottom:7px;text-transform:uppercase;letter-spacing:.4px;';
+      prodTitle2.textContent='Por producto';
+      sec.appendChild(prodTitle2);
+      const tbl2=document.createElement('table');
+      tbl2.style.cssText='width:100%;border-collapse:collapse;font-size:.78rem;background:var(--bg-card);border-radius:10px;overflow:hidden;border:1px solid var(--border);';
+      tbl2.innerHTML='<thead><tr style="background:var(--bg-hover)">'+
+        '<th style="padding:8px 12px;text-align:left;color:var(--text-1);font-weight:700;border-bottom:1px solid var(--border)">Producto</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:var(--text-1);font-weight:700;border-bottom:1px solid var(--border)">Total</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:var(--text-2);font-weight:700;border-bottom:1px solid var(--border)">🟢 Hoy</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:var(--warning);font-weight:700;border-bottom:1px solid var(--border)">⚠️ 1 día</th>'+
+        '<th style="padding:8px 10px;text-align:center;color:var(--danger);font-weight:700;border-bottom:1px solid var(--border)">🚨 +2 días</th>'+
+      '</tr></thead>';
+      const tbody2=document.createElement('tbody');
+      Object.entries(byProd2).sort((a,b)=>b[1].urg-a[1].urg||b[1].warn-a[1].warn).forEach(([prod,v],i)=>{
+        const tr=document.createElement('tr');
+        tr.style.cssText='background:'+(i%2===0?'var(--bg-card)':'var(--bg-hover)')+';';
+        tr.innerHTML='<td style="padding:7px 12px;color:var(--text-1);font-weight:500">'+prod+'</td>'+
+          '<td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--text-1)">'+v.total+'</td>'+
+          '<td style="padding:7px 10px;text-align:center;color:var(--text-2);font-weight:600">'+(v.ok||'—')+'</td>'+
+          '<td style="padding:7px 10px;text-align:center;color:var(--warning);font-weight:600">'+(v.warn||'—')+'</td>'+
+          '<td style="padding:7px 10px;text-align:center;color:var(--danger);font-weight:'+(v.urg?'700':'400')+'">'+((v.urg?v.urg:'—'))+'</td>';
+        tbody2.appendChild(tr);
+      });
+      tbl2.appendChild(tbody2);
+      sec.appendChild(tbl2);
+      const btnExp=document.createElement('button');
+      btnExp.style.cssText='margin-top:12px;background:#131920;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;';
+      btnExp.innerHTML='\uD83D\uDCE4 Exportar por proveedor para escalar';
+      btnExp.onclick=exportarPendientes;
+      sec.appendChild(btnExp);
+    } else if(est.key==='transito'){
+      // Estos pedidos NO se gestionan hablando con el cliente: se reportan en
+      // el CAS, que es otra plataforma. Por eso la card queda con dos botones y
+      // nada más — antes tenía desplegable de contacto, botón de WhatsApp, nota
+      // y desplegable de resultado, todo para un flujo que acá no aplica.
+      // "Gestionado" marca transito_gestionado, que es lo que ya cuenta como
+      // gestión del día (ver estaCompleta).
+      const casIdTr='cas-tr-'+p.id;
+      const dMovTr=(p.diasSinMov!=null)?p.diasSinMov:(p.dias||0);
+      html+='<div style="display:flex;flex-direction:column;gap:8px;">'+
+        '<div style="font-size:.7rem;font-weight:700;color:var(--warning-strong);">📋 Abrir caso en Dropi → CAS</div>'+
+        (dMovTr?'<div style="font-size:.68rem;color:var(--text-2);font-style:italic;margin-top:-4px;">Sin movimiento · '+dMovTr+(dMovTr===1?' día':' días')+' parado</div>':'')+
+        '<button class="btn-cas" id="'+casIdTr+'" style="margin:0;" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
+        // Verde sólido con texto blanco: sobre --success-soft el texto quedaba
+        // en 4,3:1 en tema claro. Este #15803D es el mismo tono ya validado
+        // para los estados de Anticipos.
+        '<button id="btn-trg-'+p.id+'" onclick="marcarTransitoGestionado('+p.id+',this)" '+
+          'style="width:100%;padding:10px 6px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;'+
+          'background:#15803D;color:#fff;cursor:pointer;font-family:inherit;">✅ Gestionado</button>'+
+      '</div>';
+    } else if(est.key==='rechazado'){
+      html+=notaWidgetHtml(p.id);
+      html+='<div style="display:flex;gap:8px;margin-top:8px;">'+
+        '<button id="btn-rg-'+p.id+'" onclick="marcarRechazadoGestionado('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #16a34a;background:transparent;color:var(--success);cursor:pointer;transition:all .25s;">✅ Pedido gestionado</button>'+
+        '<button id="btn-rsg-'+p.id+'" onclick="marcarRechazadoSinGestion('+p.id+',this)" style="flex:1;padding:9px 6px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #be123c;background:transparent;color:var(--danger);cursor:pointer;transition:all .25s;">🚫 Rechazado sin gestión</button>'+
+      '</div>'+
+      '<button onclick="copiarDatosCliente('+p.id+')" style="width:100%;padding:8px;border-radius:8px;font-size:.74rem;font-weight:700;border:2px solid #7c3aed;background:transparent;color:#7c3aed;cursor:pointer;margin-top:6px;">📋 Copiar datos del cliente</button>';
+    } else if(est.key==='oficina'){
+      // Rediseño en 3 pasos: 1) cómo fue el contacto (dropdown)  2) nota  3) resultado (dropdown, incluye finalizar)
+      const wi=getWAInfo(p,est.key);
+      const contactoActual=g.contacto_metodo||(g.llamada_ofic?'llamada':g.chatepro?'chatepro':g.wa_enviado?'whatsapp':'');
+      const resultadoActual=g.gestion_final?'finalizar':(g.resultado_gestion||(g.devolucion?'devolver':g.mensajes_listos?'fondo':''));
+      const contactoOpts=[{value:'',label:'— Selecciona —'},{value:'llamada',label:'📞 Llamada'},{value:'chatepro',label:'💬 ChateaPro'},{value:'whatsapp',label:'📲 WhatsApp'}];
+      const puedeFinalizar=!!contactoActual&&tieneNotaHoy(p.id);
+      const resultadoOpts=[
+        {value:'',label:'— Selecciona —'},
+        {value:'fondo',label:'⏬ Pasar al fondo'},
+        {value:'devolver',label:'🔄 Devolver pedido'},
+        {value:'finalizar',label:g.gestion_final?'✅ Gestión finalizada':'☑️ Finalizar gestión',disabled:!puedeFinalizar,hint:'Selecciona cómo fue el contacto y guarda una nota de hoy primero'}
+      ];
+
+      html+='<div style="font-size:.68rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">📋 ¿Cómo fue el contacto?</div>';
+      html+=_fselHtml('of-contacto-'+p.id,contactoOpts,contactoActual,'_ofSetContacto('+p.id+',this.value)');
+      html+='<div style="margin-top:6px;">'+waBoton(p,est.key,wi,g.wa_enviado)+'</div>';
+
+      if(!g.gestion_final){
+        html+='<div style="font-size:.72rem;color:#f59e0b;margin-top:12px;padding:4px 6px;background:#1c1400;border-radius:4px;">📝 ¿Qué dijo el cliente? Escribe una nota — es obligatoria</div>';
+      }
+      html+='<div class="notas-wrap" style="margin-top:6px;">'+notaInputRowHtml(p.id)+'</div>';
+
+      html+='<div style="font-size:.68rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px;">➡️ Resultado de la gestión</div>';
+      html+=_fselHtml('of-resultado-'+p.id,resultadoOpts,resultadoActual,'_ofSetResultado('+p.id+',this.value)');
+    } else if(est.key==='reparto'){
       // Un solo botón: estas guías se reportan y listo. Antes tenía dos
-      // desplegables, WhatsApp y nota, un flujo de contacto con el cliente que
-      // acá no aplica. marcarGuiaReportada ya cuenta como gestión del día.
+      // desplegables, WhatsApp y nota — un flujo de contacto con el cliente
+      // que en esta sección no aplica. marcarGuiaReportada ya cuenta como
+      // gestión del día.
       html+='<button id="btn-rep-'+p.id+'" onclick="marcarGuiaReportada('+p.id+',this)" '+
         'style="width:100%;padding:11px 6px;border-radius:8px;font-size:.78rem;font-weight:700;border:none;'+
         'background:#15803D;color:#fff;cursor:pointer;font-family:inherit;">✅ Reportado</button>';
@@ -2221,7 +2402,7 @@ function crearCard(p,est,esGest){
     html+='</div>';
   }
   html+='</div>';
-  // Directa = sin botón de expandir: la gestión ya se ve dentro de la card.
+  // Directa = sin boton de expandir: la gestion ya se ve dentro de la card.
   html+= _directa ? '' : (esGest&&!editando)
     ? '<div class="card-expand-hint" style="gap:8px;cursor:default;">'+
       '<button onclick="event.stopPropagation();editarGestion('+p.id+')" style="flex:1;background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 8px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;">✏️ Editar gestión</button>'+
