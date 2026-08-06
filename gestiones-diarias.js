@@ -484,7 +484,7 @@ function _gdVolver(){
 // ── TABS GD ────────────────────────────────────────────────────────────
 function _gdTab(tab){
   _gdActiveTab=tab;
-  ['gestion','consolidado','novedades','anticipos','ro'].forEach(t=>{
+  ['gestion','consolidado','novedades','reportes','anticipos','ro'].forEach(t=>{
     const c=document.getElementById('gd-tab-'+t);
     const b=document.getElementById('gd-tab-btn-'+t);
     if(c) c.style.display=t===tab?(t==='gestion'?'flex':'block'):'none';
@@ -499,6 +499,7 @@ function _gdTab(tab){
   if(tab==='consolidado') _consoInit();
   if(tab==='novedades') _novInit();
   if(tab==='anticipos') _antInit();
+  if(tab==='reportes') _repInit();
   if(tab==='ro') _roInit();
 }
 
@@ -804,6 +805,97 @@ function _consoGuardar(){
 
 // ── NOVEDADES ───────────────────────────────────────────────────────────
 let _novData={}, _novModalState={mode:'new',id:null,solNum:1}, _novEstadoActivo='solucionada';
+
+// ── REPORTES (guías reportadas al CAS) ───────────────────────────────
+// Registro aparte de Novedades: acá van las guías en tránsito que se reportan
+// al CAS, cada una con la captura del reporte como respaldo. Se separó a
+// propósito para no mezclar esas imágenes con las evidencias de novedades.
+//
+// Los escribe el Gestor Logístico al marcar "Gestionado" en una card de
+// tránsito (ver _repCrearDesdeGestor). Acá solo se consultan.
+//
+// La imagen va FUERA del registro, en reportes_img/{tienda}/{mes}/{id}: dentro,
+// leer el mes entero arrastraría todas las capturas aunque no se muestren. Es
+// el mismo motivo por el que las novedades usan nov_img.
+let _repData={}, _repFilter={q:''};
+
+function _repBase(tk){ return 'reportes/'+(tk||_gdTK())+'/'+_gdMes; }
+function _repImgPath(tk, mes, id){ return 'reportes_img/'+tk+'/'+mes+'/'+id; }
+
+function _repInit(){
+  const el=document.getElementById('rep-table-wrap');
+  if(!el) return;
+  el.innerHTML='<div style="padding:20px;color:var(--text-3);font-size:.78rem;text-align:center;">Cargando...</div>';
+  if(typeof _db==='undefined'){ _repData={}; _repRender(); return; }
+  _leerTienda(_repBase, r=>r.orderByChild('ts')).then(snap=>{
+    _repData={};
+    snap.forEach(ch=>{ _repData[ch.key]=ch.val(); });
+    _repRender();
+  }).catch(()=>{ _repData={}; _repRender(); });
+}
+
+function _repSearch(v){ _repFilter.q=v||''; _repRender(); }
+
+function _repRender(){
+  const el=document.getElementById('rep-table-wrap');
+  if(!el) return;
+  const q=(_repFilter.q||'').toLowerCase();
+  const todos=Object.entries(_repData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+  const entries=todos.filter(([,r])=>!q||
+    [(r.guia||''),(r.asesor||''),(r.cliente||''),(r.transportadora||'')].some(v=>String(v).toLowerCase().includes(q)));
+  const cnt=document.getElementById('rep-count');
+  if(cnt) cnt.textContent = entries.length<todos.length ? entries.length+' de '+todos.length : todos.length+' reporte'+(todos.length===1?'':'s');
+  if(!entries.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--text-3);font-size:.78rem;">'+
+      (todos.length?'Sin resultados con este filtro.':'Todavía no hay reportes. El registro desde el Gestor Logístico está en preparación.')+'</div>';
+    return;
+  }
+  let rows='';
+  entries.forEach(([id,r])=>{
+    const dias=(r.diasSinMov!=null)?r.diasSinMov:null;
+    const chipDias = dias==null ? '' :
+      '<div style="font-size:.58rem;color:var(--text-3);margin-top:2px;">'+dias+(dias===1?' día':' días')+' sin movimiento</div>';
+    const ev = r.img
+      ? '<button onclick="_repVerImg(\''+id+'\')" style="background:var(--success-soft);color:var(--success-strong);border:1px solid var(--success);'+
+        'border-radius:7px;padding:5px 12px;font-size:.66rem;font-weight:700;cursor:pointer;font-family:inherit;">🖼️ Ver captura</button>'
+      : '<span style="font-size:.65rem;color:var(--text-3);">Sin captura</span>';
+    const nota = r.nota
+      ? '<div style="font-size:.63rem;color:var(--text-2);margin-top:5px;white-space:pre-wrap;">'+esc(r.nota)+'</div>' : '';
+    rows+='<tr>'+
+      '<td style="white-space:nowrap;color:var(--text-2);font-size:.7rem;vertical-align:top;padding-top:10px;">'+esc(r.fecha||'—')+'</td>'+
+      '<td style="font-weight:800;font-size:.82rem;white-space:nowrap;vertical-align:top;padding-top:10px;">'+esc(r.guia||'—')+chipDias+'</td>'+
+      '<td style="vertical-align:top;padding-top:8px;">'+
+        '<div style="font-size:.72rem;color:var(--text-1);font-weight:600;">'+esc(r.cliente||'—')+'</div>'+
+        '<div style="font-size:.62rem;color:var(--text-3);">'+esc([r.ciudad,r.transportadora].filter(Boolean).join(' · ')||'—')+'</div>'+
+        (r.estadoRaw?'<div style="font-size:.6rem;color:var(--warning-strong);font-weight:600;margin-top:2px;">'+esc(r.estadoRaw)+'</div>':'')+
+      '</td>'+
+      '<td style="vertical-align:top;padding-top:8px;">'+ev+nota+'</td>'+
+      '<td style="text-align:center;vertical-align:top;padding-top:10px;">'+
+        '<span style="background:var(--info-soft);color:var(--info-strong);padding:3px 10px;border-radius:20px;font-size:.65rem;font-weight:700;white-space:nowrap;">'+
+        esc(r.asesor||'—')+'</span>'+
+      '</td>'+
+    '</tr>';
+  });
+  el.innerHTML='<div style="overflow-x:auto;"><table id="nov-table">'+
+    '<colgroup><col style="width:90px"><col style="width:130px"><col><col style="width:200px"><col style="width:120px"></colgroup>'+
+    '<thead><tr>'+
+      '<th>FECHA</th><th>GUÍA</th><th>PEDIDO</th>'+
+      '<th class="redth">CAPTURA DEL REPORTE</th><th>ASESOR</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+// La captura se guarda aparte del registro, así que se lee al pedirla.
+window._repVerImg=function(id){
+  const r=_repData[id];
+  if(!r) return;
+  const tk=_gdTK();
+  _db.ref(_repImgPath(tk,_gdMes,id)).once('value').then(s=>{
+    const src=s.val();
+    if(!src){ toast('No se encontró la captura'); return; }
+    if(typeof _novVerImg==='function') _novVerImg(src, r.nota||'');
+    else window.open(src,'_blank');
+  }).catch(()=>toast('No se pudo cargar la captura'));
+};
 
 function _novBase(tk){ return 'novedades/'+(tk||_gdTK())+'/'+_gdMes; }
 function _novBasePath(){ return _novBase(); }

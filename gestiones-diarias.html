@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260806l">
+<link rel="stylesheet" href="shared/shared.css?v=20260806m">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -851,6 +851,7 @@ window._sbEstadosToggle=function(){
     <button class="gd-tab-btn active" id="gd-tab-btn-gestion" onclick="_gdTab('gestion')">📋 Gestión</button>
     <button class="gd-tab-btn" id="gd-tab-btn-consolidado" onclick="_gdTab('consolidado')">📊 Consolidado</button>
     <button class="gd-tab-btn" id="gd-tab-btn-novedades" onclick="_gdTab('novedades')">📝 Novedades</button>
+    <button class="gd-tab-btn" id="gd-tab-btn-reportes" onclick="_gdTab('reportes')">🚩 Reportes</button>
     <button class="gd-tab-btn" id="gd-tab-btn-anticipos" onclick="_gdTab('anticipos')">💰 Anticipos</button>
     <button class="gd-tab-btn" id="gd-tab-btn-ro" onclick="_gdTab('ro')">🏢 R.O.</button>
   </div>
@@ -909,6 +910,24 @@ window._sbEstadosToggle=function(){
   </div>
 
   <!-- TAB: Anticipos -->
+  <div id="gd-tab-reportes" style="display:none;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:.88rem;font-weight:800;color:var(--text-1);letter-spacing:-.3px;">REGISTRO DE GUÍAS REPORTADAS AL CAS</div>
+        <div style="font-size:.62rem;color:var(--text-3);margin-top:2px;">En preparación · Acá van a quedar las guías reportadas al CAS con su captura, cuando se active el registro desde el Gestor Logístico</div>
+      </div>
+    </div>
+    <div class="tab-sb" style="border-radius:10px;margin-bottom:10px;">
+      <div class="tab-sb-row">
+        <div class="tab-sb-wrap">
+          <span class="tab-sb-ico">🔍</span>
+          <input class="tab-sb-inp" id="rep-q" placeholder="Buscar por guía, cliente, transportadora o asesor..." oninput="_repSearch(this.value)">
+        </div>
+        <span class="tab-sb-count" id="rep-count"></span>
+      </div>
+    </div>
+    <div id="rep-table-wrap"></div>
+  </div>
   <div id="gd-tab-anticipos">
     <div style="text-align:center;background:#131920;color:white;border-radius:10px;padding:10px 16px;margin-bottom:14px;">
       <div style="font-size:.82rem;font-weight:900;letter-spacing:.4px;">SEGUIMIENTO DE GUÍAS CON PAGO ANTICIPADO</div>
@@ -1373,8 +1392,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260806l"></script>
-<script src="gestiones-diarias.js?v=20260806l"></script>
+<script src="shared/app-shared.js?v=20260806m"></script>
+<script src="gestiones-diarias.js?v=20260806m"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión
