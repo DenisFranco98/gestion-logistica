@@ -1091,6 +1091,102 @@ window._auditarClavesPorNombre = async function(){
   }catch(e){ console.error('[AUDITAR claves] falló (¿sesión de admin?):',e); }
 };
 
+// Fusiona un pedido de gestiones_sync sobre el que ya está en la tienda, sin
+// perder nada de ninguno de los dos: las notas se concatenan (sin repetir), los
+// flags de gestionado ganan si alguno los tiene, y los textos vacíos se
+// completan con el otro. `_ts` se queda con el más reciente.
+function _gsFusionarPedido(dst, src){
+  const out=Object.assign({}, dst||{});
+  Object.entries(src||{}).forEach(([k,v])=>{
+    if(k==='notas'||k==='eventos'){
+      const a=Array.isArray(out[k])?out[k]:[], b=Array.isArray(v)?v:[];
+      const vistos=new Set(a.map(n=>JSON.stringify(n)));
+      out[k]=a.concat(b.filter(n=>!vistos.has(JSON.stringify(n))));
+    }
+    else if(typeof v==='boolean') out[k]=out[k]||v;
+    else if(typeof v==='number')  out[k]=Math.max(out[k]||0, v);
+    else if(out[k]===undefined||out[k]===null||out[k]==='') out[k]=v;
+  });
+  return out;
+}
+
+// Mueve las gestiones que quedaron guardadas bajo la identidad del USUARIO a la
+// tienda que les corresponde.
+//
+// Pasa cuando la sesión arranca sin empresaId resuelto: _gsKey() es
+// `_currentTiendaId || _currentUsername`, así que el trabajo del día entero se
+// escribe bajo el uid (o el username) de quien lo hizo. El equipo no ve esas
+// notas en el kanban y el admin no las cuenta al filtrar por tienda.
+//
+//   _moverGestionesSync({de:'<uid o username>', a:'<empresaId>'})              → simula
+//   _moverGestionesSync({de:'...', a:'...', aplicar:true})                     → aplica
+//
+// Los pedidos que ya existen en la tienda NO se pisan: se fusionan con
+// _gsFusionarPedido. Descarga un respaldo antes de escribir.
+window._moverGestionesSync = async function(opts){
+  opts=opts||{};
+  const de=opts.de, a=opts.a, aplicar=opts.aplicar===true;
+  if(!de||!a){ console.log("uso: _moverGestionesSync({de:'<clave origen>', a:'<empresaId destino>'})"); return; }
+  console.log('%c[MOVER gestiones_sync]'+(aplicar?'':' (simulación - no escribe)'),'font-weight:bold');
+  try{
+    const [oSnap,dSnap,eSnap]=await Promise.all([
+      _db.ref('gestiones_sync/'+de).once('value'),
+      _db.ref('gestiones_sync/'+a).once('value'),
+      _db.ref('empresas/'+a).once('value')
+    ]);
+    const origen=oSnap.val()||{}, destino=dSnap.val()||{};
+    const nOrigen=Object.keys(origen).length;
+    if(!nOrigen){ console.log('El origen no tiene gestiones.'); return; }
+    if(!eSnap.exists()) console.warn('OJO: "'+a+'" no es un empresaId de /empresas. Revisá el destino antes de aplicar.');
+
+    const nuevos=[], chocan=[];
+    Object.keys(origen).forEach(k=>{ (destino[k]?chocan:nuevos).push(k); });
+    console.log('Origen: gestiones_sync/'+de+'  ('+nOrigen+' pedidos)');
+    console.log('Destino: gestiones_sync/'+a+'  ('+((eSnap.val()||{}).nombre||'?')+', '+
+                Object.keys(destino).length+' pedidos)');
+    console.table([{ 'se agregan':nuevos.length, 'ya existen y se fusionan':chocan.length }]);
+    if(chocan.length){
+      console.group('Pedidos que ya están en la tienda ('+chocan.length+')');
+      console.table(chocan.slice(0,20).map(k=>({pedido:k,
+        cliente:(origen[k]||{})._nombre||'', 'notas origen':((origen[k]||{}).notas||[]).length,
+        'notas destino':((destino[k]||{}).notas||[]).length})));
+      if(chocan.length>20) console.log('… y '+(chocan.length-20)+' más');
+      console.groupEnd();
+    }
+    if(!aplicar){
+      console.log('%cSimulación. Para aplicar: _moverGestionesSync({de:"'+de+'", a:"'+a+'", aplicar:true})','font-weight:bold');
+      return {nuevos:nuevos.length, chocan:chocan.length};
+    }
+
+    const respaldo={ts:Date.now(), fecha:new Date().toString(), de, a,
+      origen, destinoPrevio:{}};
+    chocan.forEach(k=>{ respaldo.destinoPrevio[k]=destino[k]; });
+    try{
+      const el=document.createElement('a');
+      el.href=URL.createObjectURL(new Blob([JSON.stringify(respaldo,null,2)],{type:'application/json'}));
+      el.download='mover-gestiones-respaldo-'+_gdKey(de)+'-'+_hoyLocal()+'.json';
+      el.click(); URL.revokeObjectURL(el.href);
+      console.log('Respaldo descargado: '+el.download);
+    }catch(e){ console.warn('No se pudo descargar el respaldo, queda en window._moverRespaldo',e); }
+    window._moverRespaldo=respaldo;
+
+    // Por lotes: un update con miles de pedidos completos es un payload enorme.
+    const todas=Object.keys(origen);
+    for(let i=0;i<todas.length;i+=200){
+      const upd={};
+      todas.slice(i,i+200).forEach(k=>{
+        upd['gestiones_sync/'+a+'/'+k]=destino[k]?_gsFusionarPedido(destino[k],origen[k]):origen[k];
+      });
+      await _db.ref().update(upd);
+      console.log('  … '+Math.min(i+200,todas.length)+'/'+todas.length);
+    }
+    await _db.ref('gestiones_sync/'+de).remove();
+    console.log('%c[MOVER gestiones_sync] listo: '+nuevos.length+' agregados, '+chocan.length+
+      ' fusionados. Origen borrado.','font-weight:bold;color:#15803d');
+    return {nuevos:nuevos.length, chocan:chocan.length};
+  }catch(e){ console.error('[MOVER gestiones_sync] falló (¿sesión de admin?):',e); }
+};
+
 // Audita de quién son realmente los números de la tabla de Gestión de una
 // tienda. Responde a "¿estas confirmaciones son de esta asesora o de alguien
 // más?", que tiene dos formas posibles de mezclarse:
