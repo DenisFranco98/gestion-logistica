@@ -2202,18 +2202,9 @@ function crearCard(p,est,esGest){
   // ── ZONA DE GESTIÓN (oculta hasta expandir la card) ──
   html+='<div class="card-gestion">';
   html+=_accUrgente;
-  // Aviso CAS para todos los pedidos en tránsito con +2 días sin movimiento
-  if(p.estadoKey==='transito'&&(!esGest||editando)){
-    const dMov=(p.diasSinMov!=null)?p.diasSinMov:(p.dias||0);
-    if(dMov>=2){
-      const casIdP='cas-proc-'+p.id;
-      html+='<div style="background:var(--bg-hover);border:1px solid rgba(230,181,57,.3);border-radius:8px;padding:8px 10px;margin-top:6px;">'+
-        '<div style="font-size:.7rem;font-weight:700;color:var(--warning);margin-bottom:5px;">📋 Abrir caso en Dropi → CAS</div>'+
-        '<div style="font-size:.68rem;color:var(--text-2);margin-bottom:6px;font-style:italic;">Órdenes sin movimiento · '+dMov+' días parado</div>'+
-        '<button class="btn-cas" id="'+casIdP+'" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
-      '</div>';
-    }
-  }
+  // El aviso CAS de tránsito vive ahora en el bloque de los dos botones, más
+  // abajo: acá salía además del de allá y la card mostraba "Copiar texto para
+  // CAS" dos veces.
 
   if(esGest&&!editando){
     const _ultG=getUltimaNota(p.id);
@@ -2239,7 +2230,9 @@ function crearCard(p,est,esGest){
     if(editando){
       html+='<div style="font-size:.7rem;font-weight:700;color:var(--accent);background:var(--bg-hover);border-radius:6px;padding:5px 8px;margin-bottom:6px;">✏️ Editando gestión — este pedido sigue en Gestionadas</div>';
     }
-    if(est.key!=='pendiente_sin_guia'&&est.key!=='oficina') html+=queSigueBanner(p,est.key);
+    // Tránsito queda fuera: su banner decía "Enviar WhatsApp de seguimiento" y
+    // en esta sección ya no se contacta al cliente, se reporta en el CAS.
+    if(est.key!=='pendiente_sin_guia'&&est.key!=='oficina'&&est.key!=='transito') html+=queSigueBanner(p,est.key);
     html+='<div class="acciones">';
     if(est.key==='pendiente_sin_guia'){
       const p_ok2  =pendientes.filter(p=>(horasDesde(p.fechaOrden)||0)<24);
@@ -2309,7 +2302,10 @@ function crearCard(p,est,esGest){
       // "Gestionado" marca transito_gestionado, que es lo que ya cuenta como
       // gestión del día (ver estaCompleta).
       const casIdTr='cas-tr-'+p.id;
+      const dMovTr=(p.diasSinMov!=null)?p.diasSinMov:(p.dias||0);
       html+='<div style="display:flex;flex-direction:column;gap:8px;">'+
+        '<div style="font-size:.7rem;font-weight:700;color:var(--warning-strong);">📋 Abrir caso en Dropi → CAS</div>'+
+        (dMovTr?'<div style="font-size:.68rem;color:var(--text-2);font-style:italic;margin-top:-4px;">Sin movimiento · '+dMovTr+(dMovTr===1?' día':' días')+' parado</div>':'')+
         '<button class="btn-cas" id="'+casIdTr+'" style="margin:0;" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
         // Verde sólido con texto blanco: sobre --success-soft el texto quedaba
         // en 4,3:1 en tema claro. Este #15803D es el mismo tono ya validado
