@@ -4949,6 +4949,11 @@ function _syncGuiasReporteAdmin(){
           transportadora:p.transportadora||'',
           estatus:p.estadoRaw||'',
           fechaMov:p.fechaMov?_fmtFecha(p.fechaMov):'',
+          // Los días se guardan calculados, no solo la fecha: el admin filtra
+          // por "más de N días sin movimiento" y así no depende de reparsear el
+          // texto dd/mm/aaaa. Se conserva el fallback por fecha para las guías
+          // que se sincronizaron antes de que existiera este campo.
+          diasSinMov:(p.diasSinMov!=null)?p.diasSinMov:(p.dias!=null?p.dias:null),
           grupo:g
         };
       });

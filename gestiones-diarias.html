@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260806g">
+<link rel="stylesheet" href="shared/shared.css?v=20260806h">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -338,8 +338,10 @@ window._sbEstadosToggle=function(){
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
           <button id="adm-rep-btn-descargar" class="adm-add-btn" style="background:#131920;" onclick="_admDescargarReporteConsolidado()" disabled>📥 Descargar reporte consolidado (Excel)</button>
+          <div style="display:flex;align-items:center;gap:7px;font-size:.73rem;color:var(--text-2);font-weight:600;"><label for="adm-rep-dias">Solo guías con más de</label><input id="adm-rep-dias" type="number" min="0" max="365" step="1" value="0" onchange="_admRepSetMinDias(this.value)" oninput="_admRepSetMinDias(this.value)" style="width:64px;padding:5px 7px;border-radius:7px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-1);font-family:inherit;font-size:.75rem;font-weight:700;text-align:center;"><span>días sin movimiento <span style="color:var(--text-3);font-weight:500;">(0 = todas)</span></span></div>
           <div id="adm-rep-total" style="font-size:.75rem;color:var(--text-2);font-weight:700;"></div>
         </div>
+        <div id="adm-rep-aviso" style="font-size:.7rem;color:var(--warning-strong);font-weight:600;margin:-8px 0 14px;"></div>
         <div id="adm-rep-tabla">
           <div class="adm-empty">Cargando...</div>
         </div>
@@ -1376,8 +1378,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260806g"></script>
-<script src="gestiones-diarias.js?v=20260806g"></script>
+<script src="shared/app-shared.js?v=20260806h"></script>
+<script src="gestiones-diarias.js?v=20260806h"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

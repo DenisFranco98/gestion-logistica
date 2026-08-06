@@ -5639,6 +5639,46 @@ function _admGuardarNegocio(){
 // logistica_guias/{empId} al cargar su Excel (ver _syncGuiasReporteAdmin).
 // Este tab del admin las junta todas en un solo Excel descargable.
 let _admRepDatos=[];
+let _admRepMeta=[];
+// Filtro "más de N días sin movimiento". 0 = sin filtro. Se recuerda entre
+// sesiones porque el admin suele mirar siempre el mismo corte.
+let _admRepMinDias = (()=>{ const v=parseInt(localStorage.getItem('lgs_rep_min_dias'),10); return isNaN(v)?0:v; })();
+
+// Días desde una fecha dd/mm/aaaa (el formato con el que _fmtFecha guarda
+// fechaMov). Vive acá y no se reusa diasDesde() porque esa está en
+// gestion-logistica.js y el panel admin no carga ese archivo.
+function _admDiasDesdeTexto(val){
+  if(!val) return null;
+  const s=String(val).trim(), p=s.split(/[\/\-\.]/);
+  let d;
+  if(p.length===3) d = p[0].length===4 ? new Date(p[0],p[1]-1,p[2]) : new Date(p[2],p[1]-1,p[0]);
+  else d = new Date(s);
+  if(!d || isNaN(d)) return null;
+  const hoy=new Date(); hoy.setHours(0,0,0,0); d.setHours(0,0,0,0);
+  return Math.max(0, Math.round((hoy-d)/86400000));
+}
+
+// Días sin movimiento de una guía del reporte: el valor guardado si está, y si
+// no, el calculado desde la fecha. Devuelve null cuando no hay ninguno de los
+// dos, para poder distinguir "0 días" de "no se sabe".
+function _admDiasSinMov(g){
+  if(g && g.diasSinMov!=null && g.diasSinMov!=='') return +g.diasSinMov;
+  return _admDiasDesdeTexto(g && g.fechaMov);
+}
+
+// Aplica el filtro de días. Las guías SIN dato de movimiento se excluyen en
+// cuanto se pide un mínimo: no se puede afirmar que lleven más de N días.
+function _admRepFiltrar(filas){
+  if(!_admRepMinDias) return filas;
+  return filas.filter(f=>f._dias!=null && f._dias>_admRepMinDias);
+}
+
+window._admRepSetMinDias = function(v){
+  const n=parseInt(v,10);
+  _admRepMinDias = isNaN(n)||n<0 ? 0 : n;
+  localStorage.setItem('lgs_rep_min_dias', String(_admRepMinDias));
+  _admRepPintar();
+};
 
 function _admCargarReportes(){
   const adminId = localStorage.getItem('lgs_admin_id');
@@ -5646,6 +5686,10 @@ function _admCargarReportes(){
   const btn = document.getElementById('adm-rep-btn-descargar');
   const totalEl = document.getElementById('adm-rep-total');
   if(!adminId){ if(wrap) wrap.innerHTML='<div class="adm-empty">Sin sesión de administrador.</div>'; return; }
+  // El filtro se recuerda entre sesiones: hay que reflejarlo en el input, que
+  // en el HTML arranca en 0.
+  const inpDias=document.getElementById('adm-rep-dias');
+  if(inpDias) inpDias.value=_admRepMinDias;
   if(btn) btn.disabled=true;
   if(totalEl) totalEl.textContent='';
   if(wrap) wrap.innerHTML='<div class="adm-empty">Cargando...</div>';
@@ -5666,13 +5710,16 @@ function _admCargarReportes(){
       const guiasObj = (nodo&&nodo.guias)||{};
       const lista = Object.values(guiasObj);
       lista.forEach(g=>{
+        const dias=_admDiasSinMov(g);
         filas.push({
           'NUMERO DE GUIA': g.guia||'',
           'TRANSPORTADORA': g.transportadora||'',
           'ESTATUS': g.estatus||'',
           'FECHA ULT MOV': g.fechaMov||'',
+          'DIAS SIN MOV': dias!=null?dias:'',
           'TIENDA': emp.nombre||empId,
-          _grupo: g.grupo||'reportar'
+          _grupo: g.grupo||'reportar',
+          _dias: dias
         });
       });
       const cantRecomendar = lista.filter(g=>(g.grupo||'reportar')==='recomendar').length;
@@ -5685,57 +5732,108 @@ function _admCargarReportes(){
       });
     });
     _admRepDatos = filas;
-    const tiendasConDatos = porTienda.filter(t=>t.cant>0).length;
-    if(totalEl){
-      const totRecomendar=filas.filter(f=>f._grupo==='recomendar').length;
-      const totReportar=filas.length-totRecomendar;
-      totalEl.textContent = filas.length+' guías de '+tiendasConDatos+' tienda'+(tiendasConDatos!==1?'s':'')+' · 📢 '+totRecomendar+' para recomendar · 🚩 '+totReportar+' para reportar';
-    }
-    if(btn) btn.disabled = filas.length===0;
-    if(wrap){
-      if(!porTienda.length){
-        wrap.innerHTML='<div class="adm-empty">No tienes tiendas registradas.</div>';
-      } else {
-        wrap.innerHTML=`<table style="width:100%;border-collapse:collapse;">
-          <thead><tr>
-            <th style="text-align:left;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--text-2);border-bottom:1.5px solid var(--border);">Tienda</th>
-            <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:#0e7490;border-bottom:1.5px solid var(--border);">📢 Recomendar</th>
-            <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:#b91c1c;border-bottom:1.5px solid var(--border);">🚩 Reportar</th>
-            <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--text-2);border-bottom:1.5px solid var(--border);">Total</th>
-            <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--text-2);border-bottom:1.5px solid var(--border);">Última carga de Excel</th>
-          </tr></thead>
-          <tbody>${porTienda.map(t=>`<tr>
-            <td style="padding:6px 10px;font-size:.73rem;color:var(--text-1);font-weight:600;border-bottom:1px solid var(--border);">${t.nombre}</td>
-            <td style="padding:6px 10px;font-size:.73rem;text-align:right;color:${t.cantRecomendar>0?'#0e7490':'var(--text-3)'};border-bottom:1px solid var(--border);">${t.cantRecomendar}</td>
-            <td style="padding:6px 10px;font-size:.73rem;text-align:right;color:${t.cantReportar>0?'#b91c1c':'var(--text-3)'};border-bottom:1px solid var(--border);">${t.cantReportar}</td>
-            <td style="padding:6px 10px;font-size:.73rem;text-align:right;font-weight:700;color:${t.cant>0?'var(--text-1)':'var(--text-3)'};border-bottom:1px solid var(--border);">${t.cant}</td>
-            <td style="padding:6px 10px;font-size:.68rem;text-align:right;color:var(--text-3);border-bottom:1px solid var(--border);">${t.actualizado}</td>
-          </tr>`).join('')}</tbody>
-        </table>`;
-      }
-    }
+    _admRepMeta  = porTienda;
+    _admRepPintar();
   }).catch(()=>{
     if(wrap) wrap.innerHTML='<div class="adm-empty">Error cargando reportes.</div>';
   });
 }
 
+// Pinta el resumen del tab de Reportes aplicando el filtro de días sin
+// movimiento. Va aparte de _admCargarReportes para poder repintar al cambiar el
+// filtro sin volver a leer Firebase.
+function _admRepPintar(){
+  const wrap = document.getElementById('adm-rep-tabla');
+  const btn = document.getElementById('adm-rep-btn-descargar');
+  const totalEl = document.getElementById('adm-rep-total');
+  const avisoEl = document.getElementById('adm-rep-aviso');
+  const filas = _admRepFiltrar(_admRepDatos);
+  // Los conteos por tienda se recalculan sobre lo FILTRADO: si no, la tabla
+  // diría 40 guías y el Excel traería 6.
+  const porNombre = {};
+  filas.forEach(f=>{
+    const t = f.TIENDA || '—';
+    if(!porNombre[t]) porNombre[t] = {nombre:t, cant:0, cantRecomendar:0, cantReportar:0};
+    porNombre[t].cant++;
+    if(f._grupo==='recomendar') porNombre[t].cantRecomendar++; else porNombre[t].cantReportar++;
+  });
+  const porTienda = (_admRepMeta||[]).map(m=>{
+    const c = porNombre[m.nombre] || {cant:0, cantRecomendar:0, cantReportar:0};
+    return {nombre:m.nombre, actualizado:m.actualizado, cant:c.cant,
+            cantRecomendar:c.cantRecomendar, cantReportar:c.cantReportar};
+  });
+  const tiendasConDatos = porTienda.filter(t=>t.cant>0).length;
+  if(totalEl){
+    const totRecomendar = filas.filter(f=>f._grupo==='recomendar').length;
+    const totReportar = filas.length - totRecomendar;
+    totalEl.textContent = filas.length+' guías de '+tiendasConDatos+' tienda'+(tiendasConDatos!==1?'s':'')+
+      ' · 📢 '+totRecomendar+' para recomendar · 🚩 '+totReportar+' para reportar';
+  }
+  if(avisoEl){
+    if(!_admRepMinDias){ avisoEl.textContent=''; }
+    else {
+      const sinDato = _admRepDatos.filter(f=>f._dias==null).length;
+      avisoEl.textContent = 'Filtrando: más de '+_admRepMinDias+(_admRepMinDias===1?' día':' días')+
+        ' sin movimiento · '+filas.length+' de '+_admRepDatos.length+' guías'+
+        (sinDato?' · '+sinDato+' sin fecha de movimiento quedan fuera':'');
+    }
+  }
+  if(btn) btn.disabled = filas.length===0;
+  if(!wrap) return;
+  if(!porTienda.length){
+    wrap.innerHTML='<div class="adm-empty">No tienes tiendas registradas.</div>';
+    return;
+  }
+  if(!filas.length){
+    wrap.innerHTML='<div class="adm-empty">Ninguna guía supera '+_admRepMinDias+
+      (_admRepMinDias===1?' día':' días')+' sin movimiento.</div>';
+    return;
+  }
+  wrap.innerHTML=`<table style="width:100%;border-collapse:collapse;">
+    <thead><tr>
+      <th style="text-align:left;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--text-2);border-bottom:1.5px solid var(--border);">Tienda</th>
+      <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--info-strong);border-bottom:1.5px solid var(--border);">📢 Recomendar</th>
+      <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--danger-strong);border-bottom:1.5px solid var(--border);">🚩 Reportar</th>
+      <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--text-2);border-bottom:1.5px solid var(--border);">Total</th>
+      <th style="text-align:right;padding:7px 10px;font-size:.65rem;font-weight:700;color:var(--text-2);border-bottom:1.5px solid var(--border);">Última carga de Excel</th>
+    </tr></thead>
+    <tbody>${porTienda.map(t=>`<tr>
+      <td style="padding:6px 10px;font-size:.73rem;color:var(--text-1);font-weight:600;border-bottom:1px solid var(--border);">${esc(t.nombre)}</td>
+      <td style="padding:6px 10px;font-size:.73rem;text-align:right;color:${t.cantRecomendar>0?'var(--info-strong)':'var(--text-3)'};border-bottom:1px solid var(--border);">${t.cantRecomendar||'—'}</td>
+      <td style="padding:6px 10px;font-size:.73rem;text-align:right;color:${t.cantReportar>0?'var(--danger-strong)':'var(--text-3)'};border-bottom:1px solid var(--border);">${t.cantReportar||'—'}</td>
+      <td style="padding:6px 10px;font-size:.73rem;text-align:right;font-weight:700;color:${t.cant>0?'var(--text-1)':'var(--text-3)'};border-bottom:1px solid var(--border);">${t.cant||'—'}</td>
+      <td style="padding:6px 10px;font-size:.68rem;text-align:right;color:var(--text-3);border-bottom:1px solid var(--border);">${esc(t.actualizado)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
 function _admDescargarReporteConsolidado(){
-  if(!_admRepDatos.length){toast('No hay guías para exportar');return;}
+  // El Excel sale con lo MISMO que muestra la pantalla: si hay filtro de días
+  // puesto, se descargan solo esas guías.
+  const datos=_admRepFiltrar(_admRepDatos);
+  if(!datos.length){
+    toast(_admRepMinDias?('No hay guías con más de '+_admRepMinDias+' días sin movimiento'):'No hay guías para exportar');
+    return;
+  }
   toast('⏳ Generando Excel...');
   _cargarLib(_LIB_XLSX).then(()=>{
-    const cols=['NUMERO DE GUIA','TRANSPORTADORA','ESTATUS','FECHA ULT MOV','TIENDA'];
-    const recomendar=_admRepDatos.filter(f=>f._grupo==='recomendar');
-    const reportar=_admRepDatos.filter(f=>f._grupo!=='recomendar');
+    const cols=['NUMERO DE GUIA','TRANSPORTADORA','ESTATUS','FECHA ULT MOV','DIAS SIN MOV','TIENDA'];
+    // Del más estancado al menos, que es el orden en que se atienden.
+    const ordenar=a=>a.slice().sort((x,y)=>(y._dias??-1)-(x._dias??-1));
+    const recomendar=ordenar(datos.filter(f=>f._grupo==='recomendar'));
+    const reportar=ordenar(datos.filter(f=>f._grupo!=='recomendar'));
     const wb = XLSX.utils.book_new();
     const agregarHoja=(filas,nombreHoja)=>{
       const ws = XLSX.utils.json_to_sheet(filas, {header:cols});
-      ws['!cols']=[18,22,26,16,22].map(w=>({wch:w}));
+      ws['!cols']=[18,22,26,16,14,22].map(w=>({wch:w}));
       XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
     };
     agregarHoja(recomendar, 'Guías para recomendar');
     agregarHoja(reportar, 'Guías para reportar');
     const hoy = new Date().toLocaleDateString('es-CO').replace(/\//g,'-');
-    XLSX.writeFile(wb, 'Reporte_Guias_Todas_Tiendas_'+hoy+'.xlsx');
+    // El nombre del archivo deja constancia del corte usado.
+    const suf = _admRepMinDias ? '_mas_de_'+_admRepMinDias+'_dias' : '';
+    XLSX.writeFile(wb, 'Reporte_Guias_Todas_Tiendas'+suf+'_'+hoy+'.xlsx');
     toast('📤 Reporte consolidado descargado');
   }).catch(e=>toast('⚠️ No se pudo generar el Excel: '+(e&&e.message||e)));
 }
