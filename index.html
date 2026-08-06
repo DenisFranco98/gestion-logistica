@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260806j">
+<link rel="stylesheet" href="shared/shared.css?v=20260806k">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1005,7 +1005,7 @@ window._sbEstadosToggle=function(){
       <div id="nov-ev-img-wrap">
         <input type="file" id="nov-ev-img" accept="image/*" capture="environment" style="display:none;" onchange="_novEvPreview(this)">
         <div onclick="document.getElementById('nov-ev-img').click()" id="nov-ev-preview" style="border:2px dashed #e2e8f0;border-radius:10px;padding:24px;text-align:center;cursor:pointer;color:var(--text-3);font-size:.78rem;">
-          Toca para tomar foto o seleccionar imagen
+          Toca para tomar foto o seleccionar imagen<div style="font-size:.68rem;color:var(--info-strong);font-weight:600;margin-top:6px;">📋 o pegá una captura con Ctrl+V</div>
         </div>
       </div>
       <div id="nov-ev-txt-wrap" style="display:none;">
@@ -1061,7 +1061,7 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260806j"></script>
+<script src="shared/app-shared.js?v=20260806k"></script>
 <script>
 // ===== MODE SELECT (router del landing) =====
 function _modoLogistica(){

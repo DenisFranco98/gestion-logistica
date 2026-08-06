@@ -3748,13 +3748,61 @@ function _novEvidenciaModal(id){
   }));
   _novEvTipo('img');
   document.getElementById('nov-ev-modal').style.display='flex';
+  _novEvPasteOn();   // Ctrl+V carga la captura en el campo de imagen
+}
+
+// ── Pegar una captura desde el portapapeles ──────────────────────────
+// Mismo criterio que en Gestiones Diarias: el listener va en el documento y
+// solo actúa con el modal abierto y si lo pegado es una imagen, así pegar
+// texto en la evidencia escrita sigue funcionando. Acá además se cambia al
+// modo Imagen, porque este modal sí obliga a elegir entre foto y texto.
+let _novEvPasteHandler=null;
+
+function _novEvPasteOn(){
+  if(_novEvPasteHandler) return;
+  _novEvPasteHandler=ev=>{
+    const modal=document.getElementById('nov-ev-modal');
+    if(!modal || modal.style.display!=='flex') return;
+    const items=(ev.clipboardData && ev.clipboardData.items) || [];
+    let file=null;
+    for(const it of items){
+      if(it.kind==='file' && /^image\//.test(it.type)){ file=it.getAsFile(); break; }
+    }
+    if(!file) return;
+    ev.preventDefault();
+    const inp=document.getElementById('nov-ev-img');
+    if(!inp) return;
+    try{
+      const dt=new DataTransfer();
+      const base=(file.name && file.name!=='image.png') ? file.name : ('captura-'+_hoyLocal()+'.png');
+      dt.items.add(new File([file], base, {type:file.type||'image/png'}));
+      inp.files=dt.files;
+    }catch(e){
+      toast('⚠️ Este navegador no permite pegar la imagen; usá el selector de archivo',5000);
+      return;
+    }
+    _novEvTipo('img');
+    _novEvPreview(inp);
+    toast('📋 Captura pegada');
+  };
+  document.addEventListener('paste',_novEvPasteHandler);
+}
+
+function _novEvPasteOff(){
+  if(!_novEvPasteHandler) return;
+  document.removeEventListener('paste',_novEvPasteHandler);
+  _novEvPasteHandler=null;
 }
 
 function _novEvCerrar(){
+  _novEvPasteOff();
   document.getElementById('nov-ev-modal').style.display='none';
   document.getElementById('nov-ev-img').value='';
   document.getElementById('nov-ev-txt').value='';
-  document.getElementById('nov-ev-preview').innerHTML='Toca para tomar foto o seleccionar imagen';
+  // Mismo texto que el HTML, incluido el recordatorio de Ctrl+V: si acá se
+  // deja el viejo, el aviso desaparece en cuanto se cierra y se reabre el modal.
+  document.getElementById('nov-ev-preview').innerHTML='Toca para tomar foto o seleccionar imagen'+
+    '<div style="font-size:.68rem;color:var(--info-strong);font-weight:600;margin-top:6px;">📋 o pegá una captura con Ctrl+V</div>';
   document.getElementById('nov-ev-preview').style.background='';
   _novEvId=null;
 }
