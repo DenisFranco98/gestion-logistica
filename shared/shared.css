@@ -220,6 +220,10 @@ body.data-loaded #sidebar-actions{display:flex;}
 #card-float-wrap .card .card-name,#card-float-wrap .card .card-producto,#card-float-wrap .card .card-addr{white-space:normal!important;}
 /* Cards colapsables: info visible, gestión oculta hasta expandir */
 .card-gestion{display:none;}
+/* Guía generada y Tránsito muestran su gestión dentro de la card: son un par
+   de botones y no vale la pena mandarlas a la card flotante. */
+.card.card-directa .card-gestion{display:block;}
+.card.card-directa{cursor:default;}
 #card-float-wrap .card-gestion{display:block;}
 #card-float-wrap{background:var(--bg-card);box-shadow:0 0 0 2px var(--accent),var(--shadow-lg);border-radius:var(--radius-md);}
 /* Mientras se gestiona una card, el resto se atenúa y difumina para enfocar la atención */
