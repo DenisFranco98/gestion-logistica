@@ -1086,7 +1086,18 @@ function _publicarSnapshotLogistica(pedidos, pendConfirmacion){
 }
 
 // ── COMPLETITUD ────────────────────────────────────────────────────────
-function sinAccion(p){return p.estadoKey==='transito'&&(p.dias||0)<4;}
+// "Sin acción" = todavía no hay nada que gestionar, así que no cuenta como
+// pendiente en NINGÚN lado: ni en las cards, ni en el badge de la sección, ni
+// en el progreso ("X de Y gestionados"), ni en el resumen del día.
+//   · Tránsito con menos de 4 días: el pedido todavía se mueve solo.
+//   · Guía generada hoy o ayer: la transportadora aún puede estar recogiendo.
+// Una guía SIN fecha de generación no se oculta: no se puede afirmar que sea
+// de hoy, y es preferible mostrar de más que esconder trabajo real.
+function sinAccion(p){
+  if(p.estadoKey==='transito') return (p.dias||0)<4;
+  if(p.estadoKey==='reparto')  return p.dias!=null && p.dias<2;
+  return false;
+}
 function alertaNivel(p){
   if(p.estadoKey!=='pendiente_sin_guia')return null;
   const d=p.diasSinGuia||0;
@@ -1720,21 +1731,19 @@ function renderCards(){
     const gr=pedidos.filter(p=>p.estadoKey===est.key&&(filtroTiendas.length===0||filtroTiendas.includes(p.tienda)));if(!gr.length)return;
     const subFiltro=filtrosSeccion[est.key]||[];
     const grFiltrado=subFiltro.length>0?gr.filter(p=>subFiltro.includes(p.estadoRaw)):gr;
-    // Guía generada: solo las que llevan MÁS DE UN DÍA desde que se generó.
-    // Las de hoy y las de ayer todavía no son gestionables —la transportadora
-    // aún puede estar recogiendo— y llenaban la sección de cards sin acción.
-    // `dias` se cuenta desde la fecha de guía generada del Excel.
-    const grPorDias=(est.key==='reparto')
-      ? grFiltrado.filter(p=>(p.dias||0)>=2)
-      : grFiltrado;
-    const pendientes=grPorDias.filter(p=>!estaCompleta(p));
+    // Los "sin acción" quedan fuera de la sección entera, no solo de las cards:
+    // antes se filtraban acá y seguían contando en el progreso y en el badge,
+    // así que un archivo con 10 guías de las que 5 eran de hoy mostraba 5 para
+    // gestionar pero reportaba 10 pendientes.
+    const gestionables=grFiltrado.filter(p=>!sinAccion(p));
+    const pendientes=gestionables.filter(p=>!estaCompleta(p));
     pendientes.sort((a,b)=>urgenciaScore(b)-urgenciaScore(a));
-    const gestionados=grPorDias.filter(p=>estaCompleta(p));
+    const gestionados=gestionables.filter(p=>estaCompleta(p));
     const sec=document.createElement('div');sec.className='status-section';
     const hdr=document.createElement('div');hdr.className='section-header';hdr.style.borderColor=est.color;
     hdr.innerHTML='<span style="font-size:1.2rem">'+est.icon+'</span>'+
       '<h2 style="color:'+est.color+'">'+est.label+'</h2>'+
-      '<span class="sec-badge" style="background:'+est.color+'22;color:'+est.color+'">'+pendientes.filter(p=>!sinAccion(p)).length+' pendientes</span>';
+      '<span class="sec-badge" style="background:'+est.color+'22;color:'+est.color+'">'+pendientes.length+' pendientes</span>';
     sec.appendChild(hdr);
     if(est.guion){
       const gb=document.createElement('div');gb.className='guion-box';gb.style.borderColor=est.color;
@@ -5633,6 +5642,16 @@ window._cambiarTienda = function(){
 function _modoLogistica(){
   _ocultarTodosModos();
   document.getElementById('mode-select-screen').style.display='none';
+  // Volver a la pantalla de carga es empezar de cero: si no se limpia, el
+  // tablero del archivo anterior queda detrás y se ven sus gestiones y sus
+  // contadores mientras se está pidiendo un archivo nuevo. No se pierde nada:
+  // checkSesion() ofrece restaurar lo guardado en localStorage.
+  pedidos=[]; gestiones={};
+  filtroActivo=null; filtrosSeccion={}; filtroTiendas=[];
+  document.getElementById('main').style.display='none';
+  document.body.classList.remove('data-loaded');
+  const _rp=document.getElementById('right-panel');
+  if(_rp) _rp.style.display='none';
   document.getElementById('upload-zone').style.display='flex';
   checkSesion();
 }
