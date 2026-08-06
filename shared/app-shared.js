@@ -1217,11 +1217,20 @@ window._cruzarClavesViejas = async function(){
         const j=await r.json(); return (j&&typeof j==='object')?Object.keys(j):[];
       }catch(e){ return null; }
     };
-    // Índice nombre→uid de las cuentas de HOY.
-    const porNombre={};
-    Object.entries(users).forEach(([uid,u])=>{
-      const s=_gdKey((u||{}).asesor||''); if(s&&s!=='_') (porNombre[s]=porNombre[s]||[]).push(uid);
-    });
+    // El nombre NO se escribe igual en la cuenta vieja y en la nueva: "Yiseth
+    // Jácome" contra "YISETH", "Denis" contra "Denis Franco", "Yon Lopez"
+    // contra "YON". Comparar el nombre completo daba "no tiene cuenta" para
+    // gente que sí la tiene. Se compara por partes, sin tildes: hay candidato
+    // cuando todas las palabras del nombre más corto están en el más largo.
+    const partes=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(Boolean);
+    const coincide=(a,b)=>{
+      if(!a.length||!b.length) return false;
+      const chico=a.length<=b.length?a:b, grande=new Set(a.length<=b.length?b:a);
+      return chico.every(t=>grande.has(t));
+    };
+    const usuariosHoy=Object.entries(users).map(([uid,u])=>({
+      uid, nombre:(u||{}).asesor||(u||{}).email||uid, p:partes((u||{}).asesor||'')}));
     // Todas las claves de nodos por persona que no son uid ni admin.
     const NODOS=['presence','session_hist','session_reports','historial_diario'];
     const vistas=new Set();
@@ -1235,20 +1244,21 @@ window._cruzarClavesViejas = async function(){
     for(const k of vistas){
       const p=(await _db.ref('presence/'+k).once('value')).val()||{};
       const nombre=p.asesor||'';
-      const slug=_gdKey(nombre);
-      const uids=porNombre[slug]||[];
+      const np=partes(nombre);
+      const cands=usuariosHoy.filter(u=>coincide(np,u.p));
       const ut=[];
-      for(const uid of uids){
-        const t=(await _db.ref('user_tiendas/'+uid).once('value')).val()||{};
+      for(const c of cands){
+        const t=(await _db.ref('user_tiendas/'+c.uid).once('value')).val()||{};
         Object.keys(t).forEach(id=>ut.push(((empresas[id]||{}).nombre)||id));
       }
       filas.push({
         'clave vieja':k,
         'quién la usaba':nombre||'(sin presence)',
         'tienda entonces':p.tienda||'',
-        '¿tiene cuenta hoy?':uids.length?'SÍ':'NO',
-        'uid actual':uids.join(' · ')||'—',
-        'tiendas hoy':ut.join(' · ')||'—'
+        '¿tiene cuenta hoy?':cands.length?(cands.length>1?'SÍ ('+cands.length+' posibles)':'SÍ'):'NO',
+        'se llama hoy':cands.map(c=>c.nombre).join(' · ')||'—',
+        'uid actual':cands.map(c=>c.uid).join(' · ')||'—',
+        'tiendas hoy':[...new Set(ut)].join(' · ')||'—'
       });
     }
     filas.sort((a,b)=>String(a['¿tiene cuenta hoy?']).localeCompare(String(b['¿tiene cuenta hoy?'])));
