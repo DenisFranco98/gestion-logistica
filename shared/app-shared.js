@@ -1264,8 +1264,20 @@ window._migrarCuentaVieja = async function(opts){
   if(!de){ console.log("uso: _migrarCuentaVieja({de:'Wildropshop', ramas:{'laura':'<uid>'}, sesionesA:'<uid>', borrar:true})"); return; }
   console.log('%c[MIGRAR cuenta vieja: '+de+']'+(aplicar?'':' (simulación - no escribe)'),'font-weight:bold');
   try{
-    const users=(await _db.ref('users').once('value')).val()||{};
-    const nombreDe=uid=>((users[uid]||{}).asesor)||uid;
+    const [users,admins]=await Promise.all([
+      _db.ref('users').once('value').then(s=>s.val()||{}),
+      _db.ref('admins').once('value').then(s=>s.val()||{})]);
+    const existe=uid=>!!users[uid]||!!admins[uid];
+    const nombreDe=uid=>((users[uid]||{}).asesor)||((admins[uid]||{}).username)||uid;
+    // Los uid se copian a mano y confundir l/1, O/0 o S/5 manda el historial a
+    // una carpeta que no existe: no se avisa, simplemente nadie lo vuelve a ver.
+    const malos=Object.values(ramas).filter(u=>!existe(u));
+    if(opts.sesionesA && !existe(opts.sesionesA)) malos.push(opts.sesionesA);
+    if(malos.length){
+      console.error('Estos uid de destino no existen ni en /users ni en /admins:\n  '+
+        [...new Set(malos)].join('\n  ')+'\nRevisalos con _listarUsuarios(). No se hace nada.');
+      return;
+    }
     const ramaDe=uid=>_gdKey(nombreDe(uid));
     const [hd,sh,sr]=await Promise.all([
       _db.ref('historial_diario/'+de).once('value').then(s=>s.val()||{}),
@@ -1276,7 +1288,6 @@ window._migrarCuentaVieja = async function(opts){
     for(const [rama,uid] of Object.entries(ramas)){
       const dias=hd[rama];
       if(!dias){ console.warn('La rama "'+rama+'" no existe en '+de); continue; }
-      if(!users[uid]){ console.warn('El uid '+uid+' no está en /users. Revisá el destino.'); }
       const destRama=ramaDe(uid);
       const yaHay=(await _db.ref('historial_diario/'+uid+'/'+destRama).once('value')).val()||{};
       Object.entries(dias).forEach(([fecha,val])=>{
