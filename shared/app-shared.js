@@ -1193,6 +1193,43 @@ window._moverGestionesSync = async function(opts){
   }catch(e){ console.error('[MOVER gestiones_sync] falló (¿sesión de admin?):',e); }
 };
 
+// Lista las cuentas actuales con su uid, para poder decir "esta carpeta vieja
+// es de esta persona". Muestra nombre, correo, rol y tiendas — nunca la
+// contraseña, que en /users está en texto plano y no hay por qué pasearla.
+//
+// Ejecutar desde la consola como admin:
+//   _listarUsuarios()          → todas
+//   _listarUsuarios('lau')     → las que coincidan con ese texto
+window._listarUsuarios = async function(filtro){
+  try{
+    const [uSnap,aSnap,eSnap]=await Promise.all([
+      _db.ref('users').once('value'), _db.ref('admins').once('value'),
+      _db.ref('empresas').once('value')]);
+    const users=uSnap.val()||{}, admins=aSnap.val()||{}, empresas=eSnap.val()||{};
+    const f=String(filtro||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+    const filas=[];
+    for(const [uid,u] of Object.entries(users)){
+      const nombre=(u||{}).asesor||'', mail=(u||{}).email||(u||{}).username||'';
+      const txt=(nombre+' '+mail+' '+uid).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+      if(f && txt.indexOf(f)<0) continue;
+      const t=(await _db.ref('user_tiendas/'+uid).once('value')).val()||{};
+      filas.push({nombre, uid, correo:mail, rol:(u||{}).rol||'asesor',
+        tiendas:Object.keys(t).map(id=>((empresas[id]||{}).nombre)||id).join(' · ')||'—',
+        es:'usuario'});
+    }
+    Object.entries(admins).forEach(([uid,a])=>{
+      const nombre=(a||{}).username||(a||{}).email||uid;
+      const txt=(nombre+' '+uid).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+      if(f && txt.indexOf(f)<0) return;
+      filas.push({nombre, uid, correo:(a||{}).email||'', rol:'admin', tiendas:'(todas las suyas)', es:'admin'});
+    });
+    filas.sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es'));
+    console.table(filas);
+    console.log(filas.length+' cuentas'+(filtro?' que coinciden con "'+filtro+'"':'')+'.');
+    return filas;
+  }catch(e){ console.error('[LISTAR usuarios] falló (¿sesión de admin?):',e); }
+};
+
 // Lleva lo guardado en una cuenta vieja (la del login por nombre de tienda) a
 // la carpeta del uid de cada persona.
 //
@@ -1220,6 +1257,10 @@ window._moverGestionesSync = async function(opts){
 window._migrarCuentaVieja = async function(opts){
   opts=opts||{};
   const de=opts.de, ramas=opts.ramas||{}, aplicar=opts.aplicar===true;
+  // Ramas que se tiran a propósito, porque esa persona ya no está y se decidió
+  // no conservar su historial. Van aparte de `ramas` y no por un valor especial
+  // adentro: descartar trabajo tiene que costar escribirlo, no ser un descuido.
+  const descartar=opts.descartar||[];
   if(!de){ console.log("uso: _migrarCuentaVieja({de:'Wildropshop', ramas:{'laura':'<uid>'}, sesionesA:'<uid>', borrar:true})"); return; }
   console.log('%c[MIGRAR cuenta vieja: '+de+']'+(aplicar?'':' (simulación - no escribe)'),'font-weight:bold');
   try{
@@ -1249,7 +1290,18 @@ window._migrarCuentaVieja = async function(opts){
           _val:(previo && (previo._ts||0)>(val&&val._ts||0))?previo:val});
       });
     }
-    Object.keys(hd).forEach(r=>{ if(!(r in ramas)) sinAsignar.push({rama:r, días:Object.keys(hd[r]||{}).length}); });
+    const tirar=[];
+    Object.keys(hd).forEach(r=>{
+      if(r in ramas) return;
+      const n=Object.keys(hd[r]||{}).length;
+      if(descartar.indexOf(r)>=0) tirar.push({rama:r, 'días que se pierden':n});
+      else sinAsignar.push({rama:r, días:n});
+    });
+    if(tirar.length){
+      console.group('%cRamas que se DESCARTAN ('+tirar.length+') — se pierden al borrar','color:#b91c1c;font-weight:bold');
+      console.log('Quedan en el respaldo que se descarga, pero salen de la base.');
+      console.table(tirar); console.groupEnd();
+    }
 
     console.log('Días de historial a mover: '+plan.length);
     if(plan.length) console.table(plan.map(p=>({rama:p.rama, fecha:p.fecha, 'va a':p['va a']})));
