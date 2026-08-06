@@ -1193,6 +1193,118 @@ window._moverGestionesSync = async function(opts){
   }catch(e){ console.error('[MOVER gestiones_sync] falló (¿sesión de admin?):',e); }
 };
 
+// Lleva lo guardado en una cuenta vieja (la del login por nombre de tienda) a
+// la carpeta del uid de cada persona.
+//
+// Una misma cuenta guarda el trabajo de VARIAS personas: en historial_diario
+// cuelga una rama por nombre, y adentro de 'Rojucol' conviven Giscela, Daniel C
+// y Laura. Por eso el destino se define rama por rama, no de una.
+//
+//   _migrarCuentaVieja({
+//     de:'Wildropshop',
+//     ramas:{ 'laura':'<uid de Laura>', 'miguel quintero':'<uid de Miguel>' },
+//     sesionesA:'<uid>',   // opcional: a quién van session_hist y session_reports
+//     borrar:true          // opcional: borra la cuenta vieja al terminar
+//   })
+//
+// Sin `aplicar:true` solo simula. Descarga respaldo antes de escribir.
+//
+// Qué hace con cada cosa:
+//   · historial_diario → cada día va a historial_diario/{uid}/{nombre actual}/{fecha}.
+//     Todo termina en UNA rama por persona, la de su nombre de hoy. Si el día ya
+//     existe en destino se conserva el de _ts más reciente y se avisa.
+//   · session_hist y session_reports → se copian tal cual: son push keys y no chocan.
+//   · presence → NO se migra, solo se borra: es el estado de la ÚLTIMA sesión
+//     (online, lastSeen) y pisaría el presence vivo de la persona. Se regenera
+//     solo la próxima vez que entre.
+window._migrarCuentaVieja = async function(opts){
+  opts=opts||{};
+  const de=opts.de, ramas=opts.ramas||{}, aplicar=opts.aplicar===true;
+  if(!de){ console.log("uso: _migrarCuentaVieja({de:'Wildropshop', ramas:{'laura':'<uid>'}, sesionesA:'<uid>', borrar:true})"); return; }
+  console.log('%c[MIGRAR cuenta vieja: '+de+']'+(aplicar?'':' (simulación - no escribe)'),'font-weight:bold');
+  try{
+    const users=(await _db.ref('users').once('value')).val()||{};
+    const nombreDe=uid=>((users[uid]||{}).asesor)||uid;
+    const ramaDe=uid=>_gdKey(nombreDe(uid));
+    const [hd,sh,sr]=await Promise.all([
+      _db.ref('historial_diario/'+de).once('value').then(s=>s.val()||{}),
+      _db.ref('session_hist/'+de).once('value').then(s=>s.val()||{}),
+      _db.ref('session_reports/'+de).once('value').then(s=>s.val()||{})
+    ]);
+    const plan=[], choques=[], sinAsignar=[];
+    for(const [rama,uid] of Object.entries(ramas)){
+      const dias=hd[rama];
+      if(!dias){ console.warn('La rama "'+rama+'" no existe en '+de); continue; }
+      if(!users[uid]){ console.warn('El uid '+uid+' no está en /users. Revisá el destino.'); }
+      const destRama=ramaDe(uid);
+      const yaHay=(await _db.ref('historial_diario/'+uid+'/'+destRama).once('value')).val()||{};
+      Object.entries(dias).forEach(([fecha,val])=>{
+        const previo=yaHay[fecha];
+        if(previo){
+          const gana=(val&&val._ts||0)>=(previo._ts||0)?'el de la cuenta vieja':'el que ya estaba';
+          choques.push({rama, fecha, 'se queda':gana});
+        }
+        plan.push({rama, fecha, 'va a':nombreDe(uid)+' / '+destRama,
+          _path:'historial_diario/'+uid+'/'+destRama+'/'+fecha,
+          _val:(previo && (previo._ts||0)>(val&&val._ts||0))?previo:val});
+      });
+    }
+    Object.keys(hd).forEach(r=>{ if(!(r in ramas)) sinAsignar.push({rama:r, días:Object.keys(hd[r]||{}).length}); });
+
+    console.log('Días de historial a mover: '+plan.length);
+    if(plan.length) console.table(plan.map(p=>({rama:p.rama, fecha:p.fecha, 'va a':p['va a']})));
+    if(choques.length){ console.group('%cDías que ya existen en destino ('+choques.length+')','color:#b45309');
+      console.table(choques); console.groupEnd(); }
+    if(sinAsignar.length){ console.group('%cRamas SIN asignar ('+sinAsignar.length+') — no se tocan','color:#b91c1c');
+      console.log('Si borrás la cuenta con estas ramas sin asignar, ese trabajo se pierde.');
+      console.table(sinAsignar); console.groupEnd(); }
+    const nSes=Object.keys(sh).length, nRep=Object.keys(sr).length;
+    if(opts.sesionesA) console.log('Sesiones a mover: '+nSes+' de session_hist y '+nRep+
+      ' de session_reports → '+nombreDe(opts.sesionesA));
+    else if(nSes||nRep) console.log('Hay '+nSes+' sesiones y '+nRep+
+      ' reportes sin destino (pasá sesionesA para moverlos).');
+    if(opts.borrar) console.log('Al terminar se borra: historial_diario/'+de+', session_hist/'+de+
+      ', session_reports/'+de+' y presence/'+de);
+
+    if(!aplicar){ console.log('%cSimulación. Agregá aplicar:true para hacerlo.','font-weight:bold'); return {plan:plan.length, choques:choques.length, sinAsignar}; }
+    if(sinAsignar.length && opts.borrar){
+      console.error('No se aplica: hay ramas sin asignar y borrar:true las perdería. Asignalas o quitá borrar.');
+      return;
+    }
+
+    const respaldo={ts:Date.now(), fecha:new Date().toString(), de,
+      historial_diario:hd, session_hist:sh, session_reports:sr,
+      presence:(await _db.ref('presence/'+de).once('value')).val()};
+    try{
+      const el=document.createElement('a');
+      el.href=URL.createObjectURL(new Blob([JSON.stringify(respaldo,null,2)],{type:'application/json'}));
+      el.download='migrar-'+_gdKey(de)+'-'+_hoyLocal()+'.json';
+      el.click(); URL.revokeObjectURL(el.href);
+      console.log('Respaldo descargado: '+el.download);
+    }catch(e){ console.warn('Queda en window._migCuentaRespaldo',e); }
+    window._migCuentaRespaldo=respaldo;
+
+    const upd={};
+    plan.forEach(p=>{ upd[p._path]=p._val; });
+    if(opts.sesionesA){
+      Object.entries(sh).forEach(([k,v])=>{ upd['session_hist/'+opts.sesionesA+'/'+k]=v; });
+      Object.entries(sr).forEach(([k,v])=>{ upd['session_reports/'+opts.sesionesA+'/'+k]=v; });
+    }
+    if(Object.keys(upd).length) await _db.ref().update(upd);
+    if(opts.borrar){
+      const del={};
+      del['historial_diario/'+de]=null;
+      if(opts.sesionesA){ del['session_hist/'+de]=null; del['session_reports/'+de]=null; }
+      del['presence/'+de]=null;
+      await _db.ref().update(del);
+    }
+    console.log('%c[MIGRAR cuenta vieja] listo: '+plan.length+' días'+
+      (opts.sesionesA?', '+nSes+' sesiones, '+nRep+' reportes':'')+
+      (opts.borrar?'. Cuenta vieja borrada.':'.'),'font-weight:bold;color:#15803d');
+    return {plan:plan.length, choques:choques.length};
+  }catch(e){ console.error('[MIGRAR cuenta vieja] falló (¿sesión de admin?):',e); }
+};
+
 // Responde "¿esta clave vieja es una persona que HOY ya tiene su uid, o es
 // alguien distinto?". Es la pregunta que hay que contestar antes de borrar o
 // archivar nada: las cuentas viejas eran por tienda (el login era 'Dalevys',
