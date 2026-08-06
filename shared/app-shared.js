@@ -1285,6 +1285,11 @@ window._migrarCuentaVieja = async function(opts){
       _db.ref('session_reports/'+de).once('value').then(s=>s.val()||{})
     ]);
     const plan=[], choques=[], sinAsignar=[];
+    // Dos ramas del MISMO lote pueden ir a la misma carpeta y traer el mismo
+    // día: 'tatiana' y 'tat' eran la misma persona y las dos tenían el 12 de
+    // mayo. Escribían en la misma ruta y la segunda pisaba a la primera sin
+    // decir nada. Se lleva un índice para detectarlo y avisar.
+    const yaPlan={}, choquesRamas=[];
     for(const [rama,uid] of Object.entries(ramas)){
       const dias=hd[rama];
       if(!dias){ console.warn('La rama "'+rama+'" no existe en '+de); continue; }
@@ -1296,9 +1301,20 @@ window._migrarCuentaVieja = async function(opts){
           const gana=(val&&val._ts||0)>=(previo._ts||0)?'el de la cuenta vieja':'el que ya estaba';
           choques.push({rama, fecha, 'se queda':gana});
         }
-        plan.push({rama, fecha, 'va a':nombreDe(uid)+' / '+destRama,
-          _path:'historial_diario/'+uid+'/'+destRama+'/'+fecha,
-          _val:(previo && (previo._ts||0)>(val&&val._ts||0))?previo:val});
+        const _path='historial_diario/'+uid+'/'+destRama+'/'+fecha;
+        const _val=(previo && (previo._ts||0)>(val&&val._ts||0))?previo:val;
+        const antes=yaPlan[_path];
+        if(antes){
+          // Gana el de _ts más reciente, igual que contra el destino.
+          const ganaNuevo=(_val&&_val._ts||0)>(antes.item._val&&antes.item._val._ts||0);
+          choquesRamas.push({fecha, 'ramas en conflicto':antes.rama+' ↔ '+rama,
+            'se queda el de':ganaNuevo?rama:antes.rama, 'se descarta el de':ganaNuevo?antes.rama:rama});
+          if(ganaNuevo) antes.item._val=_val;
+          return;                       // no se agrega otra fila para la misma ruta
+        }
+        const item={rama, fecha, 'va a':nombreDe(uid)+' / '+destRama, _path, _val};
+        yaPlan[_path]={rama, item};
+        plan.push(item);
       });
     }
     const tirar=[];
@@ -1318,6 +1334,11 @@ window._migrarCuentaVieja = async function(opts){
     if(plan.length) console.table(plan.map(p=>({rama:p.rama, fecha:p.fecha, 'va a':p['va a']})));
     if(choques.length){ console.group('%cDías que ya existen en destino ('+choques.length+')','color:#b45309');
       console.table(choques); console.groupEnd(); }
+    if(choquesRamas.length){
+      console.group('%cMismo día en DOS ramas que van a la misma persona ('+choquesRamas.length+')','color:#b91c1c;font-weight:bold');
+      console.log('Solo puede quedar uno: se conserva el de _ts más reciente y el otro NO se guarda.');
+      console.table(choquesRamas); console.groupEnd();
+    }
     if(sinAsignar.length){ console.group('%cRamas SIN asignar ('+sinAsignar.length+') — no se tocan','color:#b91c1c');
       console.log('Si borrás la cuenta con estas ramas sin asignar, ese trabajo se pierde.');
       console.table(sinAsignar); console.groupEnd(); }
