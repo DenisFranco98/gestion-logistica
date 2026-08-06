@@ -1322,9 +1322,44 @@ window._migrarCuentaVieja = async function(opts){
       console.log('Si borrás la cuenta con estas ramas sin asignar, ese trabajo se pierde.');
       console.table(sinAsignar); console.groupEnd(); }
     const nSes=Object.keys(sh).length, nRep=Object.keys(sr).length;
+    // Reparto de sesiones por el asesor que figura en cada una. Hace falta
+    // cuando una cuenta la usaron varias personas: en 'Frankaro' hay 81
+    // sesiones de Denis, 25 de la cuenta del asesor de turno y 5 de alguien que
+    // ya no está. Mandarlas todas a un solo uid mezclaría las tres.
+    const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+    const porAsesor={}, tirarDe=new Set((opts.descartarSesionesDe||[]).map(norm));
+    Object.entries(opts.sesionesPorAsesor||{}).forEach(([n,uid])=>{ porAsesor[norm(n)]=uid; });
+    const hayReparto=Object.keys(porAsesor).length>0||tirarDe.size>0;
+    const sesPlan=[], sesHuerfanas={};
+    if(hayReparto){
+      const malosR=Object.values(porAsesor).filter(u=>!existe(u));
+      if(malosR.length){
+        console.error('Estos uid de sesionesPorAsesor no existen: '+[...new Set(malosR)].join(', ')+
+          '. No se hace nada.'); return;
+      }
+      [['session_hist',sh],['session_reports',sr]].forEach(([raiz,obj])=>{
+        Object.entries(obj).forEach(([k,v])=>{
+          const a=norm((v||{}).asesor);
+          if(tirarDe.has(a)) return;                       // descartada a propósito
+          const uid=porAsesor[a];
+          if(uid) sesPlan.push({raiz, k, v, uid});
+          else sesHuerfanas[(v||{}).asesor||'(sin asesor)']=(sesHuerfanas[(v||{}).asesor||'(sin asesor)']||0)+1;
+        });
+      });
+      const resumen={};
+      sesPlan.forEach(s=>{ const n=nombreDe(s.uid); resumen[n]=(resumen[n]||0)+1; });
+      console.group('Reparto de sesiones por asesor');
+      console.table(Object.entries(resumen).map(([n,c])=>({'va a':n, sesiones:c})));
+      if(tirarDe.size) console.log('Se descartan las de: '+[...tirarDe].join(', '));
+      if(Object.keys(sesHuerfanas).length){
+        console.log('%cSesiones sin destino:','color:#b91c1c');
+        console.table(Object.entries(sesHuerfanas).map(([n,c])=>({asesor:n, sesiones:c})));
+      }
+      console.groupEnd();
+    }
     if(opts.sesionesA) console.log('Sesiones a mover: '+nSes+' de session_hist y '+nRep+
       ' de session_reports → '+nombreDe(opts.sesionesA));
-    else if(nSes||nRep) console.log('%cHay '+nSes+' sesiones y '+nRep+
+    else if(!hayReparto && (nSes||nRep)) console.log('%cHay '+nSes+' sesiones y '+nRep+
       ' reportes SIN destino. Con borrar:true se pierden; pasá sesionesA para '+
       'conservarlos, o descartarSesiones:true para confirmar que se tiran.','color:#b45309');
     if(opts.borrar) console.log('Al terminar se borra: historial_diario/'+de+', session_hist/'+de+
@@ -1335,7 +1370,12 @@ window._migrarCuentaVieja = async function(opts){
       console.error('No se aplica: hay ramas sin asignar y borrar:true las perdería. Asignalas, descartalas o quitá borrar.');
       return;
     }
-    if(opts.borrar && (nSes||nRep) && !opts.sesionesA && !opts.descartarSesiones){
+    if(opts.borrar && hayReparto && Object.keys(sesHuerfanas).length && !opts.descartarSesiones){
+      console.error('No se aplica: hay sesiones cuyo asesor no está en sesionesPorAsesor '+
+        'ni en descartarSesionesDe. Asignalas o pasá descartarSesiones:true.');
+      return;
+    }
+    if(opts.borrar && (nSes||nRep) && !opts.sesionesA && !hayReparto && !opts.descartarSesiones){
       console.error('No se aplica: hay '+nSes+' sesiones y '+nRep+' reportes sin destino. '+
         'Pasá sesionesA para conservarlos o descartarSesiones:true para tirarlos.');
       return;
@@ -1355,7 +1395,8 @@ window._migrarCuentaVieja = async function(opts){
 
     const upd={};
     plan.forEach(p=>{ upd[p._path]=p._val; });
-    if(opts.sesionesA){
+    if(hayReparto) sesPlan.forEach(s=>{ upd[s.raiz+'/'+s.uid+'/'+s.k]=s.v; });
+    else if(opts.sesionesA){
       Object.entries(sh).forEach(([k,v])=>{ upd['session_hist/'+opts.sesionesA+'/'+k]=v; });
       Object.entries(sr).forEach(([k,v])=>{ upd['session_reports/'+opts.sesionesA+'/'+k]=v; });
     }
