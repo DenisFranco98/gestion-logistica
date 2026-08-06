@@ -867,7 +867,9 @@ function _evtFbPush(guia,tipo){
   if(typeof _db==='undefined'||!window._currentUsername||!guia)return;
   const p=pedidos.find(x=>x.guia===guia);
   if(p&&p.dropiId){
-    _db.ref('gestiones_sync/'+_gsKey()+'/'+_fbKey(p.dropiId)+'/eventos').push({tipo,ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')});
+    const tk=_gsKeyEscritura();
+    if(!tk) return;
+    _db.ref('gestiones_sync/'+tk+'/'+_fbKey(p.dropiId)+'/eventos').push({tipo,ts:Date.now(),fecha:new Date().toLocaleDateString('es-CO')});
   }
 }
 function histRegistrar(guia){
@@ -3532,7 +3534,9 @@ function _fbSetGestion(id){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   const p=_pedidoMap.get(id);
   if(!p||!p.dropiId)return;
-  const ref=_db.ref('gestiones_sync/'+_gsKey()+'/'+_fbKey(p.dropiId));
+  const _tk=_gsKeyEscritura();
+  if(!_tk) return;
+  const ref=_db.ref('gestiones_sync/'+_tk+'/'+_fbKey(p.dropiId));
   const g0=gestiones[id];
   if(!g0||!Object.keys(g0).length){ref.remove();return;}
   const g=Object.assign({},g0);

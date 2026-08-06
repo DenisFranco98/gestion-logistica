@@ -2234,6 +2234,28 @@ function _gsKey(){
   return window._currentTiendaId || window._currentUsername;
 }
 
+// Clave para ESCRIBIR en gestiones_sync. Solo el empresaId sirve: si se cae al
+// username, el trabajo del día entero queda bajo la identidad de la persona en
+// vez de la tienda, el equipo no ve esas notas en el kanban y el admin no las
+// cuenta al filtrar. Así se perdieron de vista ~1550 pedidos de Paquetin, que
+// hubo que rescatar a mano con _moverGestionesSync. Antes esto solo avisaba por
+// consola —donde nadie mira— y escribía igual.
+let _gsAvisado=false;
+function _gsKeyEscritura(){
+  if(window._currentTiendaId) return window._currentTiendaId;
+  if(!_gsAvisado){
+    _gsAvisado=true;
+    const msg='⚠️ No se pudo identificar la tienda: tu gestión no se está guardando. Recargá la página antes de seguir.';
+    // toast() no pinta nada si su nodo no está en la página, y este aviso no se
+    // puede perder: es la diferencia entre frenar y trabajar toda la tarde en
+    // un nodo que nadie va a leer.
+    if(typeof toast==='function' && document.getElementById('toast')) toast(msg, 9000);
+    else alert(msg);
+    console.error('[SYNC] Sin empresaId resuelto: se bloqueó la escritura en gestiones_sync.');
+  }
+  return null;
+}
+
 // ── Tiendas del usuario (para "🏪 Cambiar tienda" del selector de módulo) ──
 // Se persiste porque window._currentTiendaIds solo se poblaba en el login
 // fresco: al restaurar sesión —recargar la página, o volver al menú desde un
@@ -3689,7 +3711,9 @@ function _fbSyncGestion(id){
   if(p.ciudad)  g._ciudad=p.ciudad;
   const _asesorActual = window.getLoginAsesor ? window.getLoginAsesor() : '';
   if(_asesorActual) g._asesor = _asesorActual;
-  _db.ref('gestiones_sync/'+_gsKey()+'/'+_fbKey(p.dropiId)).update(g);
+  const _tk=_gsKeyEscritura();
+  if(!_tk) return;
+  _db.ref('gestiones_sync/'+_tk+'/'+_fbKey(p.dropiId)).update(g);
   // Actualizar presence con label de acción (inmediato) y métricas (debounced 3s)
   const g0=gestiones[id]||{};
   let _actLabel='🔄 Gestionando pedido';
@@ -3725,7 +3749,12 @@ function _fbActualizarHistorial(){
     const hoy=_hoyLocal();
     const user=window._currentUsername;
     const asesorRaw=window.getLoginAsesor?window.getLoginAsesor():'';
-    const asesorKey=_fbKey((asesorRaw||user).trim().toLowerCase());
+    // La rama es el UID, no el nombre. Con el nombre, a la misma persona se le
+    // abría una rama nueva cada vez que se lo escribían distinto o no se
+    // resolvía: quedaban "yiseth" y "yiseth jácome", o "dalevys" (el nombre de
+    // la TIENDA) conviviendo con "yon". El nombre se sigue guardando adentro,
+    // en asesorNombre, que es de donde lo toman el ranking y el selector.
+    const asesorKey=user;
     const m=_calcMetricas();
     // Usar loginTime cacheado localmente (se setea en _registrarPresencia)
     const loginTime=_cachedLoginTime||Date.now();
