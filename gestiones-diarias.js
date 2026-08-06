@@ -1050,6 +1050,7 @@ function _novNuevo(){
   document.getElementById('nov-m-txt').value='';
   _novSetEstado('solucionada');
   _novAvisoGuia();
+  _novPasteOn(); _novImgPreview();   // Ctrl+V carga la captura en el campo de imagen
   document.getElementById('nov-modal').classList.add('open');
 }
 
@@ -1081,10 +1082,98 @@ function _novAbrirSol(id){
   document.getElementById('nov-sol-fecha').value=hoy;
   _novSetEstado('solucionada');
   _novAvisoGuia();
+  _novPasteOn(); _novImgPreview();   // Ctrl+V carga la captura en el campo de imagen
   document.getElementById('nov-modal').classList.add('open');
 }
 
+// ── Pegar una captura desde el portapapeles ──────────────────────────
+// Ctrl+V con una imagen copiada la carga en el campo de evidencia, sin tener
+// que guardarla antes como archivo. El listener va en el documento y no en el
+// campo: así no hay que acertarle al input, alcanza con tener el modal abierto.
+let _novPasteHandler=null, _novPrevUrl=null;
+
+function _novPasteOn(){
+  if(_novPasteHandler) return;
+  _novPasteHandler=ev=>{
+    const modal=document.getElementById('nov-modal');
+    if(!modal || !modal.classList.contains('open')) return;
+    const items=(ev.clipboardData && ev.clipboardData.items) || [];
+    let file=null;
+    for(const it of items){
+      if(it.kind==='file' && /^image\//.test(it.type)){ file=it.getAsFile(); break; }
+    }
+    // Sin imagen no se toca nada: pegar texto en el mensaje sigue funcionando.
+    if(!file) return;
+    ev.preventDefault();
+    _novImgSet(file);
+  };
+  document.addEventListener('paste',_novPasteHandler);
+}
+
+function _novPasteOff(){
+  if(!_novPasteHandler) return;
+  document.removeEventListener('paste',_novPasteHandler);
+  _novPasteHandler=null;
+  _novPrevLimpiar();
+}
+
+// El archivo se deja en el input para que _novGuardar lo tome igual que si se
+// hubiera elegido a mano. input.files es de solo lectura: se asigna con un
+// DataTransfer, que es la única vía que da el navegador.
+function _novImgSet(file){
+  const inp=document.getElementById('nov-m-img');
+  if(!inp) return;
+  try{
+    const dt=new DataTransfer();
+    // Las capturas llegan sin nombre útil ("image.png"): se renombra con la
+    // fecha para que en el registro se distinga una de otra.
+    const base=(file.name && file.name!=='image.png') ? file.name : ('captura-'+_hoyLocal()+'.png');
+    dt.items.add(new File([file], base, {type:file.type||'image/png'}));
+    inp.files=dt.files;
+  }catch(e){
+    toast('⚠️ Este navegador no permite pegar la imagen; usá "Seleccionar archivo"',5000);
+    return;
+  }
+  _novImgPreview();
+  toast('📋 Captura pegada');
+}
+
+function _novPrevLimpiar(){
+  if(_novPrevUrl){ URL.revokeObjectURL(_novPrevUrl); _novPrevUrl=null; }
+}
+
+// Miniatura de lo que se va a subir, venga de pegar o de elegir archivo: sin
+// esto no hay forma de saber si se pegó lo correcto hasta después de guardar.
+function _novImgPreview(){
+  const inp=document.getElementById('nov-m-img');
+  const box=document.getElementById('nov-m-img-prev');
+  if(!box) return;
+  _novPrevLimpiar();
+  const f=inp && inp.files && inp.files[0];
+  if(!f){ box.innerHTML=''; box.style.display='none'; return; }
+  _novPrevUrl=URL.createObjectURL(f);
+  const kb=Math.round(f.size/1024);
+  const peso=kb>1024 ? (kb/1024).toFixed(1)+' MB' : kb+' KB';
+  box.style.display='flex';
+  box.innerHTML=
+    '<img src="'+_novPrevUrl+'" alt="Vista previa" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;">'+
+    '<div style="flex:1;min-width:0;">'+
+      '<div style="font-size:.7rem;font-weight:700;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(f.name)+'</div>'+
+      // --text-2 y no --text-3: en tema claro el peso quedaba en 4,11:1.
+      '<div style="font-size:.63rem;color:var(--text-2);">'+peso+(kb>5120?' · pesa bastante, se comprimirá':'')+'</div>'+
+    '</div>'+
+    '<button type="button" onclick="_novImgQuitar()" style="background:none;border:1px solid var(--border);color:var(--text-2);'+
+      'border-radius:6px;padding:4px 9px;font-size:.66rem;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;">Quitar</button>';
+}
+
+function _novImgQuitar(){
+  const inp=document.getElementById('nov-m-img');
+  if(inp) inp.value='';
+  _novImgPreview();
+}
+
 function _novCerrarModal(){
+  _novPasteOff();
   document.getElementById('nov-modal').classList.remove('open');
   document.getElementById('nov-m-meta').style.display='block';
   document.getElementById('nov-m-sol-section').style.display='block';
@@ -1103,6 +1192,7 @@ function _novEditar(id){
   document.getElementById('nov-m-asesor').value=n.asesor||'';
   document.getElementById('nov-m-save-btn').textContent='Actualizar';
   _novAvisoGuia();
+  _novPasteOn(); _novImgPreview();   // Ctrl+V carga la captura en el campo de imagen
   document.getElementById('nov-modal').classList.add('open');
 }
 
