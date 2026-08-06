@@ -1313,14 +1313,20 @@ window._migrarCuentaVieja = async function(opts){
     const nSes=Object.keys(sh).length, nRep=Object.keys(sr).length;
     if(opts.sesionesA) console.log('Sesiones a mover: '+nSes+' de session_hist y '+nRep+
       ' de session_reports → '+nombreDe(opts.sesionesA));
-    else if(nSes||nRep) console.log('Hay '+nSes+' sesiones y '+nRep+
-      ' reportes sin destino (pasá sesionesA para moverlos).');
+    else if(nSes||nRep) console.log('%cHay '+nSes+' sesiones y '+nRep+
+      ' reportes SIN destino. Con borrar:true se pierden; pasá sesionesA para '+
+      'conservarlos, o descartarSesiones:true para confirmar que se tiran.','color:#b45309');
     if(opts.borrar) console.log('Al terminar se borra: historial_diario/'+de+', session_hist/'+de+
       ', session_reports/'+de+' y presence/'+de);
 
     if(!aplicar){ console.log('%cSimulación. Agregá aplicar:true para hacerlo.','font-weight:bold'); return {plan:plan.length, choques:choques.length, sinAsignar}; }
     if(sinAsignar.length && opts.borrar){
-      console.error('No se aplica: hay ramas sin asignar y borrar:true las perdería. Asignalas o quitá borrar.');
+      console.error('No se aplica: hay ramas sin asignar y borrar:true las perdería. Asignalas, descartalas o quitá borrar.');
+      return;
+    }
+    if(opts.borrar && (nSes||nRep) && !opts.sesionesA && !opts.descartarSesiones){
+      console.error('No se aplica: hay '+nSes+' sesiones y '+nRep+' reportes sin destino. '+
+        'Pasá sesionesA para conservarlos o descartarSesiones:true para tirarlos.');
       return;
     }
 
@@ -1345,8 +1351,11 @@ window._migrarCuentaVieja = async function(opts){
     if(Object.keys(upd).length) await _db.ref().update(upd);
     if(opts.borrar){
       const del={};
+      // Se borra TODO el rastro de la cuenta vieja: si quedara session_hist la
+      // clave seguiría viva y volvería a aparecer en la próxima auditoría.
       del['historial_diario/'+de]=null;
-      if(opts.sesionesA){ del['session_hist/'+de]=null; del['session_reports/'+de]=null; }
+      del['session_hist/'+de]=null;
+      del['session_reports/'+de]=null;
       del['presence/'+de]=null;
       await _db.ref().update(del);
     }
