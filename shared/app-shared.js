@@ -1337,13 +1337,17 @@ window._migrarCuentaVieja = async function(opts){
         console.error('Estos uid de sesionesPorAsesor no existen: '+[...new Set(malosR)].join(', ')+
           '. No se hace nada.'); return;
       }
+      // session_hist guarda el nombre en `asesor` y session_reports en
+      // `asesorNombre`. Mirando solo el primero, los reportes quedaban sin
+      // dueño y el guard frenaba la migración entera.
+      const quienEs=v=>(v||{}).asesor||(v||{}).asesorNombre||'';
       [['session_hist',sh],['session_reports',sr]].forEach(([raiz,obj])=>{
         Object.entries(obj).forEach(([k,v])=>{
-          const a=norm((v||{}).asesor);
+          const a=norm(quienEs(v));
           if(tirarDe.has(a)) return;                       // descartada a propósito
           const uid=porAsesor[a];
           if(uid) sesPlan.push({raiz, k, v, uid});
-          else sesHuerfanas[(v||{}).asesor||'(sin asesor)']=(sesHuerfanas[(v||{}).asesor||'(sin asesor)']||0)+1;
+          else { const n=quienEs(v)||'(sin asesor)'; sesHuerfanas[n]=(sesHuerfanas[n]||0)+1; }
         });
       });
       const resumen={};
