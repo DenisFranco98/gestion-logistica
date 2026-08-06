@@ -1193,6 +1193,75 @@ window._moverGestionesSync = async function(opts){
   }catch(e){ console.error('[MOVER gestiones_sync] falló (¿sesión de admin?):',e); }
 };
 
+// Responde "¿esta clave vieja es una persona que HOY ya tiene su uid, o es
+// alguien distinto?". Es la pregunta que hay que contestar antes de borrar o
+// archivar nada: las cuentas viejas eran por tienda (el login era 'Dalevys',
+// 'Monklic'…) y detrás había personas que hoy tienen cuenta propia. Que la
+// clave no sea un uid no significa que la persona no exista.
+//
+// Ejecutar desde la consola como admin:  _cruzarClavesViejas()
+window._cruzarClavesViejas = async function(){
+  console.log('%c[CRUZAR claves viejas con usuarios actuales] solo lectura','font-weight:bold');
+  try{
+    const [uSnap,aSnap,eSnap]=await Promise.all([
+      _db.ref('users').once('value'), _db.ref('admins').once('value'),
+      _db.ref('empresas').once('value')]);
+    const users=uSnap.val()||{}, admins=aSnap.val()||{}, empresas=eSnap.val()||{};
+    const dbURL=((_db.app||{}).options||{}).databaseURL||'';
+    let token=null;
+    try{ const cu=firebase.auth().currentUser; if(cu) token=await cu.getIdToken(); }catch(e){}
+    const claves=async path=>{
+      try{
+        const r=await fetch(dbURL+'/'+path+'.json?shallow=true'+(token?'&auth='+token:''));
+        if(!r.ok) return null;
+        const j=await r.json(); return (j&&typeof j==='object')?Object.keys(j):[];
+      }catch(e){ return null; }
+    };
+    // Índice nombre→uid de las cuentas de HOY.
+    const porNombre={};
+    Object.entries(users).forEach(([uid,u])=>{
+      const s=_gdKey((u||{}).asesor||''); if(s&&s!=='_') (porNombre[s]=porNombre[s]||[]).push(uid);
+    });
+    // Todas las claves de nodos por persona que no son uid ni admin.
+    const NODOS=['presence','session_hist','session_reports','historial_diario'];
+    const vistas=new Set();
+    for(const nodo of NODOS){
+      for(const k of (await claves(nodo))||[]){
+        if(users[k]||admins[k]) continue;
+        vistas.add(k);
+      }
+    }
+    const filas=[];
+    for(const k of vistas){
+      const p=(await _db.ref('presence/'+k).once('value')).val()||{};
+      const nombre=p.asesor||'';
+      const slug=_gdKey(nombre);
+      const uids=porNombre[slug]||[];
+      const ut=[];
+      for(const uid of uids){
+        const t=(await _db.ref('user_tiendas/'+uid).once('value')).val()||{};
+        Object.keys(t).forEach(id=>ut.push(((empresas[id]||{}).nombre)||id));
+      }
+      filas.push({
+        'clave vieja':k,
+        'quién la usaba':nombre||'(sin presence)',
+        'tienda entonces':p.tienda||'',
+        '¿tiene cuenta hoy?':uids.length?'SÍ':'NO',
+        'uid actual':uids.join(' · ')||'—',
+        'tiendas hoy':ut.join(' · ')||'—'
+      });
+    }
+    filas.sort((a,b)=>String(a['¿tiene cuenta hoy?']).localeCompare(String(b['¿tiene cuenta hoy?'])));
+    console.table(filas);
+    const sin=filas.filter(f=>f['¿tiene cuenta hoy?']==='NO');
+    console.log('%cCon cuenta actual: '+(filas.length-sin.length)+'  ·  Sin cuenta actual: '+sin.length,
+      'font-weight:bold');
+    if(sin.length) console.log('Las que no tienen cuenta hoy son las delicadas: si esa persona sigue '+
+      'trabajando, hay que darle de alta antes de tocar nada (es el caso de TATIANA).');
+    return filas;
+  }catch(e){ console.error('[CRUZAR claves viejas] falló (¿sesión de admin?):',e); }
+};
+
 // Mide un nodo sin saber su forma: cuántas hojas tiene y entre qué fechas va.
 // Las fechas salen de dos lados, porque conviven los dos formatos: números que
 // parecen timestamps en ms, y claves con forma AAAA-MM-DD (historial_diario).
