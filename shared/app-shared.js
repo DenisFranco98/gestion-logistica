@@ -4715,7 +4715,11 @@ function _anlUserChange(){
     if(isNewStructure){
       wrap.style.display='block';
       keys.forEach(asesorKey=>{
-        const nombre = data[asesorKey][Object.keys(data[asesorKey])[0]]?.asesorNombre || asesorKey;
+        // El nombre sale del día MÁS RECIENTE, no del primero: si a la persona
+        // le cambian el nombre, la rama sigue siendo su uid (que no cambia) y
+        // acá se mostraría el nombre viejo para siempre.
+        const fechas = Object.keys(data[asesorKey]).sort();
+        const nombre = data[asesorKey][fechas[fechas.length-1]]?.asesorNombre || asesorKey;
         const opt = document.createElement('option');
         opt.value = asesorKey;
         opt.textContent = nombre;
