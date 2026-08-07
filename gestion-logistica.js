@@ -2952,7 +2952,10 @@ async function _novSyncSolucionadaGD(id, solucionada, auto){
   // empresaId, así que escribir en la clave vieja dejaba estas novedades y
   // estos contadores invisibles para GD en cuanto el mes estaba migrado.
   const tk=_gdTK();
-  const ak=(typeof _gdKey==='function'?_gdKey:_gdKeyFallback)(window.getLoginAsesor?window.getLoginAsesor():'_');
+  // El uid, no el slug del nombre: escribiendo por nombre esta función le abría
+  // a la persona una segunda carpeta en gestiones_diarias (así reapareció
+  // "maicol" junto a la del uid de MAICOL). Ver project-identidad-asesor.
+  const ak=_gdAK();
   const novBasePath='novedades/'+tk+'/'+mes;
   const gdDiasPath='gestiones_diarias/'+tk+'/'+mes+'/'+ak+'/dias';
   const dia=new Date().getDate();
