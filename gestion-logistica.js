@@ -2935,7 +2935,14 @@ function setCheck(id,campo,valor){ultimaGestion=Date.now();
   renderResumen();renderProgress();
 }
 
-async function _novSyncSolucionadaGD(id, solucionada){
+// `auto` = lo detectó la sincronización al cargar el Excel, NO lo marcó nadie.
+// En ese caso no se crea evidencia: la novedad ya fue gestionada por otra
+// persona en otro momento, y crear una nueva se la acreditaba como gestión del
+// día a quien abría el tablero. Así Karen Gomez aparecio con 119 gestiones que
+// no hizo, creadas en dos lotes de golpe (102 de ellas en el mismo segundo).
+// Igual se marca solucionadaDropi y se recuenta, que es lo que mueve la card a
+// Gestionadas: lo unico que se evita es inventar la gestion.
+async function _novSyncSolucionadaGD(id, solucionada, auto){
   if(typeof _db==='undefined'||!window._currentUsername)return;
   const g=gestiones[id]||{};
   const p=_pedidoMap.get(id);
@@ -2985,10 +2992,12 @@ async function _novSyncSolucionadaGD(id, solucionada){
     // (por el nombre suelto, o sea el slug) y no a quien la marcó como resuelta.
     // El día se mantiene en el de la novedad, que es el que reconta después
     // _novRecontarDiaGD(diaReal).
-    const gestorNom=window.getLoginAsesor?window.getLoginAsesor():'';
-    const solObj={estado:'solucionada',tipo:'txt',val:'✅ Solucionada en Dropi',fechaLabel:today,ts:Date.now(),fromLogistica:true,
-      asesor:gestorNom, asesorUid:_gdAK(), dia:diaReal};
-    await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').push(solObj);
+    if(!auto){
+      const gestorNom=window.getLoginAsesor?window.getLoginAsesor():'';
+      const solObj={estado:'solucionada',tipo:'txt',val:'✅ Solucionada en Dropi',fechaLabel:today,ts:Date.now(),fromLogistica:true,
+        asesor:gestorNom, asesorUid:_gdAK(), dia:diaReal};
+      await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').push(solObj);
+    }
     await _db.ref(novBasePath+'/'+gdNovKey).update({solucionadaDropi:true});
   } else {
     const solsSnap=await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').once('value');
@@ -3064,7 +3073,9 @@ function _procesarNovedadesExt(snap){
       gestiones[p.id].resultado_gestion='solucion_dropi';
       gestiones[p.id].nov_solucionada=true;
       if(!gestiones[p.id].contacto_metodo)gestiones[p.id].contacto_metodo='chatepro';
-      _novSyncSolucionadaGD(p.id,true);
+      // auto:true — esto lo detectó la sincronización, no lo gestionó quien
+      // tiene el tablero abierto.
+      _novSyncSolucionadaGD(p.id,true,true);
       marcarFinalizado(p.id);
       // Se muestra la guía del pedido, no la normalizada: esa es para comparar.
       toast('✅ Guía '+p.guia+' ya estaba gestionada — movida a Gestionadas');
