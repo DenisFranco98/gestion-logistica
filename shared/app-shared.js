@@ -21,6 +21,65 @@ function _hoyLocal(d){
   return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0');
 }
 
+// ── VERSIÓN PUBLICADA vs VERSIÓN CARGADA ─────────────────────────────
+// GitHub Pages sirve el HTML con Cache-Control: max-age=600, así que hasta 10
+// minutos después de publicar el navegador sigue usando el HTML viejo — y ese
+// HTML pide los scripts con el ?v= anterior. De ahí que hubiera que explicar
+// "recargá con Ctrl+F5" cada vez.
+//
+// version.json se pide sin caché y se compara con la versión que realmente se
+// cargó. Si no coinciden, se recarga sola con un parámetro nuevo en la URL, que
+// es lo único que obliga al navegador a volver a pedir el HTML.
+//
+// Salvaguardas, porque una recarga automática mal hecha deja la app en bucle:
+//   · una sola recarga por pestaña (queda anotada en sessionStorage);
+//   · si tras recargar sigue sin coincidir, no se insiste y se avisa por consola;
+//   · si version.json no existe o falla, no se hace nada.
+const _VER_FLAG = 'lgs_ver_recargada';
+
+function _versionCargada(){
+  const s = document.querySelector('script[src*="app-shared"]');
+  const m = s && s.src && s.src.match(/[?&]v=([^&]+)/);
+  return m ? m[1] : null;
+}
+
+async function _chequearVersion(){
+  try{
+    const actual = _versionCargada();
+    if(!actual) return;
+    const r = await fetch('version.json?cb='+Date.now(), {cache:'no-store'});
+    if(!r.ok) return;
+    const pub = (await r.json()||{}).v;
+    if(!pub || pub===actual){
+      sessionStorage.removeItem(_VER_FLAG);   // al día: se limpia la marca
+      return;
+    }
+    if(sessionStorage.getItem(_VER_FLAG)===pub){
+      // Ya se recargó por esta misma versión y sigue llegando la vieja: puede
+      // ser un proxy intermedio. No se insiste para no dejar la app girando.
+      console.warn('[VERSIÓN] Publicada '+pub+' pero sigue cargando '+actual+
+                   ' después de recargar. Probá con Ctrl+F5.');
+      return;
+    }
+    sessionStorage.setItem(_VER_FLAG, pub);
+    console.log('[VERSIÓN] Hay una versión nueva ('+pub+' vs '+actual+'): recargando.');
+    const u = new URL(location.href);
+    u.searchParams.set('_v', pub);
+    location.replace(u.toString());
+  }catch(e){ /* sin conexión o sin version.json: se sigue con lo cargado */ }
+}
+
+// El parámetro _v cumplió su función al pedir el HTML; se saca de la barra para
+// que la URL quede limpia y no se comparta con él pegado.
+function _limpiarParamVersion(){
+  try{
+    const u = new URL(location.href);
+    if(!u.searchParams.has('_v')) return;
+    u.searchParams.delete('_v');
+    history.replaceState(null, '', u.pathname + (u.search||'') + (u.hash||''));
+  }catch(e){}
+}
+
 // Meses cortos, escritos a mano y no con toLocaleDateString: es-CO con
 // month:'short' devuelve "1 de ago" y el resultado cambia según el entorno.
 // Vive acá porque lo usan Gestiones Diarias y el Consolidado GD del Panel Admin,
@@ -2772,6 +2831,10 @@ function _initLogin(){
   };
 
   window._loginCheck = function(){
+    // Segundo chequeo: la pestaña pudo quedar abierta en el login mucho rato y
+    // haberse publicado algo en el medio. Si hay versión nueva, recarga acá,
+    // antes de entrar.
+    _chequearVersion();
     const email = document.getElementById('login-user').value.trim();
     const p = document.getElementById('login-pass').value;
     const err = document.getElementById('login-error');
@@ -2975,6 +3038,12 @@ function _initLogin(){
   }
 
   // Restauración de sesión via Firebase Auth
+  // Antes de mostrar nada: si hay una versión más nueva publicada, la app se
+  // recarga sola. Acá no hay trabajo en curso que se pueda perder — es el
+  // momento seguro para hacerlo, y evita tener que pedir Ctrl+F5.
+  _limpiarParamVersion();
+  _chequearVersion();
+
   firebase.auth().onAuthStateChanged(user=>{
     _hideSplash();
     const savedSession = localStorage.getItem(LOGIN_KEY);
