@@ -1106,10 +1106,27 @@ function alertaNivel(p){
   return'verde';
 }
 
+// Una gestión vale SOLO el día en que se hizo. Al día siguiente el pedido
+// vuelve a la lista aunque ayer se le haya hecho exactamente lo mismo: la
+// gestión es diaria, no una marca permanente. Los asesores reportaban que al
+// cargar el Excel les aparecían ya gestionados los pedidos que habían
+// trabajado el día anterior.
+//
+// La fecha sale de `_gestDia`, que se sella al marcar. Para lo guardado antes
+// de este cambio se cae a `_ts`, que es cuando se tocó por última vez.
+function _gestEsDeHoy(g){
+  if(!g) return false;
+  if(g._gestDia) return g._gestDia===_hoyLocal();
+  return g._ts ? _hoyLocal(new Date(g._ts))===_hoyLocal() : false;
+}
+
 function estaCompleta(p){
   if(_editandoGestion.has(p.id))return true; // editando in-place: no sale de Gestionadas
   const g=gestiones[p.id]||{};
+  // La devolución sí es definitiva: el pedido se devolvió, no es algo que se
+  // vuelva a hacer al día siguiente.
   if(g.devolucion)return true;
+  if(!_gestEsDeHoy(g)) return false;
   if(p.estadoKey==='reparto'&&(g.guia_reportada||g.guia_generada_hoy))return true;
   if(p.estadoKey==='transito'){return!!(g.transito_sin_gestion)||!!(g.transito_gestionado);}
   if(p.estadoKey==='rechazado'){return!!(g.rechazado_gestionado)||!!(g.rechazado_sin_gestion);}
@@ -2877,6 +2894,7 @@ function setLlamada(id,resultado){ultimaGestion=Date.now();
     gestiones[id].llamada=resultado;
     gestiones[id].llamada_fecha=new Date().toLocaleDateString('es-CO');
     gestiones[id].llamada_ts=Date.now();
+    gestiones[id]._gestDia=_hoyLocal();   // la gestión vale solo hoy
     // Al marcar no_contestó limpiamos mensajes_listos para que no se auto-vaya al fondo
     if(resultado==='no_contestó') delete gestiones[id].mensajes_listos;
     const p=_pedidoMap.get(id);
@@ -3120,7 +3138,7 @@ function marcarGuiaReportada(id, btn){
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].guia_reportada=true;
   gestiones[id].guia_generada_hoy=true;
-  gestiones[id]._ts=Date.now();
+  gestiones[id]._ts=Date.now(); gestiones[id]._gestDia=_hoyLocal();
   guardar();_fbSyncGestion(id);
   animarCompletado(id,()=>_completarYLimpiar(id),'✅');
   toast('✅ Guía reportada y gestionada');
@@ -3130,7 +3148,7 @@ function marcarGuiaGeneradaHoy(id, btn){
   ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].guia_generada_hoy=true;
-  gestiones[id]._ts=Date.now();
+  gestiones[id]._ts=Date.now(); gestiones[id]._gestDia=_hoyLocal();
   guardar();_fbSyncGestion(id);
   animarCompletado(id,()=>_completarYLimpiar(id),'📦');
   toast('📦 Guía generada hoy — movida a gestionados');
@@ -3293,7 +3311,7 @@ async function marcarTransitoGestionado(id, btn){
   gestiones[id].transito_gestionado=true;
   gestiones[id].reporte_cas=true;          // deja constancia de que tiene captura
   delete gestiones[id].transito_sin_gestion;
-  gestiones[id]._ts=Date.now();
+  gestiones[id]._ts=Date.now(); gestiones[id]._gestDia=_hoyLocal();
   guardar();_fbSyncGestion(id);
   animarCompletado(id,()=>_completarYLimpiar(id),'✅');
 }
@@ -3312,7 +3330,7 @@ function marcarTransitoSinGestion(id, btn){
       setTimeout(()=>{
         if(!gestiones[id])gestiones[id]={};
         gestiones[id].transito_sin_gestion=true;
-        gestiones[id]._ts=Date.now();
+        gestiones[id]._ts=Date.now(); gestiones[id]._gestDia=_hoyLocal();
         guardar();_fbSyncGestion(id);_completarYLimpiar(id);
         toast('🚚 En tránsito sin novedad — no cuenta como gestionado');
       },200);
@@ -3321,7 +3339,7 @@ function marcarTransitoSinGestion(id, btn){
   }
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].transito_sin_gestion=true;
-  gestiones[id]._ts=Date.now();
+  gestiones[id]._ts=Date.now(); gestiones[id]._gestDia=_hoyLocal();
   guardar();_fbSyncGestion(id);_completarYLimpiar(id);
   toast('🚚 En tránsito sin novedad — no cuenta como gestionado');
 }
@@ -3370,7 +3388,7 @@ function marcarRechazadoGestionado(id, btn){
     if(!gestiones[id])gestiones[id]={};
     gestiones[id].rechazado_gestionado=true;
     delete gestiones[id].rechazado_sin_gestion;
-    gestiones[id]._ts=Date.now();
+    gestiones[id]._ts=Date.now(); gestiones[id]._gestDia=_hoyLocal();
     guardar();_fbSyncGestion(id);_fbGuardarRechazado(id);_completarYLimpiar(id);
     toast('✅ Rechazado gestionado — contará en las métricas');
   };
@@ -3382,7 +3400,7 @@ function marcarRechazadoSinGestion(id, btn){
     if(!gestiones[id])gestiones[id]={};
     gestiones[id].rechazado_sin_gestion=true;
     delete gestiones[id].rechazado_gestionado;
-    gestiones[id]._ts=Date.now();
+    gestiones[id]._ts=Date.now(); gestiones[id]._gestDia=_hoyLocal();
     guardar();_fbSyncGestion(id);_fbGuardarRechazado(id);_completarYLimpiar(id);
     toast('🚫 Marcado como rechazado sin gestión');
   };
@@ -3569,6 +3587,7 @@ function marcarFinalizado(id){ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].gestion_final=!gestiones[id].gestion_final;
   if(gestiones[id].gestion_final){
+    gestiones[id]._gestDia=_hoyLocal();   // la gestión vale solo hoy
     const p=_pedidoMap.get(id);
     if(p&&p.guia)histRegistrarFin(p.guia);
     guardar();_fbSyncGestion(id);
@@ -3740,7 +3759,7 @@ function _fbSetGestion(id){
   if(!g0||!Object.keys(g0).length){ref.remove();return;}
   const g=Object.assign({},g0);
   delete g.mensajes_listos;
-  g._ts=Date.now();
+  g._ts=Date.now(); g._gestDia=_hoyLocal();
   if(p.guia)g._guia=p.guia;
   if(p.nombre)g._nombre=p.nombre;
   if(p.telefono)g._tel=p.telefono.replace(/^57/,'');
