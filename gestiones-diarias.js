@@ -847,7 +847,7 @@ function _repRender(){
   if(cnt) cnt.textContent = entries.length<todos.length ? entries.length+' de '+todos.length : todos.length+' reporte'+(todos.length===1?'':'s');
   if(!entries.length){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--text-3);font-size:.78rem;">'+
-      (todos.length?'Sin resultados con este filtro.':'Todavía no hay reportes. El registro desde el Gestor Logístico está en preparación.')+'</div>';
+      (todos.length?'Sin resultados con este filtro.':'Todavía no hay reportes este mes. Se crean al marcar "Gestionado" en una guía En tránsito del Gestor Logístico.')+'</div>';
     return;
   }
   let rows='';

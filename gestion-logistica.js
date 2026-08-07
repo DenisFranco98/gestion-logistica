@@ -2306,24 +2306,31 @@ function crearCard(p,est,esGest){
       btnExp.onclick=exportarPendientes;
       sec.appendChild(btnExp);
     } else if(est.key==='transito'){
-      // Estos pedidos NO se gestionan hablando con el cliente: se reportan en
-      // el CAS, que es otra plataforma. Por eso la card queda con dos botones y
-      // nada más — antes tenía desplegable de contacto, botón de WhatsApp, nota
-      // y desplegable de resultado, todo para un flujo que acá no aplica.
-      // "Gestionado" marca transito_gestionado, que es lo que ya cuenta como
-      // gestión del día (ver estaCompleta).
+      // Flujo: copiar el texto del CAS habilita el apartado de evidencia, y
+      // recien con la captura cargada se puede marcar Gestionado. La captura
+      // es obligatoria porque queda como respaldo del reporte (se guarda en
+      // el registro de Reportes de Gestiones Diarias, aparte de las
+      // evidencias de novedades).
       const casIdTr='cas-tr-'+p.id;
       const dMovTr=(p.diasSinMov!=null)?p.diasSinMov:(p.dias||0);
+      const _yaEv=!!(window._trEvidFiles&&window._trEvidFiles[p.id]);
       html+='<div style="display:flex;flex-direction:column;gap:8px;">'+
         '<div style="font-size:.7rem;font-weight:700;color:var(--warning-strong);">📋 Abrir caso en Dropi → CAS</div>'+
         (dMovTr?'<div style="font-size:.68rem;color:var(--text-2);font-style:italic;margin-top:-4px;">Sin movimiento · '+dMovTr+(dMovTr===1?' día':' días')+' parado</div>':'')+
-        '<button class="btn-cas" id="'+casIdTr+'" style="margin:0;" onclick="casCopiar(CAS_SIN_MOVIMIENTO(),this.id)">📋 Copiar texto para CAS</button>'+
-        // Verde sólido con texto blanco: sobre --success-soft el texto quedaba
-        // en 4,3:1 en tema claro. Este #15803D es el mismo tono ya validado
-        // para los estados de Anticipos.
+        '<button class="btn-cas" id="'+casIdTr+'" style="margin:0;" onclick="_trCasCopiar('+p.id+',this.id)">📋 Copiar texto para CAS</button>'+
+        // El apartado de evidencia aparece al copiar el texto: antes de eso no
+        // hay nada que capturar todavia.
+        '<div id="tr-ev-'+p.id+'" style="display:'+(_yaEv?'block':'none')+';">'+
+          '<div style="font-size:.66rem;font-weight:700;color:var(--info-strong);margin-bottom:5px;">📎 Evidencia del reporte (obligatoria)</div>'+
+          '<input type="file" id="tr-ev-inp-'+p.id+'" accept="image/*" style="display:none;" onchange="_trEvidArchivo('+p.id+',this)">'+
+          '<div id="tr-ev-drop-'+p.id+'" onclick="_trEvidElegir('+p.id+')" '+
+            'style="border:2px dashed var(--border-strong);border-radius:8px;padding:12px 8px;text-align:center;cursor:pointer;font-size:.68rem;color:var(--text-2);">'+
+            '📋 Pegá la captura con Ctrl+V<div style="font-size:.62rem;color:var(--text-3);margin-top:3px;">o tocá para elegir el archivo</div></div>'+
+        '</div>'+
         '<button id="btn-trg-'+p.id+'" onclick="marcarTransitoGestionado('+p.id+',this)" '+
           'style="width:100%;padding:10px 6px;border-radius:8px;font-size:.76rem;font-weight:700;border:none;'+
-          'background:#15803D;color:#fff;cursor:pointer;font-family:inherit;">✅ Gestionado</button>'+
+          'background:'+(_yaEv?'#15803D':'var(--bg-inset)')+';color:'+(_yaEv?'#fff':'var(--text-3)')+';'+
+          'cursor:'+(_yaEv?'pointer':'not-allowed')+';font-family:inherit;">✅ Gestionado</button>'+
       '</div>';
     } else if(est.key==='rechazado'){
       html+=notaWidgetHtml(p.id);
@@ -3140,11 +3147,136 @@ function _repSetResultado(id, valor){
   _repRefrescarCard(id);
 }
 
-function marcarTransitoGestionado(id, btn){
-  if(btn){ btn.disabled=true; btn.style.opacity='0.5'; }
+// ── EVIDENCIA DEL REPORTE AL CAS (cards de tránsito) ─────────────────
+// El flujo es: copiar el texto del CAS → se habilita el apartado de evidencia
+// → se pega o se elige la captura → recién ahí se puede marcar Gestionado.
+// La captura es obligatoria: queda como respaldo del reporte en el registro de
+// Reportes de Gestiones Diarias (reportes/{tienda}/{mes}), aparte de las
+// evidencias de novedades para no mezclar unas con otras.
+window._trEvidFiles={};      // {idPedido: File} — lo pegado, todavía sin subir
+let _trEvidActiva=null;      // a qué card va lo próximo que se pegue
+let _trPasteHandler=null;
+
+// Copiar el texto abre el apartado de evidencia de ESA card y la deja como
+// destino del pegado: así "Ctrl+V" no necesita que se acierte con el foco.
+window._trCasCopiar=function(id, btnId){
+  casCopiar(CAS_SIN_MOVIMIENTO(), btnId);
+  const wrap=document.getElementById('tr-ev-'+id);
+  if(wrap) wrap.style.display='block';
+  _trEvidActiva=id;
+  _trPasteOn();
+  const drop=document.getElementById('tr-ev-drop-'+id);
+  if(drop) drop.style.borderColor='var(--info-strong)';
+};
+
+window._trEvidElegir=function(id){
+  _trEvidActiva=id;
+  const inp=document.getElementById('tr-ev-inp-'+id);
+  if(inp) inp.click();
+};
+
+window._trEvidArchivo=function(id, inp){
+  if(inp && inp.files && inp.files[0]) _trEvidSet(id, inp.files[0]);
+};
+
+function _trPasteOn(){
+  if(_trPasteHandler) return;
+  _trPasteHandler=ev=>{
+    if(!_trEvidActiva) return;
+    const items=(ev.clipboardData && ev.clipboardData.items) || [];
+    let file=null;
+    for(const it of items){
+      if(it.kind==='file' && /^image\//.test(it.type)){ file=it.getAsFile(); break; }
+    }
+    if(!file) return;            // texto: no se toca nada
+    ev.preventDefault();
+    _trEvidSet(_trEvidActiva, file);
+  };
+  document.addEventListener('paste', _trPasteHandler);
+}
+
+// Guarda la captura en memoria, muestra la miniatura y habilita Gestionado.
+function _trEvidSet(id, file){
+  window._trEvidFiles[id]=file;
+  _trEvidActiva=id;
+  const drop=document.getElementById('tr-ev-drop-'+id);
+  if(drop){
+    const url=URL.createObjectURL(file);
+    const kb=Math.round(file.size/1024);
+    drop.innerHTML='<div style="display:flex;align-items:center;gap:8px;text-align:left;">'+
+      '<img src="'+url+'" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="font-size:.66rem;font-weight:700;color:var(--success-strong);">✅ Captura lista</div>'+
+        '<div style="font-size:.6rem;color:var(--text-2);">'+(kb>1024?(kb/1024).toFixed(1)+' MB':kb+' KB')+' · tocá para cambiarla</div>'+
+      '</div></div>';
+    drop.style.borderStyle='solid';
+    drop.style.borderColor='var(--success)';
+  }
+  const btn=document.getElementById('btn-trg-'+id);
+  if(btn){
+    btn.style.background='#15803D'; btn.style.color='#fff'; btn.style.cursor='pointer';
+  }
+  toast('📎 Captura lista — ya podés marcar Gestionado');
+}
+
+// Crea el registro en Reportes con su captura. Devuelve una promesa: hasta que
+// no se guarda, la gestión no se marca, para que no quede un pedido gestionado
+// sin su respaldo.
+async function _repCrearDesdeGestor(id){
+  const p=_pedidoMap.get(id) || pedidos.find(x=>x.id===id);
+  const file=window._trEvidFiles[id];
+  if(!p || !file) throw new Error('sin captura');
+  const tk=_gsKeyEscritura();
+  if(!tk) throw new Error('sin tienda resuelta');
+  const mes=_hoyLocal().slice(0,7);      // el reporte es de HOY, no del mes del Excel
+  const ref=_db.ref('reportes/'+tk+'/'+mes).push();
+  const img=(typeof _novResizeImg==='function')
+    ? await _novResizeImg(file, 900, .72)
+    : await new Promise(r=>{const fr=new FileReader();fr.onload=e=>r(e.target.result);fr.readAsDataURL(file);});
+  // La imagen va fuera del registro: dentro, leer el mes arrastraría todas.
+  await _db.ref('reportes_img/'+tk+'/'+mes+'/'+ref.key).set(img);
+  await ref.set({
+    guia:p.guia||'', cliente:p.nombre||'', ciudad:p.ciudad||'',
+    transportadora:p.transportadora||'', estadoRaw:p.estadoRaw||'',
+    diasSinMov:(p.diasSinMov!=null)?p.diasSinMov:(p.dias!=null?p.dias:null),
+    fecha:new Date().toLocaleDateString('es-CO'),
+    dia:new Date().getDate(), mes,
+    asesor:(window.getLoginAsesor?window.getLoginAsesor():''),
+    asesorUid:_gdAK(),
+    img:true, ts:Date.now()
+  });
+  delete window._trEvidFiles[id];
+  return ref.key;
+}
+
+async function marcarTransitoGestionado(id, btn){
+  // Sin captura no se gestiona: el reporte al CAS tiene que quedar respaldado.
+  if(!window._trEvidFiles || !window._trEvidFiles[id]){
+    const wrap=document.getElementById('tr-ev-'+id);
+    if(wrap && wrap.style.display==='none'){
+      toast('📋 Primero copiá el texto para el CAS, después pegá la captura',4500);
+    } else {
+      toast('📎 Falta la captura del reporte: pegala con Ctrl+V o tocá el recuadro',4500);
+      const drop=document.getElementById('tr-ev-drop-'+id);
+      if(drop){ drop.style.borderColor='var(--danger)'; setTimeout(()=>{drop.style.borderColor='var(--info-strong)';},1600); }
+    }
+    return;
+  }
+  if(btn){ btn.disabled=true; btn.style.opacity='0.5'; btn.textContent='Guardando...'; }
+  // Primero se guarda el reporte y recién después se marca la gestión: si la
+  // subida falla, el pedido sigue pendiente en vez de quedar cerrado sin
+  // respaldo.
+  try{
+    await _repCrearDesdeGestor(id);
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent='✅ Gestionado'; }
+    toast('⚠️ No se pudo guardar el reporte: '+((e&&e.message)||e),6000);
+    return;
+  }
   ultimaGestion=Date.now();
   if(!gestiones[id])gestiones[id]={};
   gestiones[id].transito_gestionado=true;
+  gestiones[id].reporte_cas=true;          // deja constancia de que tiene captura
   delete gestiones[id].transito_sin_gestion;
   gestiones[id]._ts=Date.now();
   guardar();_fbSyncGestion(id);
