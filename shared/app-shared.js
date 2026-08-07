@@ -1001,6 +1001,66 @@ window._unificarCarpetasAsesor = async function(opts){
 // imágenes y leerlo entero para mirar sus claves colgaría el navegador.
 //
 // Ejecutar desde la consola como admin:  _auditarClavesPorNombre()
+// Busca gestiones registradas en lote: varias del mismo asesor en el mismo
+// segundo. Nadie gestiona así, o sea que un lote es el sistema acreditándole
+// trabajo a alguien — como pasó el 2026-08-06, cuando cargar el Excel le sumó
+// 102 gestiones en un segundo a quien tenía la pantalla abierta.
+//
+// Solo lee. Ejecutar desde la consola como admin:
+//   _auditarGestionesEnLote()              → el mes actual
+//   _auditarGestionesEnLote('2026-07')     → otro mes
+//   _auditarGestionesEnLote('2026-08', 3)  → bajando el umbral a 3
+window._auditarGestionesEnLote = async function(mes, minimo){
+  const MES = mes || _hoyLocal().slice(0,7);
+  const MIN = minimo || 3;
+  console.log('%c[LOTES de gestiones] '+MES+' · umbral: '+MIN+' en el mismo segundo','font-weight:bold');
+  try{
+    const [empSnap, usSnap] = await Promise.all([
+      _db.ref('empresas').once('value'), _db.ref('users').once('value')]);
+    const empresas = empSnap.val()||{}, users = usSnap.val()||{};
+    const quien = u => (users[u]||{}).asesor || u;
+    const lotes = [];
+    for(const [id, e] of Object.entries(empresas)){
+      const novs = (await _db.ref('novedades/'+id+'/'+MES).once('value')).val();
+      if(!novs) continue;
+      const porSegundo = {};
+      Object.entries(novs).forEach(([nid, n])=>{
+        Object.entries((n&&n.soluciones)||{}).forEach(([sk, s])=>{
+          if(!s || typeof s!=='object') return;
+          if(s.estado!=='solucionada' && s.estado!=='devuelta') return;
+          const k = (s.asesorUid || s.asesor || '?') + '|' + Math.floor((s.ts||0)/1000);
+          (porSegundo[k] = porSegundo[k] || []).push({nid, sk, s});
+        });
+      });
+      Object.entries(porSegundo).forEach(([k, arr])=>{
+        if(arr.length < MIN) return;
+        const uid = k.split('|')[0];
+        const dias = [...new Set(arr.map(x=>x.s.dia).filter(v=>v!=null))].sort((a,b)=>a-b);
+        lotes.push({
+          tienda: e.nombre || id,
+          asesor: quien(uid),
+          gestiones: arr.length,
+          cuando: arr[0].s.ts ? new Date(arr[0].s.ts).toLocaleString('es-CO') : '—',
+          'días que tocó': dias.join(', ') || '—',
+          automáticas: arr.filter(x=>x.s.fromLogistica && x.s.val==='✅ Solucionada en Dropi').length
+        });
+      });
+    }
+    lotes.sort((a,b)=>b.gestiones-a.gestiones);
+    if(!lotes.length){
+      console.log('%cNingún lote sospechoso en '+MES+'.','color:#15803d;font-weight:bold');
+      return [];
+    }
+    console.group('%c'+lotes.length+' lote(s) sospechoso(s) — '+
+      lotes.reduce((a,b)=>a+b.gestiones,0)+' gestiones','color:#b91c1c;font-weight:bold');
+    console.log('Una persona no registra varias gestiones en el mismo segundo. Revisá');
+    console.log('con el asesor antes de borrar: puede haber gestiones reales mezcladas.');
+    console.table(lotes);
+    console.groupEnd();
+    return lotes;
+  }catch(e){ console.error('[LOTES de gestiones] falló (¿sesión de admin?):', e); }
+};
+
 window._auditarClavesPorNombre = async function(){
   console.log('%c[AUDITAR claves] solo lectura','font-weight:bold');
   try{
@@ -3673,6 +3733,47 @@ _initLogin(); _migracionInicial();
 
 // ===== FIREBASE SYNC GESTIONES =====
 function _fbKey(k){ return String(k).replace(/[.#$\[\]\/]/g,'_'); }
+
+// ── FRENO CONTRA GESTIONES EN LOTE ───────────────────────────────────
+// Ninguna persona registra decenas de gestiones en un par de segundos. Cuando
+// eso pasa es un bucle del sistema acreditándole trabajo a quien tiene la
+// pantalla abierta — el 2026-08-06 le sumó 102 gestiones en el mismo segundo a
+// una asesora que no había gestionado nada.
+//
+// Esa causa puntual ya está corregida, pero el freno queda como red: cualquier
+// código que en el futuro llame en bucle a algo que registra gestiones se topa
+// con esto en vez de ensuciar meses de datos en silencio.
+//
+// No frena el trabajo real: el límite es muy superior al ritmo humano posible.
+const _GEST_MAX = 12;        // gestiones permitidas...
+const _GEST_VENTANA = 6000;  // ...en esta ventana de tiempo (ms)
+let _gestSellos = [];
+let _gestAvisado = false;
+
+// Devuelve true si se puede registrar. Llamar SIEMPRE justo antes de crear una
+// evidencia con resultado (solucionada/devuelta), que es lo que suma al día.
+function _puedeRegistrarGestion(motivo){
+  const ahora = Date.now();
+  _gestSellos = _gestSellos.filter(t => ahora - t < _GEST_VENTANA);
+  if(_gestSellos.length >= _GEST_MAX){
+    if(!_gestAvisado){
+      _gestAvisado = true;
+      setTimeout(()=>{ _gestAvisado = false; }, 20000);
+      const msg = '⚠️ Se frenó el registro automático de gestiones: se intentaron '+
+                  (_gestSellos.length+1)+' en '+(_GEST_VENTANA/1000)+' segundos'+
+                  (motivo?' ('+motivo+')':'')+'. No se guardó nada. Avisá a soporte.';
+      if(typeof toast==='function' && document.getElementById('toast')) toast(msg, 9000);
+      else if(typeof alert==='function') alert(msg);
+    }
+    console.error('[FRENO gestiones] bloqueadas por ritmo imposible.'+
+      ' Intentos en los últimos '+(_GEST_VENTANA/1000)+'s: '+(_gestSellos.length+1)+
+      (motivo?' · origen: '+motivo:'')+
+      '. Si esto se repite, hay un bucle registrando gestiones que nadie hizo.');
+    return false;
+  }
+  _gestSellos.push(ahora);
+  return true;
+}
 
 // Calcula métricas de gestiones en un solo loop (evita 18 llamadas .filter separadas)
 function _calcMetricas(){

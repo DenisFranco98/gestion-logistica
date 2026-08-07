@@ -1078,6 +1078,13 @@ function _novSolsCell(id,n,sols){
 // `solObj` se muta: pierde `val` y gana `img`, para que la caché en memoria
 // quede igual que lo guardado.
 async function _novGuardarSol(novId, solObj){
+  // Solo cuentan como gestión las que definen resultado; las de estado vacío no
+  // suman al día, así que no consumen el cupo del freno.
+  if(solObj && (solObj.estado==='solucionada'||solObj.estado==='devuelta')
+     && typeof _puedeRegistrarGestion==='function'
+     && !_puedeRegistrarGestion('registrar evidencia de novedad')){
+    throw new Error('registro de gestiones frenado por ritmo anómalo');
+  }
   const esImg = solObj && solObj.tipo==='img' && solObj.val && String(solObj.val).startsWith('data:');
   const ref = _db.ref(_novBasePath()+'/'+novId+'/soluciones').push();
   if(!esImg){ await ref.set(solObj); return ref; }

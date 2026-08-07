@@ -2999,6 +2999,7 @@ async function _novSyncSolucionadaGD(id, solucionada, auto){
       const gestorNom=window.getLoginAsesor?window.getLoginAsesor():'';
       const solObj={estado:'solucionada',tipo:'txt',val:'✅ Solucionada en Dropi',fechaLabel:today,ts:Date.now(),fromLogistica:true,
         asesor:gestorNom, asesorUid:_gdAK(), dia:diaReal};
+      if(!_puedeRegistrarGestion('marcar solucionada en Dropi')) return;
       await _db.ref(novBasePath+'/'+gdNovKey+'/soluciones').push(solObj);
     }
     await _db.ref(novBasePath+'/'+gdNovKey).update({solucionadaDropi:true});
@@ -3678,6 +3679,7 @@ async function _novMarcarDevueltaGD(id, razon){
     const diaGestion=hoy.getDate();
     const mesGestion=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
     if(!yaDevuelta){
+      if(!_puedeRegistrarGestion('marcar devolución')) return;
       await _db.ref(base+'/'+g.gdNovKey+'/soluciones').push({
         estado:'devuelta', tipo:'txt',
         val: razon||'Producto devuelto',
