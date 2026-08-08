@@ -21,6 +21,9 @@ function _cfPad(n){return String(n).padStart(2,'0');}
 // Símbolo de moneda configurado para esta tienda (cada tienda puede tener el suyo — no se consolida entre monedas)
 function _cfSim(){return(_cfCfg.moneda&&_cfCfg.moneda.simbolo)||'$';}
 function _cf$(n){const a=Math.abs(n||0),s=(n||0)<0?'-':'';return s+_cfSim()+' '+Math.round(a).toLocaleString('es-CO');}
+// El número solo, sin símbolo: para los campos donde se escribe el importe.
+// _cf$ no sirve ahí porque el símbolo cambia según el país de la tienda.
+function _cfNumFmt(n){return Math.round(Math.abs(n||0)).toLocaleString('es-CO');}
 function _cfM$(n){const a=Math.abs(n||0),s=(n||0)<0?'-':'';const sim=_cfSim();if(a>=1e6)return s+sim+(a/1e6).toFixed(1)+'M';if(a>=1e3)return s+sim+(a/1e3).toFixed(0)+'K';return s+sim+' '+Math.round(a).toLocaleString('es-CO');}
 // Parsea número en formato colombiano "1.234.567" o "1.234.567,89" → número JS
 function _cfPN(s){return parseFloat(String(s||0).replace(/\./g,'').replace(',','.'))||0;}
@@ -429,6 +432,19 @@ function _cfCalc(){
   const cancN=desp>0?Math.max(0,totalN-entN-procN-devN):0;
   const adsT=adsFB+adsTT, fee=adsT*(lim.comisionBancaria||1)/100, adsFee=adsT+fee;
 
+  // Publicidad del Estado de Resultados: se puede escribir a mano, porque lo
+  // que finalmente se le paga a Facebook y a TikTok no siempre coincide con lo
+  // que se fue cargando día a día. Si no se escribió nada, se usa el diario;
+  // un 0 escrito a mano SÍ vale 0, por eso se distingue vacío de cero.
+  // El Control Mes sigue con los diarios: acá solo cambia el ER.
+  const _manual = v => (v===null||v===undefined||v==='') ? null : _cfNum(v);
+  const adsFBm = _manual(costos.adsFBER), adsTTm = _manual(costos.adsTTER);
+  const adsFBER = adsFBm!==null ? adsFBm : adsFB;
+  const adsTTER = adsTTm!==null ? adsTTm : adsTT;
+  const adsTER = adsFBER+adsTTER;
+  const feeER = adsTER*(lim.comisionBancaria||1)/100;
+  const adsFeeER = adsTER+feeER;
+
   const totalAdmin=(ca.shopify||0)+(ca.tarjetas||0)+(ca.dominio||0)+(ca.impuesto4x1000||0)+(ca.openai||0)+(ca.nomina||0)+(ca.otros||0);
   const flEnt=costos.fleteEntregados||0, flProc=costos.fleteEnProceso||0, flDev=costos.fleteDevueltos||0;
   const totalVentas=flEnt+flProc+flDev+(costos.chatepro||0)+(costos.otrosVentas||0);
@@ -436,7 +452,10 @@ function _cfCalc(){
 
   const utilBruta=entM-cogs;
   const utilAntesAds=utilBruta-totalAdmin-totalVentas;
-  const utilNeta=utilAntesAds-adsFee;
+  // La utilidad se calcula con la publicidad del ER: es la que refleja lo que
+  // de verdad se pagó. Los CPA de más abajo siguen con el diario, porque son
+  // los del Control Mes.
+  const utilNeta=utilAntesAds-adsFeeER;
   const margen=entM>0?(utilNeta/entM*100):0;
   const aov=entN>0?entM/entN:0;
   const aovShop=shopM>0&&totalN>0?shopM/totalN:0; // AOV de Shopify (facturación diaria)
@@ -467,6 +486,8 @@ function _cfCalc(){
 
   return {entM,entN,aov,aovShop,procM,procN,devM,devN,cancN,desp,
     shopM,wppN,shopN,totalN,adsFB,adsTT,adsT,fee,adsFee,
+    adsFBER,adsTTER,adsTER,feeER,adsFeeER,
+    adsFBEsManual:adsFBm!==null, adsTTEsManual:adsTTm!==null,
     totalAdmin,flEnt,flProc,flDev,totalVentas,cogs,
     utilBruta,utilAntesAds,utilNeta,margen,
     cpaBreak,cpaObj,cpaEnt,cpaDesp,cpaBM,
@@ -1001,6 +1022,23 @@ function _cfSetCosto(k,v){
   _cfMD.costos[k]=k.endsWith('Motivo')?String(v||''):_cfNum(v);
   _cfSave('costos/'+k,_cfMD.costos[k]);
 }
+// Publicidad manual del ER. A diferencia de _cfSetCosto, acá el campo vacío NO
+// es cero: significa "usá la suma de los diarios", así que se borra la clave.
+// Un 0 escrito a propósito sí se guarda como 0.
+function _cfSetAdsER(k,v){
+  if(!_cfMD.costos)_cfMD.costos={};
+  const txt=String(v==null?'':v).trim();
+  if(txt===''){
+    delete _cfMD.costos[k];
+    _cfSave('costos/'+k,null);
+  } else {
+    _cfMD.costos[k]=_cfNum(txt);
+    _cfSave('costos/'+k,_cfMD.costos[k]);
+  }
+  // Se repinta el ER para que la utilidad y el fee reflejen el valor nuevo al
+  // instante, sin esperar a cambiar de pestaña.
+  _cfRenderER();
+}
 function _cfSetDia(dd,k,v){
   if(!_cfMD.dias)_cfMD.dias={};
   if(!_cfMD.dias[dd])_cfMD.dias[dd]={};
@@ -1054,6 +1092,30 @@ function _cfRenderER(){
   const row=(lbl,val,cls,sub)=>`<div class="cf-er-row"><span class="cf-er-lbl">${lbl}${sub?'<span class="cf-er-sub">'+sub+'</span>':''}</span><span class="cf-er-val ${cls||''}">${val}</span></div>`;
   const sec=(lbl)=>`<div class="cf-er-section">${lbl}</div>`;
   const tot=(lbl,val,cls)=>`<div class="cf-er-row cf-er-total"><span>${lbl}</span><span class="${cls||''}">${val}</span></div>`;
+  // Fila de publicidad editable: lo que se le paga realmente a la plataforma
+  // puede no coincidir con lo cargado día a día. Vacío = se usa el diario, y se
+  // avisa cuál es ese valor para que se note de dónde sale.
+  const rowAds=(lbl,campo,valor,esManual,valorDiario)=>{
+    const nota = esManual
+      ? (valor!==valorDiario ? 'Manual · en los diarios: '+_cf$(valorDiario) : 'Manual')
+      : 'Suma de los registros diarios';
+    return `<div class="cf-er-row">
+      <span>${lbl}
+        <span style="display:block;font-size:.62rem;color:${esManual?'var(--info-strong)':'var(--text-3)'};font-weight:600;">${nota}</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;">
+        <span class="cf-er-neg" style="font-size:.72rem;">-${_cfSim()}</span>
+        <input type="text" value="${esManual?_cfNumFmt(valor):''}"
+          placeholder="${_cfNumFmt(valorDiario)}"
+          onchange="_cfSetAdsER('${campo}',this.value)"
+          title="Dejalo vacío para usar la suma de los registros diarios"
+          style="width:110px;text-align:right;padding:4px 8px;border-radius:6px;
+                 border:1px solid ${esManual?'var(--info-strong)':'var(--border)'};
+                 background:var(--bg-hover);color:var(--text-1);
+                 font-family:var(--f-mono);font-size:.8rem;font-weight:800;">
+      </span>
+    </div>`;
+  };
   const colorVal=(v,positiveGood)=>{
     const c=positiveGood?(v>=0?'#16a34a':'#dc2626'):(v<=0?'#16a34a':'#dc2626');
     return `<span style="color:${c};font-weight:800;">${_cf$(v)}</span>`;
@@ -1084,10 +1146,11 @@ function _cfRenderER(){
       ${tot('Total Ventas','-'+_cf$(r.totalVentas),'cf-er-neg')}
       ${tot('UTILIDAD ANTES DE ADS',_cf$(r.utilAntesAds),r.utilAntesAds>=0?'cf-er-pos':'cf-er-neg')}
       ${sec('📣 PUBLICIDAD')}
-      ${row('Ads Facebook','-'+_cf$(r.adsFB),'cf-er-neg')}
-      ${row('Ads TikTok','-'+_cf$(r.adsTT),'cf-er-neg')}
-      ${row('Fee bancaria ('+(r.lim.comisionBancaria||1)+'%)','-'+_cf$(r.fee),'cf-er-neg')}
-      ${tot('Total Ads + Fee','-'+_cf$(r.adsFee),'cf-er-neg')}
+      ${rowAds('Ads Facebook','adsFBER',r.adsFBER,r.adsFBEsManual,r.adsFB)}
+      ${rowAds('Ads TikTok','adsTTER',r.adsTTER,r.adsTTEsManual,r.adsTT)}
+      ${row('Fee bancaria ('+(r.lim.comisionBancaria||1)+'%)','-'+_cf$(r.feeER),'cf-er-neg',
+            'Sobre '+_cf$(r.adsTER)+' de publicidad')}
+      ${tot('Total Ads + Fee','-'+_cf$(r.adsFeeER),'cf-er-neg')}
       <div style="height:10px;"></div>
       <div style="background:${r.utilNeta>=0?'var(--success-soft)':'var(--danger-soft)'};border-radius:10px;padding:14px 16px;border:2px solid ${r.utilNeta>=0?'rgba(57,230,122,.35)':'rgba(230,57,70,.35)'};display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:.85rem;font-weight:900;color:var(--text-1);">💰 UTILIDAD NETA</span>
