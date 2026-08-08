@@ -2931,6 +2931,121 @@ function _initLogin(){
 
   window._cerrarSesion = function(){ document.getElementById('logout-modal').classList.add('open'); };
   window._logoutCancelar = function(){ document.getElementById('logout-modal').classList.remove('open'); };
+  // ── CIERRE DE SESIÓN POR INACTIVIDAD ─────────────────────────────────
+  // Hasta ahora la sesión no caducaba nunca: quedaba abierta hasta que alguien
+  // tocaba "Salir". Con la pestaña abierta el latido la marcaba como conectada
+  // aunque nadie la estuviera usando, y había cuentas figurando en línea dos días
+  // seguidos.
+  //
+  // Ahora, tras 2 horas sin ninguna interacción real, se cierra sola. Un minuto
+  // antes aparece un aviso con un botón para seguir trabajando, así a nadie se le
+  // corta la sesión sin verlo venir.
+  //
+  // Cuenta solo la interacción de la persona (mouse, teclado, toque, scroll), no
+  // el latido ni los refrescos automáticos: si contaran, el temporizador no
+  // llegaría nunca a cero, que es justamente lo que pasaba.
+  const _INAC_LIMITE = 2*60*60*1000;   // 2 horas sin tocar nada
+  const _INAC_AVISO  = 60*1000;        // el aviso sale 1 minuto antes
+  let _inacUltima = Date.now();
+  let _inacTick = null;
+  let _inacAvisoEl = null;
+
+  function _inacHaySesion(){
+    try{ return !!localStorage.getItem(LOGIN_KEY); }catch(e){ return false; }
+  }
+
+  function _inacQuitarAviso(){
+    if(_inacAvisoEl){ _inacAvisoEl.remove(); _inacAvisoEl = null; }
+  }
+
+  window._inacSeguir = function(){
+    _inacUltima = Date.now();
+    _inacQuitarAviso();
+  };
+
+  function _inacMostrarAviso(seg){
+    if(!_inacAvisoEl){
+      _inacAvisoEl = document.createElement('div');
+      _inacAvisoEl.id = 'inac-aviso';
+      _inacAvisoEl.style.cssText =
+        'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;'+
+        'align-items:center;justify-content:center;padding:20px;';
+      _inacAvisoEl.innerHTML =
+        '<div style="background:var(--bg-card,#141a22);border:1px solid var(--border,#2a3441);'+
+          'border-radius:14px;padding:22px 24px;max-width:380px;text-align:center;'+
+          'box-shadow:0 18px 50px rgba(0,0,0,.5);">'+
+          '<div style="font-size:2rem;margin-bottom:8px;">⏰</div>'+
+          '<div style="font-size:.95rem;font-weight:800;color:var(--text-1,#e2eaf4);margin-bottom:6px;">'+
+            'Tu sesión está por cerrarse</div>'+
+          '<div style="font-size:.78rem;color:var(--text-2,#8b9db5);margin-bottom:16px;">'+
+            'Llevás 2 horas sin actividad. Se cerrará en '+
+            '<strong id="inac-seg" style="color:var(--warning-strong,#e6b539);">'+seg+'</strong> segundos.</div>'+
+          '<button onclick="_inacSeguir()" style="width:100%;padding:11px;border-radius:9px;border:none;'+
+            'background:#15803D;color:#fff;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;">'+
+            'Seguir trabajando</button>'+
+        '</div>';
+      document.body.appendChild(_inacAvisoEl);
+    } else {
+      const s = document.getElementById('inac-seg');
+      if(s) s.textContent = seg;
+    }
+  }
+
+  function _inacCerrar(){
+    _inacQuitarAviso();
+    if(_inacTick){ clearInterval(_inacTick); _inacTick = null; }
+    try{ sessionStorage.setItem('lgs_cerro_por_inactividad','1'); }catch(e){}
+    // Se reusa el cierre normal para no dejar a medias la presencia ni las claves
+    // guardadas. Según el perfil abierto, el logout que corresponda.
+    try{
+      if(document.getElementById('super-admin-panel') &&
+         document.getElementById('super-admin-panel').style.display==='block') window._superAdmLogout();
+      else if(document.getElementById('admin-panel') &&
+         document.getElementById('admin-panel').classList.contains('visible')) window._admLogout();
+      else {
+        const m = document.getElementById('logout-modal');
+        if(m) m.classList.add('open');    // _logoutConfirmar espera cerrarlo
+        window._logoutConfirmar();
+      }
+    }catch(e){ location.reload(); }
+  }
+
+  function _inacIniciar(){
+    if(_inacTick) return;
+    _inacUltima = Date.now();
+    const marcar = ()=>{
+      // Con el aviso en pantalla no se reinicia solo por mover el mouse: hay que
+      // apretar el botón. Si no, basta con rozar el teclado sin mirar para que la
+      // sesión siga abierta indefinidamente.
+      if(_inacAvisoEl) return;
+      _inacUltima = Date.now();
+    };
+    ['mousedown','keydown','touchstart','scroll','click'].forEach(ev=>
+      document.addEventListener(ev, marcar, {passive:true, capture:true}));
+
+    _inacTick = setInterval(()=>{
+      if(!_inacHaySesion()){ _inacQuitarAviso(); return; }
+      const quieto = Date.now() - _inacUltima;
+      const restante = _INAC_LIMITE - quieto;
+      if(restante <= 0) return _inacCerrar();
+      if(restante <= _INAC_AVISO) _inacMostrarAviso(Math.ceil(restante/1000));
+      else _inacQuitarAviso();
+    }, 5000);
+  }
+
+  // Si la sesión anterior se cerró sola, se explica en el login: si no, la
+  // persona vuelve, se encuentra deslogueada y cree que se rompió algo.
+  function _inacAvisarSiCerroSola(){
+    try{
+      if(sessionStorage.getItem('lgs_cerro_por_inactividad')!=='1') return;
+      sessionStorage.removeItem('lgs_cerro_por_inactividad');
+      setTimeout(()=>{
+        if(typeof toast==='function' && document.getElementById('toast'))
+          toast('⏰ Tu sesión se cerró por 2 horas de inactividad. Volvé a entrar.', 7000);
+      }, 800);
+    }catch(e){}
+  }
+
   window._logoutConfirmar = function(){
     document.getElementById('logout-modal').classList.remove('open');
     _limpiarPresencia();
@@ -3043,9 +3158,14 @@ function _initLogin(){
   // momento seguro para hacerlo, y evita tener que pedir Ctrl+F5.
   _limpiarParamVersion();
   _chequearVersion();
+  _inacAvisarSiCerroSola();
 
   firebase.auth().onAuthStateChanged(user=>{
     _hideSplash();
+    // El reloj de inactividad corre siempre que haya sesión: se controla solo
+    // mirando LOGIN_KEY en cada vuelta, así vale igual para asesor, admin o
+    // super admin, y en las cuatro páginas.
+    _inacIniciar();
     const savedSession = localStorage.getItem(LOGIN_KEY);
     if(!savedSession){ _loginShow(); document.getElementById('login-user').focus(); return; }
     // El usuario estaba eligiendo perfil cuando la página se recargó (o navegó).
