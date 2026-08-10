@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sube la versión de los assets en los 4 HTML y deja version.json igual.
+// Sube la versión de los assets en los HTML y deja version.json igual.
 //
 // Los dos tienen que ir juntos SIEMPRE: el navegador compara version.json con
 // el ?v= que realmente cargó, y si version.json queda atrasado la app no se
@@ -9,7 +9,10 @@
 //   node publicar.js 20260808a  → fija una versión concreta
 //   node publicar.js --ver      → solo muestra en qué versión está
 const fs = require('fs');
-const HTML = ['index.html','gestion-logistica.html','gestiones-diarias.html','control-financiero.html'];
+const HTML = ['index.html','gestion-logistica.html','gestiones-diarias.html','control-financiero.html',
+              // Página del enlace del correo (restablecer contraseña). No es un
+              // módulo, pero carga shared.css y también tiene que versionarse.
+              'cuenta.html'];
 
 function actual(){
   const m = fs.readFileSync('index.html','utf8').match(/\?v=([0-9a-z]+)/);
