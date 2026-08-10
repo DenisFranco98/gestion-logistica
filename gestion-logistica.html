@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="shared/shared.css?v=20260810a">
+<link rel="stylesheet" href="shared/shared.css?v=20260810b">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -323,6 +323,7 @@ window._sbEstadosToggle=function(){
             <option value="exito">✅ Exitosos</option>
             <option value="fallo_password">❌ Contraseña incorrecta</option>
             <option value="fallo_usuario">👤 Usuario no existe</option>
+            <option value="reset_solicitado">🔑 Restablecimiento pedido</option>
           </select>
           <button onclick="_audCargar()" style="padding:7px 14px;background:#131920;color:white;border:none;border-radius:8px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:inherit;">↻ Actualizar</button>
         </div>
@@ -515,7 +516,7 @@ window._sbEstadosToggle=function(){
       <button class="adm-modal-btn cancel" onclick="_admCerrarEditar()">Cancelar</button>
       <button class="adm-modal-btn primary" onclick="_admGuardarEdicion()">Guardar cambios</button>
     </div>
-    <div id="adm-edit-error" style="color:#f87171;font-size:.75rem;margin-top:10px;display:none;"></div>
+    <div id="adm-edit-error" style="color:var(--danger-strong);font-size:.75rem;margin-top:10px;display:none;"></div>
   </div>
 </div>
 
@@ -1793,8 +1794,8 @@ window._sbEstadosToggle=function(){
   </div>
 </div>
 
-<script src="shared/app-shared.js?v=20260810a"></script>
-<script src="gestion-logistica.js?v=20260810a"></script>
+<script src="shared/app-shared.js?v=20260810b"></script>
+<script src="gestion-logistica.js?v=20260810b"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestión Logística tras un login/restauración de sesión

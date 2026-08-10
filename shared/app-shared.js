@@ -4543,6 +4543,10 @@ function _audFiltrar(){
     if(r.resultado==='exito') return '<span style="background:var(--success-soft);color:var(--success);border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">✅ Éxito</span>';
     if(r.resultado==='fallo_password') return '<span style="background:var(--danger-soft);color:var(--danger);border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">❌ Contraseña incorrecta</span>';
     if(r.resultado==='fallo_usuario') return '<span style="background:var(--warning-soft);color:var(--warning);border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">👤 Usuario no existe</span>';
+    // No es un acceso: es un admin pidiendo el correo de restablecimiento. Se
+    // guarda acá porque es un cambio de credenciales y conviene saber quién lo pidió.
+    if(r.resultado==='reset_solicitado') return '<span style="background:var(--info-soft);color:var(--info);border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">🔑 Restablecimiento pedido'+
+      (r.pedidoPor?' por '+esc(r.pedidoPor):'')+'</span>';
     return '<span style="background:var(--bg-inset);color:var(--text-2);border-radius:12px;padding:2px 8px;font-size:.62rem;font-weight:700;">' +(r.resultado||'—')+'</span>';
   };
   wrap.innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.7rem;">
@@ -5805,7 +5809,9 @@ function _admGuardarEdicion(){
   const tienda = document.getElementById('adm-edit-tienda').value.trim();
   const rol    = document.getElementById('adm-edit-rol').value||'asesor';
   const err    = document.getElementById('adm-edit-error');
-  if(!asesor){ err.textContent='El nombre es obligatorio'; err.style.display='block'; return; }
+  // El color se fija acá y no solo en el HTML: la misma caja la usa el aviso de
+  // restablecimiento, que la deja en verde.
+  if(!asesor){ err.textContent='El nombre es obligatorio'; err.style.color='var(--danger-strong)'; err.style.display='block'; return; }
   const checkboxes = document.querySelectorAll('#adm-edit-tiendas input[type=checkbox]');
   // Update multi-path atómico: users + user_tiendas + empresa_asesores (simétrico)
   // + presence (nombre visible en el panel En Vivo sin esperar re-login)
@@ -5827,12 +5833,49 @@ function _admGuardarEdicion(){
   }).catch(e=>{ err.textContent='Error: '+e.message; err.style.display='block'; });
 }
 
+// El correo SÍ sale, pero Gmail lo manda a spam: lo envía Firebase desde
+// noreply@gestion-logistica-86fd7.firebaseapp.com, un remitente sin reputación.
+// Se dio por perdido varias veces creyendo que el botón no funcionaba.
+//
+// El aviso no puede ser un toast que se va en dos segundos: el dato importante
+// es DÓNDE buscarlo, así que queda fijo en el modal hasta cerrarlo.
+//
+// Además "enviado" acá no significa "entregado" ni siquiera "la cuenta existe":
+// el proyecto tiene la protección contra enumeración de correos, así que
+// sendPasswordResetEmail responde OK siempre y el .catch casi nunca se dispara.
+const _RESET_REMITENTE = 'noreply@gestion-logistica-86fd7.firebaseapp.com';
+
 function _admEnviarResetPass(){
-  const email=document.getElementById('adm-edit-user').value;
-  if(!email){ toast('⚠️ Sin correo'); return; }
+  const email=(document.getElementById('adm-edit-user').value||'').trim();
+  const caja=document.getElementById('adm-edit-error');
+  const avisar=(html,color)=>{
+    if(!caja){ toast(String(html).replace(/<[^>]+>/g,'')); return; }
+    caja.style.display='block';
+    caja.style.color=color;
+    caja.innerHTML=html;
+  };
+  if(!email){ avisar('⚠️ Este usuario no tiene correo cargado.','var(--danger-strong)'); return; }
+  avisar('⏳ Enviando…','var(--text-2)');
   firebase.auth().sendPasswordResetEmail(email)
-    .then(()=>{ toast('📧 Email de restablecimiento enviado a '+email); })
-    .catch(e=>{ toast('⚠️ Error: '+e.message); });
+    .then(()=>{
+      avisar(
+        '📧 Correo solicitado para <b>'+esc(email)+'</b>.<br>'+
+        '<span style="color:var(--warning-strong);font-weight:700;">Suele llegar a SPAM.</span> '+
+        'Buscalo como <b>'+esc(_RESET_REMITENTE)+'</b> y marcalo como correo deseado.',
+        'var(--success-strong)');
+      // Rastro de quién pidió el restablecimiento: es un cambio de credenciales
+      // y hasta ahora no quedaba registrado en ningún lado.
+      try{
+        _db.ref('login_audit/'+_audKey(email)).push({
+          username:email, resultado:'reset_solicitado', ts:Date.now(),
+          fecha:new Date().toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'}),
+          ip:'—', ciudad:'—', region:'—', pais:'—', isp:'—',
+          dispositivo:'—', navegador:'—', tz:'—',
+          pedidoPor: localStorage.getItem('lgs_admin_user')||window._currentUsername||'admin'
+        });
+      }catch(_){}
+    })
+    .catch(e=>{ avisar('⚠️ Error: '+esc(e.message),'var(--danger-strong)'); });
 }
 
 function _admForzarLogout(uid){
