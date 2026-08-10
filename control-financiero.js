@@ -761,6 +761,7 @@ function _cfTotRowHTML(){
 }
 
 function _cfRenderMes(){
+  _cfPegarInstalar();
   const el=document.getElementById('cf-tab-mes');
   const dias=_cfMD.dias||{};
   const cod=_cfMD.cod||{};
@@ -817,21 +818,21 @@ function _cfRenderMes(){
       <td class="xls-n xls-sep" style="${isToday?'color:var(--accent);':(esDom||esSab)?'color:var(--text-3);opacity:.65;':''}">${dd}${(esDom||esSab)&&!isToday?'<span style="font-size:.42rem;opacity:.8;display:block;line-height:.5;margin-top:-2px;">'+(esDom?'DOM':'SÁB')+'</span>':''}</td>
       <td class="xls-ant" style="text-align:right;padding:0 4px;">${prevTotalM?_cf$(prevTotalM):''}</td>
       <td class="xls-ant xls-sep" style="text-align:center;">${prevTotN||''}</td>
-      <td class="xls-wpp"><input class="xls-inp" type="text" inputmode="numeric" value="${wppM?_cf$(wppM):''}" placeholder="" style="color:var(--warning);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','wppMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
-      <td class="xls-shopn"><input class="xls-inp" type="text" inputmode="numeric" value="${shopM?_cf$(shopM):''}" placeholder="" style="color:var(--info);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','shopifyMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
-      <td class="xls-wpp"><input class="xls-inp" type="number" min="0" value="${wppN||''}" placeholder="" style="color:var(--warning);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','wppNum',this.value)"></td>
-      <td class="xls-shopn"><input class="xls-inp" type="number" min="0" value="${shopNSolo||''}" placeholder="" style="color:var(--info);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','shopifyNum',this.value)"></td>
+      <td class="xls-wpp"><input class="xls-inp" data-dia="${dd}" data-campo="wppMonto" type="text" inputmode="numeric" value="${wppM?_cf$(wppM):''}" placeholder="" style="color:var(--warning);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','wppMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
+      <td class="xls-shopn"><input class="xls-inp" data-dia="${dd}" data-campo="shopifyMonto" type="text" inputmode="numeric" value="${shopM?_cf$(shopM):''}" placeholder="" style="color:var(--info);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','shopifyMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
+      <td class="xls-wpp"><input class="xls-inp" data-dia="${dd}" data-campo="wppNum" type="number" min="0" value="${wppN||''}" placeholder="" style="color:var(--warning);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','wppNum',this.value)"></td>
+      <td class="xls-shopn"><input class="xls-inp" data-dia="${dd}" data-campo="shopifyNum" type="number" min="0" value="${shopNSolo||''}" placeholder="" style="color:var(--info);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','shopifyNum',this.value)"></td>
       <td class="xls-tot xls-sep">${totN||''}</td>
       <td class="${crM===null?'xls-auto':crM>=0?'xls-pos':'xls-neg'}" style="text-align:center;">${crFmt(crM)}</td>
       <td class="${crN===null?'xls-auto xls-sep':crN>=0?'xls-pos xls-sep':'xls-neg xls-sep'}" style="text-align:center;">${crFmt(crN)}</td>
-      <td class="xls-ads"><input class="xls-inp" type="text" inputmode="numeric" value="${adsFB?_cf$(adsFB):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsFB',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
-      <td class="xls-ads"><input class="xls-inp" type="text" inputmode="numeric" value="${adsTT?_cf$(adsTT):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsTiktok',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
+      <td class="xls-ads"><input class="xls-inp" data-dia="${dd}" data-campo="adsFB" type="text" inputmode="numeric" value="${adsFB?_cf$(adsFB):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsFB',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
+      <td class="xls-ads"><input class="xls-inp" data-dia="${dd}" data-campo="adsTiktok" type="text" inputmode="numeric" value="${adsTT?_cf$(adsTT):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsTiktok',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
       <td class="xls-ads" style="text-align:right;padding:0 4px;">${adsT?_cf$(adsT):''}</td>
       <td class="xls-ads" style="text-align:right;padding:0 4px;color:#6b7280;">${fee?_cf$(fee):''}</td>
       <td class="xls-ads" style="text-align:right;padding:0 4px;font-weight:700;">${adsFee?_cf$(adsFee):''}</td>
       <td class="xls-cpa" style="text-align:right;padding:0 4px;">${cpa?_cf$(cpa):''}</td>
       <td class="xls-roas xls-sep" style="text-align:right;padding:0 4px;">${roas?roas.toFixed(2)+'x':''}</td>
-      <td class="xls-nota" style="min-width:90px;"><input class="xls-inp xls-inp-l" type="text" value="${d.nota||''}" placeholder="" oninput="_cfSetDia('${dd}','nota',this.value)"></td>
+      <td class="xls-nota" style="min-width:90px;"><input class="xls-inp xls-inp-l" data-dia="${dd}" data-campo="nota" type="text" value="${d.nota||''}" placeholder="" oninput="_cfSetDia('${dd}','nota',this.value)"></td>
     </tr>`;
   }
 
@@ -1039,6 +1040,100 @@ function _cfSetAdsER(k,v){
   // instante, sin esperar a cambiar de pestaña.
   _cfRenderER();
 }
+// ── PEGAR DESDE EXCEL ───────────────────────────────────────────────
+// El Control Mes se llevaba en un Excel aparte. Al pegar un rango (A1:A5)
+// parado en una celda, se reparte hacia abajo y hacia la derecha como en Excel,
+// en vez de meter las 5 líneas dentro de un solo input.
+
+// Excel copia los números ya formateados: "$ 1.234.567", "1,234,567", "45.000,00".
+// _cfNum solo entiende el formato colombiano y con "1,234,567" devuelve 1.234.
+// Acá se decide qué es el último separador mirando cuántos dígitos lo siguen:
+// 3 → miles, 1 o 2 → decimales. Los valores son pesos y conteos, así que el
+// resultado se redondea a entero.
+function _cfNumPeg(txt){
+  let t=String(txt==null?'':txt).replace(/[^\d.,-]/g,'').trim();
+  if(!t) return 0;
+  const neg=/^-/.test(t);
+  t=t.replace(/-/g,'');
+  const ult=Math.max(t.lastIndexOf('.'), t.lastIndexOf(','));
+  let n;
+  if(ult<0){
+    n=parseFloat(t)||0;
+  }else{
+    const decimales=t.length-ult-1;
+    const entero=t.slice(0,ult).replace(/[.,]/g,'');
+    n = (decimales===1||decimales===2)
+      ? parseFloat(entero+'.'+t.slice(ult+1))||0
+      : parseFloat(entero+t.slice(ult+1))||0;
+  }
+  return Math.round(neg?-n:n);
+}
+
+// El orden de las columnas se lee del DOM y no de una lista fija: si mañana se
+// agrega o se mueve una columna de captura, el pegado sigue cuadrando solo.
+function _cfPegCampos(){
+  const uno=document.querySelector('#cf-tab-mes .xls tbody input[data-dia]');
+  if(!uno) return [];
+  return [...uno.closest('tr').querySelectorAll('input[data-dia]')].map(i=>i.dataset.campo);
+}
+
+function _cfPegar(e){
+  const inp=e.target;
+  if(!inp||!inp.dataset||!inp.dataset.dia) return;
+  if(!inp.closest||!inp.closest('#cf-tab-mes')) return;
+  if(typeof _esSoloLectura==='function'&&_esSoloLectura()){
+    e.preventDefault();
+    toast('👁️ Solo lectura: no se puede pegar');
+    return;
+  }
+  const cb=e.clipboardData||window.clipboardData;
+  const txt=cb?cb.getData('text'):'';
+  if(!txt) return;
+
+  const filas=txt.replace(/\r\n?/g,'\n').replace(/\n+$/,'').split('\n').map(f=>f.split('\t'));
+  const campos=_cfPegCampos();
+  const c0=campos.indexOf(inp.dataset.campo);
+  if(c0<0) return;
+  e.preventDefault();
+
+  const d0=parseInt(inp.dataset.dia,10);
+  const totalDias=_cfDiasEnMes(_cfMes);
+  let escritas=0, sobran=0;
+
+  filas.forEach((cols,i)=>{
+    // Pegar 20 días parado en el 25 no debe desbordar al mes siguiente:
+    // lo que no cabe se descarta y se avisa.
+    if(d0+i>totalDias){ sobran+=cols.length; return; }
+    const dd=_cfPad(d0+i);
+    cols.forEach((celda,j)=>{
+      const campo=campos[c0+j];
+      if(!campo){ sobran++; return; }
+      _cfSetDia(dd, campo, campo==='nota'?celda.trim():String(_cfNumPeg(celda)));
+      escritas++;
+    });
+  });
+
+  // Repintar: los totales, el CPA y el ROAS de cada fila tocada hay que
+  // recalcularlos, y las columnas de dinero se muestran formateadas.
+  _cfRenderMes();
+  const vuelta=document.querySelector('#cf-tab-mes input[data-dia="'+_cfPad(d0)+'"][data-campo="'+inp.dataset.campo+'"]');
+  if(vuelta) vuelta.focus();
+
+  const plural=(n,uno,varios)=>n+' '+(n===1?uno:varios);
+  toast(escritas
+    ? '📋 '+plural(escritas,'celda pegada','celdas pegadas')+
+      (sobran?' · '+plural(sobran,'quedó fuera del mes','quedaron fuera del mes'):'')
+    : '📋 No se pegó nada: el rango cae fuera de la tabla');
+}
+
+// Un solo listener en el documento: la tabla se vuelve a dibujar entera en cada
+// cambio de mes y uno pegado a ella se perdería.
+function _cfPegarInstalar(){
+  if(window._cfPegInstalado) return;
+  window._cfPegInstalado=true;
+  document.addEventListener('paste', _cfPegar, true);
+}
+
 function _cfSetDia(dd,k,v){
   if(!_cfMD.dias)_cfMD.dias={};
   if(!_cfMD.dias[dd])_cfMD.dias[dd]={};
