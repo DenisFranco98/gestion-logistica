@@ -365,12 +365,25 @@ function _refSoloLectura(ref){
 // auditoría: cada módulo es una carga nueva, así que el estado se relee de
 // localStorage en cada una.
 const _dbRefOriginal = _db.ref.bind(_db);
+// El dueño de tienda puede mirar la Gestión de sus asesores. Mientras observa a
+// otro, todo queda en solo lectura por el mismo camino que la auditoría: son
+// datos de otra persona y un guardado accidental se los escribiría encima.
+function _gdViendoOtro(){
+  const v = window._gdVerAsesor;
+  return !!(v && v!==window._currentUsername);
+}
+// Única condición de solo lectura del sistema: la usa el blindaje, así que
+// alcanza con que devuelva true para que ninguna escritura pase.
+function _esSoloLectura(){ return _esAuditoria() || _gdViendoOtro(); }
+
 function _instalarBlindajeAuditoria(){
   if(window._auditBlindado) return;
   window._auditBlindado = true;
   _db.ref = function(ruta){
     const r = _dbRefOriginal(ruta);
-    return _esAuditoria() ? _refSoloLectura(r) : r;
+    // Se evalúa en CADA llamada: así el mismo blindaje sirve para el admin
+    // auditando y para el dueño mirando a un asesor, sin reinstalarlo.
+    return _esSoloLectura() ? _refSoloLectura(r) : r;
   };
 }
 if(_esAuditoria()) _instalarBlindajeAuditoria();
@@ -7837,6 +7850,9 @@ function _gdAK(){
     const observado = _getAuditAsesor();
     if(observado) return observado;
   }
+  // El dueño mirando a uno de sus asesores: se lee la carpeta de esa persona.
+  // Escribir no es riesgo, lo impide el blindaje (ver _esSoloLectura).
+  if(_gdViendoOtro()) return window._gdVerAsesor;
   return window._currentUsername || localStorage.getItem('lgs_user') || _gdAKLegacy();
 }
 

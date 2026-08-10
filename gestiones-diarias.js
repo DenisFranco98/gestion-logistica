@@ -8,7 +8,11 @@ function _gdInit(){
   document.getElementById('gd-nombre').textContent=nombre.toUpperCase();
   document.getElementById('gd-panel').style.display='flex';
   document.getElementById('gd-title').textContent='REMISIÓN MENSUAL · ['+nombre.split(' ')[0].toUpperCase()+']';
+  // Entrar siempre en la propia remisión: el selector no debe quedar apuntando
+  // a un asesor de la sesión anterior.
+  window._gdVerAsesor=null;
   _gdCargar();
+  _gdVerBarra();
 }
 
 // _gdKey/_gdTK/_gdAK/_leerTienda viven en shared/app-shared.js.
@@ -58,6 +62,95 @@ function _consoCargarTotales(){
     // Los totales llegan después del primer pintado; se repinta con los valores.
     if(document.getElementById('conso-form')) _consoRender();
   }).catch(()=>{});
+}
+
+// ── EL DUEÑO MIRA LA GESTIÓN DE SUS ASESORES ─────────────────────────
+// Un dueño de tienda solo veía su propia remisión. Acá puede elegir a
+// cualquiera de los asesores que tengan datos en el mes y ver su tabla.
+//
+// Mientras observa a otro, TODO queda en solo lectura: la carpeta que se lee
+// pasa a ser la de esa persona (_gdAK) y el blindaje bloquea cualquier
+// escritura (_esSoloLectura). Sin eso, escribir una observación se la
+// guardaría encima al asesor.
+//
+// Solo para dueños: al asesor no se le muestra nada de esto.
+function _gdEsDueno(){
+  try{
+    if(window._currentRol==='dueno') return true;
+    return localStorage.getItem('lgs_rol')==='dueno';
+  }catch(e){ return false; }
+}
+
+// Los asesores del mes salen del propio nodo de la tienda: son los que tienen
+// datos cargados. Se reusa _auditListaAsesores, que ya sabe descartar las
+// carpetas que no son personas y unir la del uid con la vieja del nombre.
+async function _gdVerCargarAsesores(){
+  const sel = document.getElementById('gd-ver-asesor');
+  if(!sel) return;
+  try{
+    const yo = window._currentUsername || '';
+    const [gdSnap, usSnap] = await Promise.all([
+      _db.ref(_gdTK() ? 'gestiones_diarias/'+_gdTK()+'/'+_gdMes : 'x').once('value'),
+      _db.ref('users').once('value')
+    ]);
+    const gd = gdSnap.val()||{}, users = usSnap.val()||{};
+    const lista = (typeof _auditListaAsesores==='function')
+      ? _auditListaAsesores(users, gd, [])
+      : Object.keys(gd).filter(k=>!_GD_NO_ASESOR.has(k))
+          .map(k=>({uid:k, nombre:((users[k]||{}).asesor)||((gd[k]||{})._nombre)||k, etiqueta:null}));
+    const otros = lista.filter(a=>a.uid!==yo);
+    const actual = window._gdVerAsesor || yo;
+    sel.innerHTML =
+      '<option value="">👤 Mi remisión</option>' +
+      (otros.length
+        ? otros.map(a=>'<option value="'+esc(a.uid)+'"'+(a.uid===actual?' selected':'')+'>'+
+                        esc(a.etiqueta||a.nombre)+'</option>').join('')
+        : '<option value="" disabled>— Ningún otro asesor con datos este mes —</option>');
+  }catch(e){
+    sel.innerHTML = '<option value="">👤 Mi remisión</option>';
+  }
+}
+
+// Cambiar de asesor recarga la tabla: _gdAK ya apunta a la carpeta correcta.
+window._gdVerCambiar = function(uid){
+  window._gdVerAsesor = uid || null;
+  if(uid && typeof _instalarBlindajeAuditoria==='function') _instalarBlindajeAuditoria();
+  _gdVerPintarAviso();
+  _gdData={};
+  _gdCargar();
+};
+
+// Aviso permanente mientras se mira a otra persona: si no, se puede escribir
+// una observación creyendo que es la propia y no entender por qué no guarda.
+function _gdVerPintarAviso(){
+  const av = document.getElementById('gd-ver-aviso');
+  const tit = document.getElementById('gd-title');
+  const propio = (window.getLoginAsesor?window.getLoginAsesor():'')||'';
+  const comoTitulo = n => 'REMISIÓN MENSUAL · ['+String(n||'—').split(' ')[0].toUpperCase()+']';
+  if(!_gdViendoOtro()){
+    if(av){ av.style.display='none'; av.textContent=''; }
+    if(tit) tit.textContent = comoTitulo(propio);
+    return;
+  }
+  const sel = document.getElementById('gd-ver-asesor');
+  const nom = sel && sel.selectedIndex>=0 ? sel.options[sel.selectedIndex].textContent : 'otro asesor';
+  if(av){
+    av.style.display='inline-flex';
+    av.textContent = '👁️ Viendo a '+nom+' · solo lectura';
+  }
+  // El título también cambia: es la señal más visible de que la tabla en
+  // pantalla no es la propia.
+  if(tit) tit.textContent = comoTitulo(nom);
+}
+
+// La barra solo existe para dueños, y se refresca al entrar a Gestión o al
+// cambiar de mes (la lista de asesores con datos cambia mes a mes).
+function _gdVerBarra(){
+  const cont = document.getElementById('gd-ver-barra');
+  if(!cont) return;
+  if(!_gdEsDueno()){ cont.style.display='none'; return; }
+  cont.style.display='flex';
+  _gdVerCargarAsesores().then(_gdVerPintarAviso);
 }
 
 function _gdCargar(){
@@ -459,14 +552,14 @@ function _gdPrevMes(){
   const [y,m]=_gdMes.split('-').map(Number);
   const dt=new Date(y,m-2,1);
   _gdMes=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
-  _gdData={};_gdCargar();
+  _gdData={};_gdCargar(); _gdVerBarra();
   _gdRefreshActiveTab();
 }
 function _gdNextMes(){
   const [y,m]=_gdMes.split('-').map(Number);
   const dt=new Date(y,m,1);
   _gdMes=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
-  _gdData={};_gdCargar();
+  _gdData={};_gdCargar(); _gdVerBarra();
   _gdRefreshActiveTab();
 }
 function _gdRefreshActiveTab(){
@@ -495,7 +588,11 @@ function _gdTab(tab){
   // el tab esté visible). Sin este repintado, el asesor registraba una novedad y
   // al volver seguía viendo el número viejo hasta recargar la página. Es render
   // en memoria, sin lecturas extra a Firebase.
-  if(tab==='gestion'){ _gdRenderTabla(); _gdRenderResumen(); }
+  // Mirar a otro asesor vale SOLO en Gestión: si el modo se arrastrara a
+  // Novedades o R.O., el dueño encontraría esos módulos en solo lectura sin
+  // entender por qué. Al salir de Gestión se vuelve a su propia remisión.
+  if(tab!=='gestion' && _gdViendoOtro()) _gdVerCambiar('');
+  if(tab==='gestion'){ _gdRenderTabla(); _gdRenderResumen(); _gdVerBarra(); }
   if(tab==='consolidado') _consoInit();
   if(tab==='novedades') _novInit();
   if(tab==='anticipos') _antInit();
