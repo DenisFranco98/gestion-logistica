@@ -99,11 +99,16 @@ async function _gdVerCargarAsesores(){
       : Object.keys(gd).filter(k=>!_GD_NO_ASESOR.has(k))
           .map(k=>({uid:k, nombre:((users[k]||{}).asesor)||((gd[k]||{})._nombre)||k, etiqueta:null}));
     const otros = lista.filter(a=>a.uid!==yo);
-    const actual = window._gdVerAsesor || yo;
+    const marcado = v => v===window._gdVerAsesor ? ' selected' : '';
     sel.innerHTML =
-      '<option value="">👤 Mi remisión</option>' +
+      '<option value=""'+(window._gdVerAsesor?'':' selected')+'>👤 Mi remisión</option>' +
+      // El total solo tiene sentido si hay alguien más: con un solo asesor
+      // sería la misma tabla que ya se ve al elegirlo por nombre.
       (otros.length
-        ? otros.map(a=>'<option value="'+esc(a.uid)+'"'+(a.uid===actual?' selected':'')+'>'+
+        ? '<option value="'+_GD_VER_TODOS+'"'+marcado(_GD_VER_TODOS)+'>📊 Todos — suma de la tienda ('+lista.length+')</option>'
+        : '') +
+      (otros.length
+        ? otros.map(a=>'<option value="'+esc(a.uid)+'"'+marcado(a.uid)+'>'+
                         esc(a.etiqueta||a.nombre)+'</option>').join('')
         : '<option value="" disabled>— Ningún otro asesor con datos este mes —</option>');
   }catch(e){
@@ -132,6 +137,14 @@ function _gdVerPintarAviso(){
     if(tit) tit.textContent = comoTitulo(propio);
     return;
   }
+  if(_gdVerTodos()){
+    if(av){
+      av.style.display='inline-flex';
+      av.textContent = '📊 Suma de todos los asesores · solo lectura · sin observaciones';
+    }
+    if(tit) tit.textContent = 'REMISIÓN MENSUAL · [TODA LA TIENDA]';
+    return;
+  }
   const sel = document.getElementById('gd-ver-asesor');
   const nom = sel && sel.selectedIndex>=0 ? sel.options[sel.selectedIndex].textContent : 'otro asesor';
   if(av){
@@ -153,12 +166,43 @@ function _gdVerBarra(){
   _gdVerCargarAsesores().then(_gdVerPintarAviso);
 }
 
+// "Ver todo" no es una persona: es la suma de la tienda. No se puede leer de
+// una carpeta, hay que recorrer las de todos los asesores del mes y sumarlas.
+const _GD_VER_TODOS = '__todos__';
+function _gdVerTodos(){ return window._gdVerAsesor === _GD_VER_TODOS; }
+
+// Los números se suman día a día (_gdadmSumarDias, el mismo del consolidado del
+// admin); las observaciones no se pueden sumar, así que se descartan: mostrar la
+// de una sola persona como si fuera la del total sería mentir sobre quién la escribió.
+function _gdCargarTodos(){
+  const tk=_gdTK();
+  _db.ref('gestiones_diarias/'+tk+'/'+_gdMes).once('value').then(snap=>{
+    const mes=snap.val()||{}, suma={};
+    Object.entries(mes).forEach(([clave,nodo])=>{
+      if(_GD_NO_ASESOR.has(clave)||!nodo||typeof nodo!=='object') return;
+      _gdadmSumarDias(suma, nodo.dias||{});
+    });
+    Object.values(suma).forEach(d=>{
+      Object.keys(d).forEach(c=>{ if(typeof d[c]!=='number') delete d[c]; });
+    });
+    _gdData=suma;
+    _gdNotaEditando=null;
+    _gdRenderTabla();
+    _gdRenderResumen();
+    _gdCargarNotas({});
+  }).catch(e=>{
+    console.warn('[GD] no se pudo sumar la tienda',e);
+    _gdData={}; _gdRenderTabla(); _gdRenderResumen();
+  });
+}
+
 function _gdCargar(){
   const [y,m]=_gdMes.split('-').map(Number);
   const label=new Date(y,m-1,1).toLocaleDateString('es-CO',{month:'long',year:'numeric'});
   document.getElementById('gd-mes-label').textContent=label.charAt(0).toUpperCase()+label.slice(1);
   document.getElementById('gd-save-st').textContent='';
   if(typeof _db==='undefined'||!window._currentUsername){_gdData={};_gdRenderTabla();_gdRenderResumen();return;}
+  if(_gdVerTodos()){ _gdCargarTodos(); _gdCargarCF(); return; }
   // _leerGD y no _leerTienda: acá cambiaron DOS claves (la tienda por empresaId
   // y el asesor por uid), y hay que probar las combinaciones viejas.
   _leerGD(_gdBase).then(snap=>{
