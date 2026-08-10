@@ -2712,14 +2712,15 @@ function _initLogin(){
       localStorage.setItem(LOGIN_KEY,'superadmin');
       _showSuperAdmin(); _superAdmCargar();
     } else if(rolTipo === 'admin'){
-      _auditLogin(email,'exito');
+      // El acceso ya quedó registrado al validar la contraseña (ver _loginCheck).
+      // Registrarlo otra vez acá era el 46% de los duplicados de login_audit.
       localStorage.setItem(LOGIN_KEY,'admin');
       localStorage.setItem('lgs_admin_id', uid);
       localStorage.setItem('lgs_admin_user', email);
       _showAdmin(); _admCargarDashboard();
     } else {
       const d = userData||{};
-      _auditLogin(email,'exito');
+      // Igual que arriba: el registro ya se hizo al validar la contraseña.
       window._currentRol = d.rol||'dueno';
       const nombreAsesor = d.asesor||email;
       const _resolverTiendas = snapT=>{
@@ -2857,6 +2858,9 @@ function _initLogin(){
 
     // Acceso de emergencia hardcodeado (solo para Super Admin sin cuenta Gmail aún)
     if(email === ADMIN_USER && p === ADMIN_PASS){
+      // Este camino no dejaba ningún rastro: el acceso más privilegiado del
+      // sistema era justo el único que no aparecía en la auditoría.
+      _auditLogin(email,'exito');
       firebase.auth().signInAnonymously().then(()=>{
         localStorage.setItem(LOGIN_KEY,'superadmin');
         _showSuperAdmin(); _superAdmCargar();
@@ -4245,52 +4249,241 @@ function _admTab(tab){
 // ── AUDITORÍA DE LOGINS ───────────────────────────────────────────────────
 let _audAllData=[], _audFilter='';
 
+// La clave del nodo. Firebase no permite ".", "#", "$", "[", "]" en rutas, y
+// además el correo se guarda EN MINÚSCULAS: se tomaba tal como se tecleaba, así
+// que "Frankaroasesor1@gmail.com" y "frankaroasesor1@gmail.com" quedaron como
+// dos personas distintas (20 y 74 registros) y ninguna lista las mostraba juntas.
+function _audKey(username){
+  return String(username||'').trim().toLowerCase().replace(/[.#$[\]]/g,'_');
+}
+
+// Un login exitoso se registraba DOS veces: una al validar la contraseña y otra
+// al entrar con el rol, a ~120 ms de distancia. Eran el 46% de los registros.
+// Las llamadas de más ya se quitaron; esto es la red de seguridad para que una
+// vía nueva no vuelva a duplicar sin que nadie se entere.
+const _AUD_REPETIDO_MS = 15000;
+let _audUltimo = {};
+
+// ── UNIFICAR CUENTAS QUE SOLO DIFIEREN EN MAYÚSCULAS ─────────────────────
+// El correo se guardaba tal como se tecleaba, así que quien un día escribió
+// "Frankaroasesor1@gmail.com" quedó con dos carpetas: 20 accesos en una y 74 en
+// la otra, y ninguna lista los mostraba juntos. _audKey ya normaliza a
+// minúsculas; esto arregla lo que quedó de antes.
+//
+//   _audUnificarMayusculas()                → simulación
+//   _audUnificarMayusculas({aplicar:true})  → mueve los registros
+window._audUnificarMayusculas = async function(opts){
+  opts = opts||{};
+  const snap = await _db.ref('login_audit').once('value');
+  const todo = snap.val()||{};
+  const grupos = {};
+  Object.keys(todo).forEach(k=>{ const l=k.toLowerCase(); (grupos[l]=grupos[l]||[]).push(k); });
+  const mover = [];
+  Object.entries(grupos).forEach(([destino,claves])=>{
+    if(claves.length<2 && claves[0]===destino) return;
+    claves.filter(k=>k!==destino).forEach(origen=>{
+      Object.entries(todo[origen]||{}).forEach(([key,reg])=>mover.push({origen,destino,key,reg}));
+    });
+  });
+  console.log('%c══ CUENTAS DUPLICADAS POR MAYÚSCULAS ══','font-weight:bold;font-size:13px');
+  if(!mover.length){ console.log('No hay ninguna.'); return {mover:[]}; }
+  const resumen={};
+  mover.forEach(m=>{ const id=m.origen+' → '+m.destino; resumen[id]=(resumen[id]||0)+1; });
+  console.table(Object.entries(resumen).map(([ruta,n])=>({ruta,registros:n})));
+  if(!opts.aplicar){
+    console.log('%cSimulación. Para aplicar: _audUnificarMayusculas({aplicar:true})','color:#E6B539');
+    return {mover};
+  }
+  const upd={};
+  mover.forEach(m=>{ upd[m.destino+'/'+m.key]=m.reg; upd[m.origen+'/'+m.key]=null; });
+  await _db.ref('login_audit').update(upd);
+  console.log('%c✓ '+mover.length+' registros movidos. Ahora corré _audLimpiarDuplicados().','color:#39E67A;font-weight:bold');
+  return {movidos:mover.length};
+};
+
+// ── LIMPIEZA DE LOS DUPLICADOS VIEJOS ────────────────────────────────────
+// Los registros escritos antes del arreglo siguen ahí: 356 de 774 eran el mismo
+// acceso guardado dos veces. Se conserva SIEMPRE el primero de cada par (es el
+// que tiene la hora real del ingreso) y se borran los que lo siguen dentro de la
+// ventana. Se agrupa por cuenta y resultado: dos personas distintas entrando a
+// la vez, o un fallo seguido de un éxito, no son duplicados.
+//
+// Ejecutar desde la consola como admin:
+//   _audLimpiarDuplicados()                  → simulación, no borra nada
+//   _audLimpiarDuplicados({aplicar:true})    → borra (descarga el backup antes)
+window._audLimpiarDuplicados = async function(opts){
+  opts = opts||{};
+  const ventana = opts.ventanaMs || _AUD_REPETIDO_MS;
+  const snap = await _db.ref('login_audit').once('value');
+  const todo = snap.val()||{};
+  const aBorrar = [];
+  let total = 0;
+
+  Object.entries(todo).forEach(([cuenta,regs])=>{
+    const lista = Object.entries(regs||{})
+      .map(([k,r])=>({k, ts:(r||{}).ts||0, resultado:(r||{}).resultado||''}))
+      .sort((a,b)=>a.ts-b.ts);
+    total += lista.length;
+    const ultimoDe = {};
+    lista.forEach(r=>{
+      // Un registro sin ts no se puede comparar con nada: se deja quieto.
+      if(!r.ts) return;
+      const previo = ultimoDe[r.resultado];
+      if(previo!=null && r.ts-previo <= ventana){
+        aBorrar.push({cuenta, key:r.k, ts:r.ts, resultado:r.resultado, separacionMs:r.ts-previo});
+      } else {
+        // El ancla es el PRIMERO del grupo y no se mueve: si se corriera con
+        // cada duplicado, una ráfaga de registros se borraría en cadena.
+        ultimoDe[r.resultado] = r.ts;
+      }
+    });
+  });
+
+  const porCuenta = {};
+  aBorrar.forEach(b=>{ porCuenta[b.cuenta]=(porCuenta[b.cuenta]||0)+1; });
+  console.log('%c══ DUPLICADOS EN login_audit ══','font-weight:bold;font-size:13px');
+  console.log('Registros en la base: '+total);
+  console.log('A borrar: '+aBorrar.length+' ('+(total?(aBorrar.length/total*100).toFixed(1):0)+'%)');
+  console.log('Quedarían: '+(total-aBorrar.length)+' accesos reales');
+  console.table(Object.entries(porCuenta).sort((a,b)=>b[1]-a[1]).map(([cuenta,n])=>({cuenta,duplicados:n})));
+
+  if(!opts.aplicar){
+    console.log('%cSimulación: no se borró nada. Para aplicar: _audLimpiarDuplicados({aplicar:true})','color:#E6B539');
+    return {total, aBorrar};
+  }
+  if(!aBorrar.length){ console.log('No hay nada que borrar.'); return {total, aBorrar}; }
+
+  // Backup antes de tocar: el nodo entero, no solo lo que se borra.
+  try{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(todo,null,2)],{type:'application/json'}));
+    a.download='login_audit-backup-'+_hoyLocal()+'.json';
+    a.click();
+    console.log('%cBackup descargado: '+a.download,'color:#39E67A');
+  }catch(e){ console.warn('No se pudo descargar el backup:',e); throw new Error('Sin backup no se borra. Revisá el error de arriba.'); }
+
+  // En lotes: un update con 356 claves en una sola llamada es frágil.
+  const LOTE=100;
+  for(let i=0;i<aBorrar.length;i+=LOTE){
+    const upd={};
+    aBorrar.slice(i,i+LOTE).forEach(b=>{ upd[b.cuenta+'/'+b.key]=null; });
+    await _db.ref('login_audit').update(upd);
+    console.log('  borrados '+Math.min(i+LOTE,aBorrar.length)+'/'+aBorrar.length);
+  }
+  console.log('%c✓ Listo. Quedan '+(total-aBorrar.length)+' accesos.','color:#39E67A;font-weight:bold');
+  return {total, borrados:aBorrar.length};
+};
+
 async function _auditLogin(username, resultado){
   try{
     if(typeof _db==='undefined')return;
-    // Firebase no permite ".", "#", "$", "[", "]" en rutas — sanitizar el email
-    const safeKey = String(username).replace(/[.#$[\]]/g,'_');
-    // Obtener IP y ubicación via API gratuita (sin API key)
-    let ip='—', ciudad='—', pais='—', isp='—', region='—';
-    try{
-      const r=await fetch('https://ip-api.com/json/?fields=status,query,city,regionName,country,org',{cache:'no-store'});
-      if(r.ok){
-        const d=await r.json();
-        if(d.status==='success'){ip=d.query||'—';ciudad=d.city||'—';region=d.regionName||'—';pais=d.country||'—';isp=d.org||'—';}
-      }
-    }catch(_){}
+    const safeKey = _audKey(username);
+    const marca = safeKey+'|'+resultado;
+    const ahora = Date.now();
+    if(_audUltimo[marca] && ahora-_audUltimo[marca] < _AUD_REPETIDO_MS){
+      console.warn('[audit] ignorado, mismo acceso hace '+(ahora-_audUltimo[marca])+' ms:', marca);
+      return;
+    }
+    _audUltimo[marca] = ahora;
+
     const ua=navigator.userAgent||'—';
-    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone||'—';
-    // Detectar dispositivo aproximado
     const esMovil=/Mobi|Android|iPhone|iPad/i.test(ua);
     const navegador=ua.includes('Chrome')?'Chrome':ua.includes('Firefox')?'Firefox':ua.includes('Safari')?'Safari':ua.includes('Edge')?'Edge':'Otro';
     const record={
-      username, resultado, ts:Date.now(),
+      username, resultado, ts:ahora,
       fecha:new Date().toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'}),
-      ip, ciudad, region, pais, isp,
+      ip:'—', ciudad:'—', region:'—', pais:'—', isp:'—',
       dispositivo:esMovil?'Móvil':'Escritorio',
-      navegador, tz,
+      navegador, tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'—',
       ua:ua.slice(0,120) // truncar para no exceder límites
     };
-    await _db.ref('login_audit/'+safeKey).push(record);
+    // El registro se guarda PRIMERO y la ubicación se agrega después. Antes se
+    // esperaba a la API de IP para recién escribir: si la red fallaba o el
+    // navegador cambiaba de página en el medio, el acceso no quedaba registrado.
+    const ref = await _db.ref('login_audit/'+safeKey).push(record);
+    _audUbicacion().then(u=>{ if(u) ref.update(u); }).catch(()=>{});
   }catch(e){ console.warn('[audit]',e); }
+}
+
+// El proveedor anterior (ip-api.com) no da HTTPS en su plan gratuito: desde la
+// app respondía 403 y por eso los 774 registros que había tenían la IP y la
+// ubicación vacías. ipwho.is sí sirve por HTTPS y sin API key; geojs queda de
+// respaldo por si algún día cambia.
+async function _audUbicacion(){
+  const pedir=async(url,ms)=>{
+    const ctl=new AbortController();
+    const t=setTimeout(()=>ctl.abort(), ms);
+    try{
+      const r=await fetch(url,{cache:'no-store',signal:ctl.signal});
+      return r.ok ? await r.json() : null;
+    } finally { clearTimeout(t); }
+  };
+  try{
+    const d=await pedir('https://ipwho.is/',6000);
+    if(d && d.success && d.ip){
+      return {ip:d.ip, ciudad:d.city||'—', region:d.region||'—', pais:d.country||'—',
+              isp:(d.connection&&(d.connection.org||d.connection.isp))||'—'};
+    }
+  }catch(_){}
+  try{
+    const d=await pedir('https://get.geojs.io/v1/ip/geo.json',6000);
+    if(d && d.ip){
+      return {ip:d.ip, ciudad:d.city||'—', region:d.region||'—', pais:d.country||'—',
+              isp:d.organization_name||d.organization||'—'};
+    }
+  }catch(_){}
+  return null;
+}
+
+// Cuántos registros se bajan por cuenta. Estaba en 30 y con eso 434 de los 774
+// registros que había NO se descargaban nunca: la cuenta con más movimiento
+// tenía 292 accesos y en pantalla salían 30. No es un tope de pantalla, es un
+// tope de consulta, y por eso parecía que los accesos no se estaban guardando.
+const _AUD_POR_CUENTA = 500;
+const _AUD_TOTAL = 3000;
+
+// Las claves REALES del nodo, no las deducidas de /users y /admins. Hay
+// registros guardados bajo nombres de tienda del login viejo (3D Company,
+// Tendearte, Frankaro…) que no le corresponden a ningún correo y quedaban
+// invisibles. `shallow` trae solo los nombres de las claves, no los registros.
+async function _audClavesExistentes(){
+  try{
+    const dbURL=((_db.app||{}).options||{}).databaseURL||'';
+    const u=firebase.auth().currentUser;
+    if(!dbURL||!u) return [];
+    const token=await u.getIdToken();
+    const r=await fetch(dbURL+'/login_audit.json?shallow=true&auth='+encodeURIComponent(token),{cache:'no-store'});
+    if(!r.ok) return [];
+    return Object.keys(await r.json()||{});
+  }catch(e){ console.warn('[audit] no se pudieron listar las cuentas:',e); return []; }
 }
 
 async function _audInicializar(){
   const wrap=document.getElementById('aud-table-wrap');
   if(!wrap)return;
   wrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-3);font-size:.75rem;">Cargando registros...</div>';
-  // Cargar todos los usuarios para el selector
-  const [snapUsers, snapAdmins]=await Promise.all([
+  const [snapUsers, snapAdmins, clavesReales]=await Promise.all([
     _db.ref('users').once('value'),
-    _db.ref('admins').once('value')
+    _db.ref('admins').once('value'),
+    _audClavesExistentes()
   ]);
-  const usuarios=[];
-  snapUsers.val()&&Object.entries(snapUsers.val()).forEach(([uid,u])=>usuarios.push(u.email||uid));
-  snapAdmins.val()&&Object.entries(snapAdmins.val()).forEach(([uid,a])=>usuarios.push(a.email||a.username||uid));
+  // El valor de cada opción es la clave del nodo y el texto es el correo: antes
+  // el valor era el correo con puntos y la consulta con ese valor ni siquiera
+  // llegaba a Firebase — "login_audit/x@y.com" es una ruta inválida.
+  const etiquetas={};
+  const agregar=nombre=>{ if(nombre) etiquetas[_audKey(nombre)] = etiquetas[_audKey(nombre)]||String(nombre); };
+  snapUsers.val()&&Object.entries(snapUsers.val()).forEach(([uid,u])=>agregar(u.email||uid));
+  snapAdmins.val()&&Object.entries(snapAdmins.val()).forEach(([uid,a])=>agregar(a.email||a.username||uid));
+  clavesReales.forEach(k=>{ if(!etiquetas[k]) etiquetas[k]=k; });
   const sel=document.getElementById('aud-user-sel');
   if(sel){
-    sel.innerHTML='<option value="">Todos los usuarios</option>'+[...new Set(usuarios)].sort().map(u=>`<option value="${u}">${u}</option>`).join('');
+    const conDatos=new Set(clavesReales);
+    sel.innerHTML='<option value="">Todos los usuarios</option>'+
+      Object.entries(etiquetas)
+        .sort((a,b)=>a[1].localeCompare(b[1]))
+        // Las cuentas sin un solo acceso se marcan en vez de esconderse: que no
+        // haya registros es justamente algo que el admin quiere poder ver.
+        .map(([k,txt])=>`<option value="${k}">${txt}${conDatos.has(k)?'':' — sin accesos'}</option>`).join('');
   }
   _audCargar();
 }
@@ -4300,32 +4493,44 @@ async function _audCargar(){
   if(!wrap)return;
   wrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-3);font-size:.75rem;">Cargando...</div>';
   const userFil=(document.getElementById('aud-user-sel')||{}).value||'';
-  let snap;
-  if(userFil){
-    snap=await _db.ref('login_audit/'+userFil).orderByChild('ts').limitToLast(200).once('value');
-    _audAllData=[];
-    snap.forEach(ch=>_audAllData.unshift({...ch.val(),_key:ch.key}));
-  } else {
-    // Consultar por usuario con límite en vez de bajar todo el árbol
-    // (login_audit crece sin tope; la descarga completa se vuelve lenta con el tiempo)
-    const sel=document.getElementById('aud-user-sel');
-    const usuarios=sel?[...sel.options].map(o=>o.value).filter(Boolean):[];
-    _audAllData=[];
-    if(usuarios.length){
-      const snaps=await Promise.all(usuarios.map(u=>
-        _db.ref('login_audit/'+String(u).replace(/[.#$[\]]/g,'_')).orderByChild('ts').limitToLast(30).once('value')
-      ));
-      snaps.forEach((s,i)=>{ s.forEach(ch=>{ _audAllData.push({...ch.val(),_key:ch.key,username:ch.val().username||usuarios[i]}); }); });
+  _audAllData=[];
+  try{
+    if(userFil){
+      const snap=await _db.ref('login_audit/'+_audKey(userFil)).orderByChild('ts').limitToLast(_AUD_POR_CUENTA).once('value');
+      snap.forEach(ch=>_audAllData.unshift({...ch.val(),_key:ch.key,_cuenta:userFil}));
     } else {
-      const snapAll=await _db.ref('login_audit').limitToLast(50).once('value');
-      Object.entries(snapAll.val()||{}).forEach(([user,regs])=>{
-        Object.entries(regs||{}).forEach(([k,r])=>_audAllData.push({...r,_key:k,username:r.username||user}));
-      });
+      // Consultar por cuenta con límite en vez de bajar todo el árbol
+      // (login_audit crece sin tope; la descarga completa se vuelve lenta con el tiempo)
+      const sel=document.getElementById('aud-user-sel');
+      const cuentas=sel?[...sel.options].map(o=>o.value).filter(Boolean):[];
+      const snaps=await Promise.all(cuentas.map(k=>
+        _db.ref('login_audit/'+k).orderByChild('ts').limitToLast(_AUD_POR_CUENTA).once('value')
+      ));
+      snaps.forEach((s,i)=>{ s.forEach(ch=>{ _audAllData.push({...ch.val(),_key:ch.key,_cuenta:cuentas[i],username:ch.val().username||cuentas[i]}); }); });
+      _audAllData.sort((a,b)=>(b.ts||0)-(a.ts||0));
+      _audAllData=_audAllData.slice(0,_AUD_TOTAL);
     }
-    _audAllData.sort((a,b)=>(b.ts||0)-(a.ts||0));
-    _audAllData=_audAllData.slice(0,300);
+  }catch(e){
+    console.warn('[audit] error al cargar',e);
+    wrap.innerHTML='<div style="padding:30px;text-align:center;color:var(--danger);font-size:.75rem;">No se pudieron cargar los registros: '+String(e.message||e)+'</div>';
+    return;
   }
   _audFiltrar();
+}
+
+// Se dice cuántos se bajaron y desde cuándo: sin eso, un tope de consulta se ve
+// igual que "no se está registrando nada", que es justo la confusión que hubo.
+function _audPie(mostrados){
+  const total=_audAllData.length;
+  const cuentas=new Set(_audAllData.map(r=>r._cuenta||r.username)).size;
+  let txt=mostrados+' de '+total+' registro'+(total===1?'':'s')+' · '+cuentas+' cuenta'+(cuentas===1?'':'s');
+  const ts=_audAllData.map(r=>r.ts).filter(Boolean);
+  if(ts.length){
+    const f=t=>new Date(t).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'});
+    txt+=' · desde '+f(Math.min(...ts))+' hasta '+f(Math.max(...ts));
+  }
+  if(total>=_AUD_TOTAL) txt+=' · tope alcanzado, filtra por usuario para ver más atrás';
+  return txt;
 }
 
 function _audFiltrar(){
@@ -4365,7 +4570,7 @@ function _audFiltrar(){
       <td style="padding:6px 10px;">${r.navegador||'—'}</td>
       <td style="padding:6px 10px;color:var(--text-2);">${r.tz||'—'}</td>
     </tr>`).join('')}</tbody>
-  </table><div style="padding:8px 10px;font-size:.62rem;color:var(--text-3);">${rows.length} registros mostrados</div></div>`;
+  </table><div style="padding:8px 10px;font-size:.62rem;color:var(--text-3);">${_audPie(rows.length)}</div></div>`;
 }
 
 function _admCargarDashboard(){
