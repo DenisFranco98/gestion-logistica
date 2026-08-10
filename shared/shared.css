@@ -634,6 +634,27 @@ body.card-gestionando .hist-overlay{background:transparent;backdrop-filter:none;
 .xls-inp::placeholder{color:var(--text-3);opacity:.35;}
 .xls-inp:focus{background:rgba(57,113,230,.12);box-shadow:0 0 0 1.5px var(--accent);border-radius:3px;}
 .xls-inp.xls-inp-l{text-align:left;min-width:90px;font-family:var(--f-body);}
+/* Las flechitas del type=number sobran: acá ↑ y ↓ mueven de celda, no cambian
+   el valor, y el spinner invitaba justo a lo contrario. */
+.xls-inp[type=number]{-moz-appearance:textfield;appearance:textfield;}
+.xls-inp[type=number]::-webkit-outer-spin-button,
+.xls-inp[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+/* NOTA — mismo comportamiento que OBSERVACIONES ASESOR de Gestiones Diarias:
+   en reposo ocupa una línea para no alterar el alto de la tabla, y al hacer
+   clic se abre y muestra el texto completo. Crece la fila en vez de flotar
+   por encima, así no tapa los días vecinos ni se recorta en las últimas filas. */
+.xls td.xls-nota textarea.xls-inp{
+  height:21px;line-height:15px;padding:3px;
+  resize:none;overflow:hidden;display:block;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+  transition:height .12s ease;
+}
+.xls td.xls-nota textarea.xls-inp:focus{
+  height:96px;overflow-y:auto;
+  background:var(--bg-card);border-radius:5px;
+  box-shadow:0 0 0 1.5px var(--accent);
+  color:var(--text-1);position:relative;z-index:2;
+}
 /* separador de grupos */
 .xls th.xls-sep,.xls td.xls-sep{border-left:2px solid var(--border-strong)!important;}
 /* Checklist informe PDF */

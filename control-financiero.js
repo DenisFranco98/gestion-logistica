@@ -740,13 +740,14 @@ function _cfTotRowHTML(){
       <div style="color:var(--warning);">${totWppM?_cf$(totWppM):''}</div>
       <div style="font-size:.5rem;color:var(--warning);">${totTotalM>0?pct(totWppM,totTotalM):''}</div>
     </td>
+    <td style="text-align:center;">${totWppN||''}</td>
     <td style="text-align:right;padding:0 4px;">
       <div style="color:var(--info);">${totShopM?_cf$(totShopM):''}</div>
       <div style="font-size:.5rem;color:var(--info);">${totTotalM>0?pct(totShopM,totTotalM):''}</div>
     </td>
-    <td style="text-align:center;">${totWppN||''}</td>
     <td style="text-align:center;">${totShopN||''}</td>
-    <td class="xls-sep" style="text-align:center;font-size:.65rem;">${totTotal}</td>
+    <td style="text-align:center;font-size:.65rem;">${totTotal}</td>
+    <td class="xls-sep" style="text-align:right;padding:0 4px;font-size:.65rem;">${totTotalM?_cf$(totTotalM):''}</td>
     <td style="text-align:center;${crCls(crMTot)}">${crFmt(crMTot)}</td>
     <td class="xls-sep" style="text-align:center;${crCls(crNTot)}">${crFmt(crNTot)}</td>
     <td style="text-align:right;padding:0 4px;">${_cf$(totAdsFB)}</td>
@@ -819,20 +820,21 @@ function _cfRenderMes(){
       <td class="xls-ant" style="text-align:right;padding:0 4px;">${prevTotalM?_cf$(prevTotalM):''}</td>
       <td class="xls-ant xls-sep" style="text-align:center;">${prevTotN||''}</td>
       <td class="xls-wpp"><input class="xls-inp" data-dia="${dd}" data-campo="wppMonto" type="text" inputmode="numeric" value="${wppM?_cf$(wppM):''}" placeholder="" style="color:var(--warning);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','wppMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
-      <td class="xls-shopn"><input class="xls-inp" data-dia="${dd}" data-campo="shopifyMonto" type="text" inputmode="numeric" value="${shopM?_cf$(shopM):''}" placeholder="" style="color:var(--info);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','shopifyMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
       <td class="xls-wpp"><input class="xls-inp" data-dia="${dd}" data-campo="wppNum" type="number" min="0" value="${wppN||''}" placeholder="" style="color:var(--warning);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','wppNum',this.value)"></td>
+      <td class="xls-shopn"><input class="xls-inp" data-dia="${dd}" data-campo="shopifyMonto" type="text" inputmode="numeric" value="${shopM?_cf$(shopM):''}" placeholder="" style="color:var(--info);font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','shopifyMonto',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
       <td class="xls-shopn"><input class="xls-inp" data-dia="${dd}" data-campo="shopifyNum" type="number" min="0" value="${shopNSolo||''}" placeholder="" style="color:var(--info);font-weight:700;text-align:center;" oninput="_cfSetDia('${dd}','shopifyNum',this.value)"></td>
-      <td class="xls-tot xls-sep">${totN||''}</td>
-      <td class="${crM===null?'xls-auto':crM>=0?'xls-pos':'xls-neg'}" style="text-align:center;">${crFmt(crM)}</td>
-      <td class="${crN===null?'xls-auto xls-sep':crN>=0?'xls-pos xls-sep':'xls-neg xls-sep'}" style="text-align:center;">${crFmt(crN)}</td>
+      <td class="xls-tot" data-auto="totN">${totN||''}</td>
+      <td class="xls-tot xls-sep" data-auto="totM" style="text-align:right;padding:0 4px;">${totalM?_cf$(totalM):''}</td>
+      <td class="${crM===null?'xls-auto':crM>=0?'xls-pos':'xls-neg'}" data-auto="crM" style="text-align:center;">${crFmt(crM)}</td>
+      <td class="${crN===null?'xls-auto xls-sep':crN>=0?'xls-pos xls-sep':'xls-neg xls-sep'}" data-auto="crN" style="text-align:center;">${crFmt(crN)}</td>
       <td class="xls-ads"><input class="xls-inp" data-dia="${dd}" data-campo="adsFB" type="text" inputmode="numeric" value="${adsFB?_cf$(adsFB):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsFB',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
       <td class="xls-ads"><input class="xls-inp" data-dia="${dd}" data-campo="adsTiktok" type="text" inputmode="numeric" value="${adsTT?_cf$(adsTT):''}" placeholder="" style="color:#9B59E6;font-weight:700;" onfocus="this.value=this.value.replace(/[^0-9]/g,'');this.select()" oninput="_cfSetDia('${dd}','adsTiktok',this.value)" onblur="const _r=_cfNum(this.value);this.value=_r>0?_cf$(_r):''"></td>
-      <td class="xls-ads" style="text-align:right;padding:0 4px;">${adsT?_cf$(adsT):''}</td>
-      <td class="xls-ads" style="text-align:right;padding:0 4px;color:#6b7280;">${fee?_cf$(fee):''}</td>
-      <td class="xls-ads" style="text-align:right;padding:0 4px;font-weight:700;">${adsFee?_cf$(adsFee):''}</td>
-      <td class="xls-cpa" style="text-align:right;padding:0 4px;">${cpa?_cf$(cpa):''}</td>
-      <td class="xls-roas xls-sep" style="text-align:right;padding:0 4px;">${roas?roas.toFixed(2)+'x':''}</td>
-      <td class="xls-nota" style="min-width:90px;"><input class="xls-inp xls-inp-l" data-dia="${dd}" data-campo="nota" type="text" value="${d.nota||''}" placeholder="" oninput="_cfSetDia('${dd}','nota',this.value)"></td>
+      <td class="xls-ads" data-auto="adsT" style="text-align:right;padding:0 4px;">${adsT?_cf$(adsT):''}</td>
+      <td class="xls-ads" data-auto="fee" style="text-align:right;padding:0 4px;color:#6b7280;">${fee?_cf$(fee):''}</td>
+      <td class="xls-ads" data-auto="adsFee" style="text-align:right;padding:0 4px;font-weight:700;">${adsFee?_cf$(adsFee):''}</td>
+      <td class="xls-cpa" data-auto="cpa" style="text-align:right;padding:0 4px;">${cpa?_cf$(cpa):''}</td>
+      <td class="xls-roas xls-sep" data-auto="roas" style="text-align:right;padding:0 4px;">${roas?roas.toFixed(2)+'x':''}</td>
+      <td class="xls-nota" style="min-width:90px;"><textarea class="xls-inp xls-inp-l" data-dia="${dd}" data-campo="nota" rows="1" placeholder="" oninput="_cfSetDia('${dd}','nota',this.value)">${esc(d.nota||'')}</textarea></td>
     </tr>`;
   }
 
@@ -979,7 +981,7 @@ function _cfRenderMes(){
           <tr>
             <th class="xls-sep" rowspan="2">DÍA</th>
             <th class="xls-ant" colspan="2">← MES ANT.</th>
-            <th class="xls-sep" colspan="7">VENTAS DEL DÍA</th>
+            <th class="xls-sep" colspan="8">VENTAS DEL DÍA</th>
             <th class="xls-ads xls-sep" colspan="5">ADS</th>
             <th class="xls-cpa" rowspan="2">CPA día</th>
             <th class="xls-roas xls-sep" rowspan="2" title="ROAS = Facturación total ÷ Total invertido en Ads">ROAS</th>
@@ -989,10 +991,11 @@ function _cfRenderMes(){
             <th class="xls-ant">Fact.$</th>
             <th class="xls-ant xls-sep">#</th>
             <th class="xls-wpp">WPP $</th>
-            <th class="xls-shopn">Shop $</th>
             <th class="xls-wpp">WPP#</th>
+            <th class="xls-shopn">Shop $</th>
             <th class="xls-shop">Shop#</th>
             <th style="font-weight:900;">Tot#</th>
+            <th style="font-weight:900;" title="Total facturado del día: WPP $ + Shop $">Tot$</th>
             <th title="% crecimiento facturación vs mismo día del mes anterior">Crec$</th>
             <th class="xls-sep" title="% crecimiento pedidos vs mismo día del mes anterior">Crec#</th>
             <th class="xls-ads">FB $</th>
@@ -1072,9 +1075,12 @@ function _cfNumPeg(txt){
 // El orden de las columnas se lee del DOM y no de una lista fija: si mañana se
 // agrega o se mueve una columna de captura, el pegado sigue cuadrando solo.
 function _cfPegCampos(){
-  const uno=document.querySelector('#cf-tab-mes .xls tbody input[data-dia]');
+  // La Nota es un textarea, no un input: sin incluirlo, pegar una columna de
+  // notas desde Excel no encontraría a dónde ponerlas.
+  const CAPTURA='input[data-dia], textarea[data-dia]';
+  const uno=document.querySelector('#cf-tab-mes .xls tbody '+CAPTURA);
   if(!uno) return [];
-  return [...uno.closest('tr').querySelectorAll('input[data-dia]')].map(i=>i.dataset.campo);
+  return [...uno.closest('tr').querySelectorAll(CAPTURA)].map(i=>i.dataset.campo);
 }
 
 function _cfPegar(e){
@@ -1116,7 +1122,8 @@ function _cfPegar(e){
   // Repintar: los totales, el CPA y el ROAS de cada fila tocada hay que
   // recalcularlos, y las columnas de dinero se muestran formateadas.
   _cfRenderMes();
-  const vuelta=document.querySelector('#cf-tab-mes input[data-dia="'+_cfPad(d0)+'"][data-campo="'+inp.dataset.campo+'"]');
+  const donde='[data-dia="'+_cfPad(d0)+'"][data-campo="'+inp.dataset.campo+'"]';
+  const vuelta=document.querySelector('#cf-tab-mes input'+donde+', #cf-tab-mes textarea'+donde);
   if(vuelta) vuelta.focus();
 
   const plural=(n,uno,varios)=>n+' '+(n===1?uno:varios);
@@ -1126,12 +1133,81 @@ function _cfPegar(e){
     : '📋 No se pegó nada: el rango cae fuera de la tabla');
 }
 
+// ── MOVERSE POR LA TABLA COMO EN EXCEL ───────────────────────────────
+// Las flechas mueven de celda. En un input type=number, ↑ y ↓ sumaban y restaban
+// al valor: quien intentaba bajar una fila terminaba cambiando una cifra de
+// ventas sin darse cuenta. Ahora navegan y nunca tocan el número.
+//
+// ← y → mueven de columna solo cuando el cursor está en el borde del texto o
+// cuando está todo seleccionado (al entrar a una celda se selecciona sola). En
+// medio de un número siguen moviendo el cursor, para poder corregir un dígito.
+//
+// La Nota queda fuera: es un textarea de varias líneas y ahí las flechas tienen
+// que servir para editar. Se entra y se sale con Tab.
+function _cfCeldas(){
+  return [...document.querySelectorAll('#cf-tab-mes .xls tbody input[data-dia]')];
+}
+function _cfMover(desde, filas, cols){
+  const celdas=_cfCeldas();
+  const i=celdas.indexOf(desde);
+  if(i<0) return false;
+  const porFila=_cfPegCampos().filter(c=>c!=='nota').length;
+  if(!porFila) return false;
+  const col=i%porFila, fila=Math.floor(i/porFila);
+  const nCol=col+cols, nFila=fila+filas;
+  if(nCol<0||nCol>=porFila) return false;
+  const destino=celdas[nFila*porFila+nCol];
+  if(!destino) return false;
+  destino.focus();
+  if(destino.select) destino.select();
+  // Sin esto, saltar a una fila lejana deja el foco fuera de la vista.
+  destino.scrollIntoView({block:'nearest',inline:'nearest'});
+  return true;
+}
+function _cfTeclas(e){
+  const el=e.target;
+  if(!el||!el.dataset||!el.dataset.dia) return;
+  if(!el.closest||!el.closest('#cf-tab-mes')) return;
+  if(el.tagName==='TEXTAREA') return;   // la Nota se edita, no navega
+
+  const k=e.key;
+  if(k==='ArrowUp'||k==='ArrowDown'){
+    // El preventDefault va SIEMPRE, aunque no haya a dónde moverse: si no, en la
+    // primera y la última fila las flechas volverían a cambiar el valor.
+    e.preventDefault();
+    _cfMover(el, k==='ArrowUp'?-1:1, 0);
+    return;
+  }
+  if(k==='Enter'){ e.preventDefault(); _cfMover(el, e.shiftKey?-1:1, 0); return; }
+  if(k==='ArrowLeft'||k==='ArrowRight'){
+    const v=el.value||'';
+    // type=number no deja leer selectionStart: ahí siempre se navega.
+    let enBorde=true;
+    try{
+      const ini=el.selectionStart, fin=el.selectionEnd;
+      if(ini!==null){
+        const todoSel = ini===0 && fin===v.length && v.length>0;
+        enBorde = todoSel || (ini===fin && (k==='ArrowLeft' ? ini===0 : ini===v.length));
+      }
+    }catch(_){}
+    if(!enBorde) return;
+    if(_cfMover(el, 0, k==='ArrowLeft'?-1:1)) e.preventDefault();
+  }
+}
+
 // Un solo listener en el documento: la tabla se vuelve a dibujar entera en cada
 // cambio de mes y uno pegado a ella se perdería.
 function _cfPegarInstalar(){
   if(window._cfPegInstalado) return;
   window._cfPegInstalado=true;
   document.addEventListener('paste', _cfPegar, true);
+  document.addEventListener('keydown', _cfTeclas, true);
+  // La rueda del mouse sobre un input type=number también cambia el valor. Con
+  // una tabla de 31 filas que se recorre scrolleando, es el mismo accidente.
+  document.addEventListener('wheel', ev=>{
+    const el=document.activeElement;
+    if(el&&el.type==='number'&&el.dataset&&el.dataset.dia&&el===ev.target) el.blur();
+  }, {passive:true});
 }
 
 function _cfSetDia(dd,k,v){
@@ -1163,16 +1239,21 @@ function _cfSetDia(dd,k,v){
       if(tr.classList.contains('xls-totrow'))return;
       const fc=tr.querySelector('td');
       if(!fc||parseInt(fc.textContent.trim(),10)!==parseInt(dd,10))return;
-      const tds=tr.querySelectorAll('td');
-      // [7]=Tot#, [8]=Crec$, [9]=Crec#, [12]=AdsTotal, [13]=Fee, [14]=AdsFee, [15]=CPA, [16]=ROAS
-      if(tds[7])tds[7].textContent=totalDia||'';
-      if(tds[8]){tds[8].textContent=crTxt(crM);tds[8].className=crM===null?'xls-auto':crM>=0?'xls-pos':'xls-neg';}
-      if(tds[9]){tds[9].textContent=crTxt(crN);tds[9].className=(crN===null?'xls-auto':crN>=0?'xls-pos':'xls-neg')+' xls-sep';}
-      if(tds[12])tds[12].textContent=adsT?_cf$(adsT):'';
-      if(tds[13])tds[13].textContent=fee?_cf$(fee):'';
-      if(tds[14])tds[14].textContent=adsFee?_cf$(adsFee):'';
-      if(tds[15])tds[15].textContent=cpa?_cf$(cpa):'';
-      if(tds[16])tds[16].textContent=roas?roas.toFixed(2)+'x':'';
+      // Por data-auto y no por posición: los índices fijos ([7]=Tot#, [12]=Ads…)
+      // se rompían en silencio al reordenar las columnas, escribiendo el ROAS
+      // donde iba el CPA sin que nada fallara.
+      const auto=c=>tr.querySelector('td[data-auto="'+c+'"]');
+      const poner=(c,txt)=>{ const el=auto(c); if(el) el.textContent=txt; };
+      poner('totN', totalDia||'');
+      poner('totM', totalM?_cf$(totalM):'');
+      poner('adsT', adsT?_cf$(adsT):'');
+      poner('fee',  fee?_cf$(fee):'');
+      poner('adsFee', adsFee?_cf$(adsFee):'');
+      poner('cpa',  cpa?_cf$(cpa):'');
+      poner('roas', roas?roas.toFixed(2)+'x':'');
+      const cM=auto('crM'), cN=auto('crN');
+      if(cM){ cM.textContent=crTxt(crM); cM.className=(crM===null?'xls-auto':crM>=0?'xls-pos':'xls-neg'); }
+      if(cN){ cN.textContent=crTxt(crN); cN.className=(crN===null?'xls-auto':crN>=0?'xls-pos':'xls-neg')+' xls-sep'; }
     });
     // Refrescar la fila TOT con las sumas actualizadas
     const totRow=tbody.querySelector('tr.xls-totrow');
