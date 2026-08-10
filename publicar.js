@@ -10,9 +10,10 @@
 //   node publicar.js --ver      → solo muestra en qué versión está
 const fs = require('fs');
 const HTML = ['index.html','gestion-logistica.html','gestiones-diarias.html','control-financiero.html',
-              // Página del enlace del correo (restablecer contraseña). No es un
+              // Página del enlace del correo (restablecer contraseña), servida en /cuenta/
+              // para que la URL no lleve extensión. No es un
               // módulo, pero carga shared.css y también tiene que versionarse.
-              'cuenta.html'];
+              'cuenta/index.html'];
 
 function actual(){
   const m = fs.readFileSync('index.html','utf8').match(/\?v=([0-9a-z]+)/);

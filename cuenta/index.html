@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Tu cuenta · Gestión Logística</title>
+<link rel="stylesheet" href="/shared/shared.css?v=20260810d">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<style>
+  /* La caja del login ya trae el estilo; acá solo lo que es propio de esta página */
+  .cta-estado{display:none;}
+  .cta-estado.visible{display:block;}
+  .cta-ok{font-size:.82rem;color:var(--success-strong);background:var(--success-soft);
+          border:1px solid rgba(29,168,85,.35);border-radius:10px;padding:12px 14px;margin-top:14px;text-align:left;line-height:1.5;}
+  /* --text-2 y no --text-3: a .72rem el gris más claro se queda en 4.34 sobre el
+     fondo oscuro de la caja, y esta línea es la que explica qué hacer si el
+     enlace venció. */
+  .cta-hint{font-size:.72rem;color:var(--text-2);margin-top:8px;text-align:left;line-height:1.5;}
+  .cta-ojo{position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;
+           font-size:.9rem;user-select:none;}
+  .cta-medidor{height:5px;border-radius:3px;background:var(--bg-hover);margin-top:8px;overflow:hidden;}
+  .cta-medidor i{display:block;height:100%;width:0;border-radius:3px;transition:width .2s,background .2s;}
+  .cta-tema{position:fixed;top:16px;right:16px;background:var(--bg-card);border:1px solid var(--border);
+            color:var(--text-1);border-radius:10px;width:38px;height:38px;font-size:1rem;cursor:pointer;z-index:10000;}
+</style>
+</head>
+<body>
+<script>
+// Tema guardado antes del primer paint, igual que en la app: quien abre el
+// enlace desde el correo llega a la misma cara que ya conoce.
+try{document.documentElement.setAttribute('data-theme',localStorage.getItem('lgs_theme')||'dark');}catch(_){}
+</script>
+
+<button class="cta-tema" onclick="_cambiarTema()" title="Cambiar tema">☀️</button>
+
+<div id="login-screen" class="visible">
+  <div class="login-box">
+    <div class="login-logo">🚚</div>
+    <div class="login-title" id="cta-titulo">Gestión Logística</div>
+    <div class="login-subtitle" id="cta-sub">Verificando el enlace…</div>
+
+    <!-- 1. Restablecer contraseña -->
+    <div id="cta-form" class="cta-estado">
+      <div class="login-field">
+        <label>Nueva contraseña</label>
+        <div style="position:relative;">
+          <input type="password" id="cta-p1" placeholder="Mínimo 6 caracteres" autocomplete="new-password" style="padding-right:38px;">
+          <span class="cta-ojo" onclick="_verPass(this,'cta-p1')">👁️</span>
+        </div>
+        <div class="cta-medidor"><i id="cta-barra"></i></div>
+      </div>
+      <div class="login-field">
+        <label>Repetir contraseña</label>
+        <div style="position:relative;">
+          <input type="password" id="cta-p2" placeholder="Escribila otra vez" autocomplete="new-password" style="padding-right:38px;">
+          <span class="cta-ojo" onclick="_verPass(this,'cta-p2')">👁️</span>
+        </div>
+      </div>
+      <button class="login-btn" id="cta-btn" onclick="_guardarPass()">Guardar contraseña</button>
+      <div class="cta-hint">Usá una contraseña que no uses en otro lado. Si el enlace venció, pedile al administrador que te mande uno nuevo.</div>
+    </div>
+
+    <!-- 2. Todo salió bien -->
+    <div id="cta-listo" class="cta-estado">
+      <div class="cta-ok" id="cta-listo-txt"></div>
+      <button class="login-btn" onclick="location.href='/'">Ir a Gestión Logística</button>
+    </div>
+
+    <!-- 3. Algo falló -->
+    <div id="cta-error" class="cta-estado">
+      <div class="login-error show" id="cta-error-txt" style="text-align:left;"></div>
+      <button class="login-btn" onclick="location.href='/'" style="margin-top:14px;">Volver al inicio</button>
+    </div>
+  </div>
+</div>
+
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyA9Ae7Zt7TwKsg7h7TOD9PTfeEaYhkoLVE",
+  authDomain: "gestion-logistica-86fd7.firebaseapp.com",
+  projectId: "gestion-logistica-86fd7"
+});
+const _auth = firebase.auth();
+_auth.languageCode = 'es';
+
+function _cambiarTema(){
+  const cur=document.documentElement.getAttribute('data-theme')||'dark';
+  const next=cur==='light'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',next);
+  try{localStorage.setItem('lgs_theme',next);}catch(_){}
+  document.querySelector('.cta-tema').textContent = next==='dark'?'☀️':'🌙';
+}
+document.querySelector('.cta-tema').textContent =
+  (document.documentElement.getAttribute('data-theme')||'dark')==='dark'?'☀️':'🌙';
+
+function _verPass(icono,id){
+  const i=document.getElementById(id);
+  i.type = i.type==='password' ? 'text' : 'password';
+  icono.textContent = i.type==='password' ? '👁️' : '🙈';
+}
+
+function _mostrar(cual){
+  ['cta-form','cta-listo','cta-error'].forEach(id=>
+    document.getElementById(id).classList.toggle('visible', id===cual));
+}
+function _cabecera(titulo, sub){
+  document.getElementById('cta-titulo').textContent = titulo;
+  document.getElementById('cta-sub').textContent = sub;
+}
+function _fallar(msg){
+  document.getElementById('cta-error-txt').textContent = msg;
+  _cabecera('No pudimos continuar','El enlace no se pudo usar');
+  _mostrar('cta-error');
+}
+
+// Firebase devuelve los códigos en inglés y con nombres que no le dicen nada a
+// un asesor. Cada uno tiene además una salida distinta, así que el mensaje
+// explica QUÉ hacer, no solo qué pasó.
+function _traducir(e){
+  const c=(e&&e.code)||'';
+  if(c==='auth/expired-action-code') return 'El enlace ya venció. Los correos de restablecimiento duran poco: pedile al administrador que te envíe uno nuevo.';
+  if(c==='auth/invalid-action-code')  return 'Este enlace no sirve o ya se usó. Si ya cambiaste la contraseña, entrá con la nueva; si no, pedí otro correo.';
+  if(c==='auth/user-disabled')        return 'La cuenta está deshabilitada. Hablá con el administrador.';
+  if(c==='auth/user-not-found')       return 'La cuenta ya no existe.';
+  if(c==='auth/weak-password')        return 'La contraseña es muy débil. Usá al menos 6 caracteres.';
+  if(c==='auth/network-request-failed') return 'No hay conexión. Revisá internet y probá de nuevo.';
+  if(c==='auth/too-many-requests')    return 'Demasiados intentos seguidos. Esperá unos minutos y volvé a probar.';
+  return 'Error inesperado: '+((e&&e.message)||c||'desconocido');
+}
+
+// Medidor simple: no bloquea nada, solo orienta. El mínimo real lo pone
+// Firebase en 6 caracteres y se valida aparte.
+function _fuerza(p){
+  let n=0;
+  if(p.length>=6) n++;
+  if(p.length>=10) n++;
+  if(/[A-Z]/.test(p)&&/[a-z]/.test(p)) n++;
+  if(/\d/.test(p)) n++;
+  if(/[^A-Za-z0-9]/.test(p)) n++;
+  return Math.min(n,4);
+}
+document.getElementById('cta-p1').addEventListener('input', function(){
+  const n=_fuerza(this.value);
+  const barra=document.getElementById('cta-barra');
+  const colores=['var(--danger-strong)','var(--danger-strong)','var(--warning-strong)','var(--success-strong)','var(--success-strong)'];
+  barra.style.width = this.value ? (n/4*100)+'%' : '0';
+  barra.style.background = colores[n];
+});
+// Enter en cualquiera de los dos campos guarda, como en el login
+['cta-p1','cta-p2'].forEach(id=>document.getElementById(id)
+  .addEventListener('keydown', e=>{ if(e.key==='Enter') _guardarPass(); }));
+
+const _params = new URLSearchParams(location.search);
+const _modo = _params.get('mode');
+const _code = _params.get('oobCode');
+let _correo = '';
+
+function _guardarPass(){
+  const p1=document.getElementById('cta-p1').value;
+  const p2=document.getElementById('cta-p2').value;
+  const btn=document.getElementById('cta-btn');
+  const err=document.getElementById('cta-error-txt');
+  // El error se muestra dentro del formulario para no perder lo ya escrito
+  const enForm=(msg)=>{
+    let caja=document.getElementById('cta-form-err');
+    if(!caja){
+      caja=document.createElement('div');
+      caja.id='cta-form-err';
+      caja.className='login-error show';
+      caja.style.textAlign='left';
+      document.getElementById('cta-form').appendChild(caja);
+    }
+    caja.textContent=msg;
+    caja.style.display='block';
+  };
+  const limpiar=()=>{ const c=document.getElementById('cta-form-err'); if(c) c.style.display='none'; };
+  limpiar();
+  if(p1.length<6) return enForm('La contraseña debe tener al menos 6 caracteres.');
+  if(p1!==p2)     return enForm('Las dos contraseñas no coinciden.');
+  btn.disabled=true; btn.textContent='Guardando…';
+  _auth.confirmPasswordReset(_code, p1)
+    .then(()=>{
+      document.getElementById('cta-listo-txt').innerHTML =
+        '✅ Listo. La contraseña de <b>'+_correo.replace(/[&<>]/g,'')+'</b> quedó cambiada.<br>'+
+        'Ya podés entrar con la nueva.';
+      _cabecera('Contraseña cambiada','Guardala en un lugar seguro');
+      _mostrar('cta-listo');
+    })
+    .catch(e=>{
+      btn.disabled=false; btn.textContent='Guardar contraseña';
+      // Un código vencido no se arregla reescribiendo: se sale del formulario.
+      if(e.code==='auth/expired-action-code'||e.code==='auth/invalid-action-code') _fallar(_traducir(e));
+      else enForm(_traducir(e));
+    });
+}
+
+// ── Arranque: Firebase manda TODOS los modos de acción a esta misma URL ──
+if(!_code || !_modo){
+  _fallar('Este enlace está incompleto. Abrilo directamente desde el correo, sin copiarlo a mano.');
+} else if(_modo==='resetPassword'){
+  _auth.verifyPasswordResetCode(_code)
+    .then(email=>{
+      _correo=email;
+      _cabecera('Nueva contraseña','Para '+email);
+      _mostrar('cta-form');
+      document.getElementById('cta-p1').focus();
+    })
+    .catch(e=>_fallar(_traducir(e)));
+} else if(_modo==='verifyEmail'){
+  _auth.applyActionCode(_code)
+    .then(()=>{
+      document.getElementById('cta-listo-txt').textContent='✅ Tu correo quedó verificado.';
+      _cabecera('Correo verificado','Ya podés usar tu cuenta');
+      _mostrar('cta-listo');
+    })
+    .catch(e=>_fallar(_traducir(e)));
+} else if(_modo==='recoverEmail'){
+  // Recuperar el correo anterior tras un cambio que el dueño no pidió.
+  _auth.checkActionCode(_code)
+    .then(info=>_auth.applyActionCode(_code).then(()=>info))
+    .then(info=>{
+      const previo=(info&&info.data&&info.data.email)||'tu correo anterior';
+      document.getElementById('cta-listo-txt').innerHTML=
+        '✅ La cuenta volvió a <b>'+String(previo).replace(/[&<>]/g,'')+'</b>.<br>'+
+        'Si no fuiste vos quien pidió el cambio, avisale al administrador y cambiá la contraseña.';
+      _cabecera('Correo restaurado','Revisá tu cuenta');
+      _mostrar('cta-listo');
+    })
+    .catch(e=>_fallar(_traducir(e)));
+} else {
+  _fallar('Este tipo de enlace no se puede abrir acá ('+_modo+').');
+}
+</script>
+</body>
+</html>
