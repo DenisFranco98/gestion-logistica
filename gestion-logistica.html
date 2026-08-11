@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="shared/shared.css?v=20260810f">
+<link rel="stylesheet" href="shared/shared.css?v=20260811a">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -119,37 +119,45 @@ window._sbEstadosToggle=function(){
     <!-- Main content -->
     <div class="adm-main">
 
-      <!-- Command bar — siempre visible -->
-      <div class="adm-cmdbar">
-        <div class="adm-cmd-card blue">
-          <div class="adm-cmd-icon">👥</div>
-          <div class="adm-cmd-val" id="adm-stat-total">0</div>
-          <div class="adm-cmd-lbl">Usuarios registrados</div>
-        </div>
-        <div class="adm-cmd-card green">
-          <div class="adm-cmd-icon">🟢</div>
-          <div class="adm-cmd-val" id="adm-stat-online" style="color:#10b981">0</div>
-          <div class="adm-cmd-lbl">En línea ahora</div>
-        </div>
-        <div class="adm-cmd-card amber">
-          <div class="adm-cmd-icon">⚡</div>
-          <div class="adm-cmd-val" id="adm-stat-gest">0</div>
-          <div class="adm-cmd-lbl">Gestiones esta sesión</div>
-        </div>
-        <div class="adm-cmd-card purple">
-          <div class="adm-cmd-icon">🏁</div>
-          <div class="adm-cmd-val" id="adm-stat-fin" style="color:#a78bfa">0</div>
-          <div class="adm-cmd-lbl">Finalizados en vivo</div>
-        </div>
-        <div class="adm-cmd-card">
-          <div class="adm-cmd-icon">📦</div>
-          <div class="adm-cmd-val" id="adm-stat-tp" style="color:var(--text-2)">—</div>
-          <div class="adm-cmd-lbl">Total pedidos hoy</div>
-        </div>
-      </div>
-
       <!-- TAB: EN VIVO -->
       <div id="adm-tab-enlive">
+        <!-- El command bar vive DENTRO del tab a propósito: son datos del pulso
+             del día y no tienen sentido en Ranking, Analítica o Reportes, que
+             miran otros períodos. Estando acá se oculta solo al cambiar de tab,
+             sin lógica extra en _admTab. -->
+        <div class="adm-cmdbar">
+          <!-- Los dos primeros salen del CONSOLIDADO de Gestiones Diarias
+               (gestiones_diarias/{empresaId}/{mes}/consolidado), que es donde cada
+               tienda anota tres veces al día cuánto tiene pendiente. De cada tienda
+               se toma UN solo registro —el corte más reciente que tenga el dato—,
+               nunca la suma de sus cortes: en cada corte se vuelve a anotar lo que
+               hay pendiente EN ESE MOMENTO, así que sumarlos contaría el mismo
+               pedido tres veces. Entre tiendas distintas sí se suma. -->
+          <div class="adm-cmd-card amber">
+            <div class="adm-cmd-icon">🕒</div>
+            <div class="adm-cmd-val" id="adm-stat-pendconf" style="color:#f59e0b">—</div>
+            <div class="adm-cmd-lbl">Pendientes de confirmación</div>
+            <!-- De qué corte salió y cuántas tiendas reportaron: sin eso, un total
+                 al que le faltan tiendas se lee como "hay poco pendiente". -->
+            <div class="adm-cmd-lbl" id="adm-stat-pendconf-sub" style="text-transform:none;letter-spacing:0;color:var(--text-3);font-weight:600;opacity:.75;">Sin consolidado cargado hoy</div>
+          </div>
+          <div class="adm-cmd-card">
+            <div class="adm-cmd-icon">⚠️</div>
+            <div class="adm-cmd-val" id="adm-stat-novedad" style="color:#d97706">—</div>
+            <div class="adm-cmd-lbl">Pedidos en novedad</div>
+          </div>
+          <!-- Resumen del día, sumando a todos los asesores de la tienda. Sale de
+               Gestiones Diarias (gestiones_diarias/{tienda}/{mes}/{asesor}/dias). -->
+          <div class="adm-cmd-card blue adm-cmd-resumen">
+            <div class="adm-cmd-lbl" style="margin-bottom:6px;">Hoy · toda la tienda</div>
+            <div class="adm-res-row"><span>Órdenes confirmadas</span><b id="adm-res-conf">0</b></div>
+            <div class="adm-res-row"><span>Novedades solucionadas</span><b id="adm-res-soluc">0</b></div>
+            <div class="adm-res-row"><span>Carritos recuperados</span><b id="adm-res-carri">0</b></div>
+            <div class="adm-res-row"><span>Ventas WPP cargadas a Dropi</span><b id="adm-res-wpp">0</b></div>
+            <div class="adm-res-row"><span>Órdenes canceladas</span><b id="adm-res-cancel">0</b></div>
+          </div>
+        </div>
+
         <div class="adm-sec-head">
           <div class="adm-sec-title">Asesores conectados ahora</div>
         </div>
@@ -1794,8 +1802,8 @@ window._sbEstadosToggle=function(){
   </div>
 </div>
 
-<script src="shared/app-shared.js?v=20260810f"></script>
-<script src="gestion-logistica.js?v=20260810f"></script>
+<script src="shared/app-shared.js?v=20260811a"></script>
+<script src="gestion-logistica.js?v=20260811a"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestión Logística tras un login/restauración de sesión
