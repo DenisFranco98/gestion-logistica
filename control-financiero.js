@@ -501,18 +501,40 @@ function _cfRenderDash(){
   const el=document.getElementById('cf-tab-dash');
   const r=_cfCalc();
   const kpis=[
-    {lbl:'Facturación total',val:_cfM$(r.shopM),c:'#1e293b',sub:'WPP '+r.wppN+' · Shop '+r.shopN+' · Total '+r.totalN+' pdos.'},
-    {lbl:'💬 Pedidos WPP',val:r.wppN,c:'#92400e',sub:r.metas.wppNum?Math.round(r.pWppN)+'% de meta '+r.metas.wppNum:'ChateaPro'},
-    {lbl:'🛍️ Pedidos Shopify',val:r.shopN,c:'#1d4ed8',sub:r.metas.shopifyNumSolo?Math.round(r.pShopOnly)+'% de meta '+r.metas.shopifyNumSolo:'Shopify'},
+    // Estos tres son colores de identidad, no de rendimiento, y por eso son
+    // fijos. Iban en hex (#1e293b, #92400e, #1d4ed8), pero el fondo de la card
+    // es var(--bg-card), que sí cambia con el tema: sobre el oscuro daban
+    // 1,29:1 la facturación —el número más importante del tablero, ilegible—,
+    // 2,67:1 WPP y 2,82:1 Shopify. Las variantes -strong traen un valor por
+    // tema y mantienen el mismo criterio de color.
+    // El subtítulo va contra la meta, igual que las dos tarjetas de pedidos.
+    // Antes desglosaba "WPP n · Shop n · Total n pdos.", pero los dos primeros
+    // son exactamente los valores de las tarjetas de al lado. Sin meta cargada
+    // queda el total de pedidos, que es lo único de ese desglose que no se
+    // repite en ninguna otra parte del tablero.
+    {lbl:'Facturación total',val:_cfM$(r.shopM),c:'var(--text-1)',sub:r.metas.shopifyMonto?Math.round(r.pShopM)+'% de meta '+_cfM$(r.metas.shopifyMonto):r.totalN+' pedidos'},
+    {lbl:'💬 Pedidos WPP',val:r.wppN,c:'var(--warning-strong)',sub:r.metas.wppNum?Math.round(r.pWppN)+'% de meta '+r.metas.wppNum:'ChateaPro'},
+    {lbl:'🛍️ Pedidos Shopify',val:r.shopN,c:'var(--info-strong)',sub:r.metas.shopifyNumSolo?Math.round(r.pShopOnly)+'% de meta '+r.metas.shopifyNumSolo:'Shopify'},
     {lbl:'Ingresos Entregados',val:_cfM$(r.entM),c:'#16a34a',sub:r.entN+' pedidos · AOV '+_cf$(r.aov)},
     {lbl:'Utilidad Neta',val:_cfM$(r.utilNeta),c:r.utilNeta<0?'#dc2626':'#16a34a',sub:'Antes Ads: '+_cfM$(r.utilAntesAds)},
     {lbl:'Margen Neto',val:_cfP(r.margen),c:r.margen>=(r.lim.margenNeto||15)?'#16a34a':r.margen>0?'#d97706':'#dc2626',sub:'Objetivo: '+_cfP(r.lim.margenNeto)},
     {lbl:'Ads FB + TikTok + Fee',val:_cfM$(r.adsFee),c:'#7c3aed',sub:'FB: '+_cfM$(r.adsFB)+' · TikTok: '+_cfM$(r.adsTT)},
+    // Este se queda neutro a propósito: cpaBM es Ads/pedidos TOTALES y el
+    // break-even que lleva debajo es utilAntesAds/pedidos ENTREGADOS. Al no
+    // compartir base no son comparables, y pintarlo de verde o rojo le daría
+    // autoridad de semáforo a una comparación que no se sostiene.
     {lbl:'CPA BM (Ads/Total#)',val:_cf$(r.cpaBM),c:'#0891b2',sub:'Break-even: '+_cf$(r.cpaBreak)},
-    {lbl:'CPA Entregado',val:_cf$(r.cpaEnt),c:'#0284c7',sub:'CPA objetivo: '+_cf$(r.cpaObj)},
+    // Acá sí: cpaEnt y cpaObj son los dos por pedido entregado. Gastar por
+    // encima del objetivo es no llegar al margen buscado, así que va en rojo.
+    // Sin objetivo calculable (cpaObj sale 0 si no hay entregados) queda neutro.
+    {lbl:'CPA Entregado',val:_cf$(r.cpaEnt),c:r.cpaObj>0?(r.cpaEnt<=r.cpaObj?'#16a34a':'#dc2626'):'#0284c7',sub:'CPA objetivo: '+_cf$(r.cpaObj)},
     {lbl:'% Cancelación',val:_cfP(r.cancRate),c:r.cancRate<=r.lim.cancelacion?'#16a34a':'#dc2626',sub:'Límite: '+_cfP(r.lim.cancelacion)},
     {lbl:'% Devolución',val:_cfP(r.devRate),c:r.devRate<=r.lim.devolucion?'#16a34a':'#dc2626',sub:'Límite: '+_cfP(r.lim.devolucion)},
-    {lbl:'% Entrega',val:_cfP(r.entRate),c:r.entRate>=(r.lim.entregaEsperada||75)?'#16a34a':'#d97706',sub:'Esperado: '+_cfP(r.lim.entregaEsperada)},
+    // Era el único semáforo del tablero sin luz roja: quedarse a 37 puntos del
+    // esperado se veía del mismo ámbar que quedarse a uno. El corte es
+    // proporcional al esperado y no en puntos fijos, para que siga teniendo
+    // sentido si la tienda mueve su meta (ámbar desde el 80% de lo esperado).
+    {lbl:'% Entrega',val:_cfP(r.entRate),c:(()=>{const esp=r.lim.entregaEsperada||75;return r.entRate>=esp?'#16a34a':r.entRate>=esp*.8?'#d97706':'#dc2626';})(),sub:'Esperado: '+_cfP(r.lim.entregaEsperada)},
   ];
   const kCard=k=>`<div class="cf-kpi" style="border-left-color:${k.c}"><div class="cf-kpi-val" style="color:${k.c}">${k.val}</div><div class="cf-kpi-lbl">${k.lbl}</div>${k.sub?'<div class="cf-kpi-sub">'+k.sub+'</div>':''}</div>`;
   const alerts=[
