@@ -6794,7 +6794,9 @@ window._malAbrir = function(username){
   _malPresRef.on('value', snap=>{ _malPresData=snap.val()||{}; _malRender(); });
   if(_malInterval){ clearInterval(_malInterval); _malInterval=null; }
   _malInterval = setInterval(_malActualizarTiempos, 15000);
-  // Cargar historial de sesiones (últimas 3)
+  // Cada asesor se abre en la vista corta: dejar la ampliada pegada de la
+  // persona anterior hace creer que el de ahora trabajó todos esos días.
+  _malHistExpandido = false;
   _malCargarSesiones(username);
 };
 
@@ -6824,7 +6826,16 @@ function _malAgruparSesiones(registros, ahora){
       // Sin `end` la sesión sigue viva: se mide hasta ahora. Ese caso es real,
       // no un dato roto — es justamente quien está trabajando en este momento.
       const abierta = !r.end;
-      const fin = r.end || ahora;
+      // Para AGRUPAR, una sesión sin cierre vale por su propio arranque y no
+      // "hasta ahora". Midiéndola hasta ahora, su ventana llegaba al presente y
+      // se tragaba todos los ingresos posteriores: una pestaña que murió sin
+      // cerrar el lunes dejaba el martes y el miércoles dentro del mismo bloque.
+      //
+      // `start` lo escribe el cliente con Date.now() y `end` el servidor con
+      // ServerValue.TIMESTAMP: con el reloj del asesor adelantado, el cierre
+      // queda ANTES del inicio y la duración sale negativa (hay registros así en
+      // la base). Nunca menos de cero: una jornada no puede durar -32 segundos.
+      const fin = Math.max(r.end || r.start, r.start);
       const ultimo = out[out.length-1];
       if(ultimo && r.start <= ultimo.fin + _SES_UNIR_MS){
         if(fin > ultimo.fin) ultimo.fin = fin;
@@ -6834,6 +6845,13 @@ function _malAgruparSesiones(registros, ahora){
         out.push({inicio:r.start, fin, enCurso:abierta, registros:1});
       }
     });
+  // La única sesión que puede estar viva de verdad es la última, y solo si es de
+  // hoy: esa sí se mide hasta ahora, que es lo que hace correr el contador de
+  // quien está trabajando en este momento.
+  const ult = out[out.length-1];
+  if(ult && ult.enCurso && _hoyLocal(new Date(ult.inicio))===_hoyLocal(new Date(ahora))){
+    ult.fin = Math.max(ult.fin, ahora);
+  }
   return out;
 }
 // "4 ago · 07:58 a. m." — el mes sale de _NOV_MESES y no de toLocaleDateString
@@ -6843,31 +6861,108 @@ function _malFmtInicio(ts){
   return d.getDate()+' '+_NOV_MESES[d.getMonth()]+' · '+
          d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
 }
+// Cuántos días atrás mira la vista ampliada: hoy y los 3 anteriores.
+const _MAL_DIAS_HIST = 4;
+let _malHistExpandido = false;
+
+// Medianoche local de hace N-1 días. Con Date.UTC o toISOString el corte se
+// movería 5 horas y en Colombia se perdería la primera hora de la mañana.
+function _malDesdeTs(dias){
+  const h = new Date();
+  return new Date(h.getFullYear(), h.getMonth(), h.getDate()-(dias-1), 0, 0, 0, 0).getTime();
+}
+
+// Un ingreso "abierto" de un día pasado NO es alguien conectado: es una sesión
+// que nunca cerró (la pestaña murió sin que corriera el onDisconnect). En la
+// base hay varios así. Medirlos hasta ahora daba "en línea · 2d 6h" para
+// alguien que hace días no entra, y ese número además se sumaba al día.
+function _malSinCierre(s, ahora){
+  return s.enCurso && _hoyLocal(new Date(s.inicio)) !== _hoyLocal(new Date(ahora||Date.now()));
+}
+
+function _malFilaIngreso(s){
+  const dur = s.sinCierre
+    ? '<span style="color:var(--text-3);" title="La sesión nunca se cerró: no se puede saber cuánto duró">sin cierre</span>'
+    : s.enCurso
+      ? '<span style="color:#10b981;font-weight:700;">en línea · '+_fmtDuracion(s.fin-s.inicio)+'</span>'
+      : _fmtDuracion(s.fin - s.inicio);
+  return (
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;'+
+         'background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:8px 12px;">'+
+      '<span style="font-size:.72rem;color:var(--text-1);font-weight:600;">'+_malFmtInicio(s.inicio)+'</span>'+
+      '<span style="font-size:.7rem;color:var(--text-2);background:var(--bg-inset);padding:2px 9px;border-radius:10px;white-space:nowrap;">'+dur+'</span>'+
+    '</div>'
+  );
+}
+
+window._malVerMasSesiones = function(){
+  _malHistExpandido = !_malHistExpandido;
+  if(_malUsername) _malCargarSesiones(_malUsername);
+};
+
 function _malCargarSesiones(username){
   const el = document.getElementById('mal-session-hist');
   el.innerHTML = '<div style="font-size:.72rem;color:var(--text-3);">Cargando...</div>';
-  // Se leen bastantes más de los 3 que se muestran: hacen falta los registros
-  // crudos para poder unirlos, y cada ingreso se lleva varios por delante.
-  _db.ref('session_hist/'+username).orderByChild('start').limitToLast(60).once('value', snap=>{
+  const desde = _malDesdeTs(_MAL_DIAS_HIST);
+  // Ampliado se consulta por FECHA y no por cantidad: con un límite de registros
+  // no hay forma de saber si los 4 días entraron o si quedaron a medias. Igual
+  // se lee un poco antes del corte, porque un ingreso puede haber empezado la
+  // noche anterior y hay que unirle sus registros para no partirlo en dos.
+  const q = _malHistExpandido
+    ? _db.ref('session_hist/'+username).orderByChild('start').startAt(desde - 12*3600000)
+    : _db.ref('session_hist/'+username).orderByChild('start').limitToLast(60);
+
+  q.once('value', snap=>{
     const crudos = [];
     snap.forEach(c=>{ crudos.push(c.val()); });
-    const ingresos = _malAgruparSesiones(crudos, _ahoraServidor()).slice(-3);
+    const ahora = _ahoraServidor();
+    const todos = _malAgruparSesiones(crudos, ahora);
+    todos.forEach(s=>{ s.sinCierre = _malSinCierre(s, ahora); });
+    const ingresos = _malHistExpandido
+      ? todos.filter(s=>s.fin >= desde)   // por `fin`: una jornada que cruzó medianoche cuenta
+      : todos.slice(-3);
+
+    const boton = '<button onclick="_malVerMasSesiones()" style="margin-top:6px;background:none;border:1px solid var(--border);'+
+      'color:var(--text-2);border-radius:8px;padding:6px 10px;font-size:.68rem;font-weight:700;cursor:pointer;font-family:inherit;">'+
+      (_malHistExpandido ? '▲ Ver solo las últimas 3' : '▼ Ver los últimos '+_MAL_DIAS_HIST+' días')+'</button>';
+
     if(!ingresos.length){
-      el.innerHTML='<div style="font-size:.72rem;color:var(--text-3);">Sin sesiones registradas aún</div>';
+      el.innerHTML='<div style="font-size:.72rem;color:var(--text-3);">'+
+        (_malHistExpandido?'Sin ingresos en los últimos '+_MAL_DIAS_HIST+' días':'Sin sesiones registradas aún')+
+        '</div>'+boton;
       return;
     }
-    el.innerHTML = ingresos.map(s=>{
-      const dur = s.enCurso
-        ? '<span style="color:#10b981;font-weight:700;">en línea · '+_fmtDuracion(s.fin-s.inicio)+'</span>'
-        : _fmtDuracion(s.fin - s.inicio);
-      return (
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;'+
-             'background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:8px 12px;">'+
-          '<span style="font-size:.72rem;color:var(--text-1);font-weight:600;">'+_malFmtInicio(s.inicio)+'</span>'+
-          '<span style="font-size:.7rem;color:var(--text-2);background:var(--bg-inset);padding:2px 9px;border-radius:10px;white-space:nowrap;">'+dur+'</span>'+
-        '</div>'
-      );
-    }).join('');
+
+    let html;
+    if(_malHistExpandido){
+      // Agrupados por día, del más reciente al más viejo, con el total de cada
+      // uno: para saber cuánto trabajó alguien un día no sirve leer ingreso por
+      // ingreso y sumarlos de cabeza.
+      const porDia = {};
+      ingresos.forEach(s=>{ const d=_hoyLocal(new Date(s.inicio)); (porDia[d]=porDia[d]||[]).push(s); });
+      html = Object.keys(porDia).sort().reverse().map(dia=>{
+        const lista = porDia[dia].sort((a,b)=>b.inicio-a.inicio);
+        // Lo que nunca cerró no se puede medir, así que suma 0: es preferible un
+        // total corto y honesto a uno inflado por una sesión que quedó abierta.
+        const total = lista.reduce((a,s)=>a+(s.sinCierre?0:(s.fin-s.inicio)),0);
+        const sinCerrar = lista.filter(s=>s.sinCierre).length;
+        const [y,m,d] = dia.split('-').map(Number);
+        const fecha = new Date(y, m-1, d);
+        const hoy = _hoyLocal();
+        const ayer = _hoyLocal(new Date(Date.now()-86400000));
+        const etiqueta = dia===hoy ? 'Hoy' : dia===ayer ? 'Ayer'
+          : fecha.toLocaleDateString('es-CO',{weekday:'long'})+' '+d+' '+_NOV_MESES[m-1];
+        return '<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+            '<span style="font-size:.64rem;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;">'+etiqueta+'</span>'+
+            '<span style="font-size:.62rem;color:var(--text-3);">'+lista.length+(lista.length===1?' ingreso · ':' ingresos · ')+
+              (total>0?_fmtDuracion(total):'—')+(sinCerrar?' <span title="'+sinCerrar+' sin cierre, no suman">+'+sinCerrar+'?</span>':'')+'</span>'+
+          '</div>'+
+          '<div style="display:flex;flex-direction:column;gap:5px;margin-top:5px;">'+lista.map(_malFilaIngreso).join('')+'</div>';
+      }).join('');
+    } else {
+      html = ingresos.slice().reverse().map(_malFilaIngreso).join('');
+    }
+    el.innerHTML = html + boton;
   });
 }
 
