@@ -2726,14 +2726,12 @@ function _initLogin(){
       const _resolverTiendas = snapT=>{
         const tiendaIds = _setTiendaIds(Object.keys(snapT.val()||{}));
         console.log('[LOGIN] tiendas:', tiendaIds, '| asesor:', d.asesor, '| tienda:', d.tienda);
-        toast('🔍 tiendas:'+tiendaIds.length+' | asesor:"'+(d.asesor||'')+ '" | tienda:"'+(d.tienda||'')+'"', 8000);
         if(!tiendaIds.length){
           // Si el perfil ya tiene nombre y tienda (cuenta creada por admin), entrar directo
           if(d.asesor && d.tienda){
-            toast('🚀 Entrando a la app...', 4000);
             _entrarApp(uid, d.tienda, d.asesor, null);
           } else {
-            toast('⚠️ Falta asesor o tienda → pidiendo perfil', 6000);
+            // Sin toast: _pedirPerfil() ya muestra una pantalla que se explica sola.
             _pedirPerfil(uid, d.tienda||'');
           }
           return;
@@ -2911,7 +2909,6 @@ function _initLogin(){
               firebase.auth().signOut(); return;
             }
             console.log('[LOGIN] roles:', roles, '| user:', snapUser.val(), '| tiendas:', snapTiendas.val());
-            toast('✅ ROL: '+roles.join(',')+' | user:'+(snapUser.exists()?'SI':'NO')+' tiendas:'+(snapTiendas.exists()?'SI':'NO'), 6000);
             _auditLogin(email,'exito');
             const admData = snapAdm.val();
             const userData = snapUser.val();
@@ -2922,8 +2919,11 @@ function _initLogin(){
                 _mostrarSelectorRol(uid, email, roles, admData, userData);
               }
             } catch(ex) {
+              // El detalle técnico va a la consola; al usuario se le dice qué
+              // hacer. Sin ningún aviso se quedaría mirando el login colgado
+              // sin saber que algo falló.
               console.error('Error al entrar con rol:', ex);
-              toast('❌ Error JS: '+ex.message, 10000);
+              toast('No se pudo abrir tu sesión. Recargá la página; si sigue igual, avisá al administrador.', 8000);
             }
           });
         });
