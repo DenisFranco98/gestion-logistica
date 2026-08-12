@@ -5750,51 +5750,15 @@ checkSesion();
 iniciarTimerInactividad();
 
 // ===== MODE SELECT =====
-function _ocultarTodosModos(){
-  document.getElementById('upload-zone').style.display='none';
-  document.getElementById('gd-panel').style.display='none';
-  document.getElementById('cf-panel').style.display='none';
-  const main=document.getElementById('main');if(main)main.style.display='none';
-  const rp=document.getElementById('right-panel');if(rp)rp.style.display='none';
-}
-window._gdMostrarModeSelect = function(asesor){
-  _ocultarTodosModos();
-  const ms=document.getElementById('mode-select-screen');
-  ms.style.display='flex';
-  // Si el nombre es un email, usar solo la parte antes del @
-  let nombreRaw=(asesor||'').trim();
-  if(nombreRaw.includes('@')) nombreRaw=nombreRaw.split('@')[0];
-  const nombre=nombreRaw.split(' ')[0];
-  document.getElementById('mss-greeting').textContent=nombre?'¡Hola, '+nombre+'!':'¡Hola!';
-  // Botón de volver: al Panel Admin si se entró navegando una empresa puntual
-  // desde ahí, o al selector de perfil si la cuenta tiene varios roles
-  const btnVolver = document.getElementById('mss-btn-volver-admin');
-  if(btnVolver){
-    if(window._cameFromAdmin){
-      btnVolver.textContent = '← Volver al Panel Admin';
-      btnVolver.style.display = 'block';
-    } else if(window._rolPendiente?.roles?.length > 1){
-      btnVolver.textContent = '← Volver a selección de perfil';
-      btnVolver.style.display = 'block';
-    } else {
-      btnVolver.style.display = 'none';
-    }
-  }
-  // Control Financiero solo para dueños
-  const rol=window._currentRol||localStorage.getItem('lgs_rol')||'dueno';
-  const btnCF=document.querySelector('#mode-select-screen .mss-btn[onclick="_modoFinanciero()"]');
-  if(btnCF) btnCF.style.display=rol==='asesor'?'none':'flex';
-  // Mostrar "Cambiar tienda" solo si el usuario tiene más de una tienda
-  const btnCambiarTienda = document.getElementById('mss-btn-cambiar-tienda');
-  if(btnCambiarTienda) btnCambiarTienda.style.display = (window._currentTiendaIds && window._currentTiendaIds.length > 1) ? 'block' : 'none';
-};
-window._cambiarTienda = function(){
-  const uid = localStorage.getItem('lgs_user');
-  const asesor = localStorage.getItem('lgs_asesor');
-  if(!uid || !window._currentTiendaIds || !window._currentTiendaIds.length) return;
-  document.getElementById('mode-select-screen').style.display='none';
-  _mostrarSelectorTienda(uid, asesor, window._currentTiendaIds);
-};
+// _ocultarTodosModos, _gdMostrarModeSelect y _cambiarTienda viven en
+// shared/app-shared.js y NO se redefinen acá. Estaban duplicadas, y como este
+// archivo carga después, sus copias —anteriores al arreglo del 2026-08-03—
+// pisaban a las buenas: leían window._cameFromAdmin y window._currentTiendaIds
+// en vez de _getCameFromAdmin() y _getTiendaIds(), que caen a localStorage.
+// Como saltar de módulo es siempre una carga de página completa, esas
+// variables arrancan vacías y el admin que auditaba se quedaba sin el botón
+// "← Volver al Panel Admin". Al agregar algo del mode-select, hacerlo en
+// shared: lo comparten las 4 páginas.
 function _modoLogistica(){
   _ocultarTodosModos();
   document.getElementById('mode-select-screen').style.display='none';
