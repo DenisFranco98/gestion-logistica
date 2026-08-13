@@ -34,6 +34,18 @@
       <label>Teléfono</label>
       <input type="text" id="antcp-telefono" placeholder="Arrastra el número o escríbelo">
 
+      <!-- Texto libre con <datalist>, no un desplegable cerrado: es la única
+           forma de que el catálogo de la tienda crezca solo, porque un producto
+           nuevo tiene que poder escribirse la primera vez. Igual que la columna
+           PRODUCTO del panel. -->
+      <label>Producto</label>
+      <input type="text" id="antcp-producto" list="antcp-prod-list" placeholder="Escríbelo o elígelo de la lista" autocomplete="off">
+      <datalist id="antcp-prod-list"></datalist>
+
+      <label>Monto del anticipo</label>
+      <input type="text" id="antcp-monto" inputmode="numeric" placeholder="0">
+      <div id="antcp-monto-fmt"></div>
+
       <label>Motivo del anticipo</label>
       <textarea id="antcp-motivo" placeholder="¿Por qué se registra este anticipo?" rows="2"></textarea>
 
@@ -52,6 +64,10 @@
   const fileInput = $('#antcp-file');
   const clienteInp = $('#antcp-cliente');
   const telefonoInp = $('#antcp-telefono');
+  const productoInp = $('#antcp-producto');
+  const prodList = $('#antcp-prod-list');
+  const montoInp = $('#antcp-monto');
+  const montoFmtEl = $('#antcp-monto-fmt');
   const motivoInp = $('#antcp-motivo');
   const msgEl = $('#antcp-msg');
   const guardarBtn = $('#antcp-guardar');
@@ -81,12 +97,58 @@
     }
   }
 
+  // ── Catálogo de productos de la tienda ─────────────────────────────────
+  // Mismo nodo y misma clave que el panel (`catalogo_productos/{empresaId}`,
+  // clave = gdKey del nombre): se arma solo con lo que se va escribiendo, no
+  // tiene alta manual, y es de cada tienda porque cada una vende cosas
+  // distintas. Sin normalizar la clave, cada variante de mayúsculas o espacios
+  // crearía una entrada nueva —el primer producto real estaba guardado como
+  // " Botas en cuero - BOOTMEN ", con espacios de sobra—.
+  let catProductos = {};
+
+  function pintarCatalogo() {
+    prodList.innerHTML = Object.values(catProductos)
+      .map(p => `<option value="${String(p.nombre || '').replace(/"/g, '&quot;')}">`).join('');
+  }
+
+  async function cargarCatalogo(auth) {
+    if (!auth || !tienda || !tienda.key) return;
+    try {
+      catProductos = await leerDB('catalogo_productos/' + tienda.key, auth) || {};
+      pintarCatalogo();
+    } catch (e) { /* sin catálogo se sigue pudiendo escribir a mano */ }
+  }
+
+  // Conserva el texto tal como se escribió la primera vez; las veces siguientes
+  // solo se reconoce, no se pisa.
+  async function agregarAlCatalogo(nombre, auth) {
+    const limpio = String(nombre || '').trim().replace(/\s+/g, ' ');
+    if (!limpio) return;
+    const k = gdKey(limpio);
+    if (!k || k === '_' || catProductos[k]) return;
+    catProductos[k] = { nombre: limpio, ts: Date.now() };
+    pintarCatalogo();
+    try { await escribirDB('catalogo_productos/' + tienda.key + '/' + k, auth, catProductos[k]); }
+    catch (e) { console.warn('[catálogo]', e); }
+  }
+
+  // ── Monto ───────────────────────────────────────────────────────────────
+  // Se teclea con o sin puntos y se guarda como NÚMERO limpio. Es lo que espera
+  // la tabla: el total del pie hace parseInt(r.monto,10), así que un "150.000"
+  // guardado como texto se leería 150.
+  function montoLimpio(v) { return parseInt(String(v || '').replace(/[^\d]/g, ''), 10) || 0; }
+
+  montoInp.addEventListener('input', () => {
+    const n = montoLimpio(montoInp.value);
+    montoFmtEl.textContent = n ? '$ ' + n.toLocaleString('es-CO') : '';
+  });
+
   // Ver nota en novedades-content.js: la clave de datos es el empresaId, y las
   // tiendas guardadas con el formato viejo hay que revincularlas.
   getAuthValido().then(auth => {
     pintarSesion(auth);
-    return resolverTiendaGuardada(auth);
-  }).then(t => { tienda = t; pintarTienda(); });
+    return resolverTiendaGuardada(auth).then(t => { tienda = t; pintarTienda(); return cargarCatalogo(auth); });
+  });
   chrome.storage.onChanged.addListener(changes => {
     if (changes[STORAGE_KEY]) { tienda = changes[STORAGE_KEY].newValue; pintarTienda(); }
     if (changes[AUTH_KEY]) pintarSesion(changes[AUTH_KEY].newValue);
@@ -262,6 +324,8 @@
     if (!tienda || !tienda.key) { mostrarMsg('Configura primero la tienda desde el ícono de la extensión.', true); return; }
     const cliente = clienteInp.value.trim();
     const telefono = telefonoInp.value.trim();
+    const producto = productoInp.value.trim().replace(/\s+/g, ' ');
+    const monto = montoLimpio(montoInp.value);
     const motivo = motivoInp.value.trim();
     if (!cliente && !telefono) { mostrarMsg('Ingresa al menos el cliente o el teléfono.', true); return; }
     if (!motivo) { mostrarMsg('Escribe el motivo del anticipo.', true); return; }
@@ -272,10 +336,22 @@
       const auth = await getAuthValido();
       pintarSesion(auth);
       if (!auth) throw new Error('Inicia sesión desde el ícono 💰 de la extensión.');
+      // Las claves y sus tipos tienen que coincidir con lo que pinta _antRender
+      // en gestiones-diarias.js para la tabla GUÍAS CON ANTICIPO:
+      //   fecha · telefono · motivo · producto · monto · comprobante · estado
+      // `monto` va como número (el total del pie hace parseInt) y `estado` como
+      // uno de los cuatro de _ANT_ESTADOS. Sin `estado`, _antEstadoDe() lo
+      // derivaría de la casilla `entrega` y mostraría EN PROCESO igual, pero se
+      // escribe explícito. Nunca 'PENDIENTE': ese valor no existe en la lista de
+      // anticipos —es de R.O.— y el filtro por estado no lo encontraría.
+      // `cliente`, `transporte` y `entrega` ya no se muestran en esa tabla pero
+      // se siguen guardando: los datos no se borraron al quitar las columnas.
       const registro = {
         fecha: fechaHoyCO(),
         cliente, telefono,
-        transporte: '', motivo, producto: '',
+        transporte: '', motivo, producto,
+        monto,
+        estado: 'EN PROCESO',
         entrega: false,
         comprobante: comprobanteData || '',
         ts: Date.now()
@@ -284,8 +360,13 @@
       const resp = await fetch(url, { method: 'POST', body: JSON.stringify(registro) });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.error) throw new Error(data.error || ('Error al guardar (' + resp.status + ')'));
+      // Cada producto escrito alimenta el catálogo de la tienda, igual que hace
+      // _antCambio en el panel. Va después de guardar: si falla, el anticipo ya
+      // quedó registrado y solo se pierde la sugerencia.
+      await agregarAlCatalogo(producto, auth);
       mostrarMsg('✓ Anticipo guardado en Guías con Anticipo', false);
       clienteInp.value = ''; telefonoInp.value = ''; motivoInp.value = '';
+      productoInp.value = ''; montoInp.value = ''; montoFmtEl.textContent = '';
       limpiarComprobante();
     } catch (err) {
       mostrarMsg(err.message, true);
