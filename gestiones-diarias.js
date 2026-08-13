@@ -611,6 +611,9 @@ function _gdRefreshActiveTab(){
   if(_gdActiveTab==='novedades') _novInit();
   if(_gdActiveTab==='anticipos') _antInit();
   if(_gdActiveTab==='ro') _roInit();
+  // Las ventas del bot viven en ventas_bot/{tienda}/{mes}, así que cambiar de
+  // mes obliga a releer: sin esto la tabla seguía mostrando el mes anterior.
+  if(_gdActiveTab==='ventasbot') _vbInit();
 }
 function _gdVolver(){
   document.getElementById('gd-panel').style.display='none';
@@ -2302,7 +2305,7 @@ async function _antEliminar(tipo,id){
 // No usa _leerTienda: ese helper migra nodos de la clave vieja a la nueva, y acá
 // no hay nada que migrar (el nodo nace con empresaId). Además la migración es
 // una escritura, que estas reglas no permiten.
-let _vbData={}, _vbFiltro={q:'',estado:''}, _vbSearchTimer=null;
+let _vbData={}, _vbFiltro={q:'',estado:'',dia:'',producto:''}, _vbSearchTimer=null;
 
 function _vbInit(){
   const wrap=document.getElementById('vb-table-wrap');
@@ -2311,6 +2314,11 @@ function _vbInit(){
   if(typeof _db==='undefined'){ _vbData={}; _vbRender(); return; }
   _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes).once('value').then(snap=>{
     _vbData=snap.val()||{};
+    // Al cambiar de mes se limpian los filtros: un dia o un producto del mes
+    // anterior puede no existir en este, y la tabla quedaria vacia sin motivo
+    // aparente. El buscador tambien, por coherencia.
+    _vbFiltro={q:'',estado:'',dia:'',producto:''};
+    const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
     _vbRender();
   }).catch(e=>{
     // El caso más probable es que la tienda todavía no esté conectada al bot:
@@ -2318,6 +2326,8 @@ function _vbInit(){
     wrap.innerHTML='<div class="adm-empty">No se pudieron leer las ventas del bot.<br><span style="font-size:.7rem;">'+esc(e.message)+'</span></div>';
   });
 }
+
+function _vbFiltroSet(campo,valor){ _vbFiltro[campo]=valor; _vbRender(); }
 
 function _vbSearch(q){ _vbFiltro.q=q; if(_vbSearchTimer)clearTimeout(_vbSearchTimer); _vbSearchTimer=setTimeout(_vbRender,200); }
 function _vbEstChip(e,btn){
@@ -2340,6 +2350,25 @@ function _vbRender(){
   if(!wrap) return;
   const todas=Object.entries(_vbData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
 
+  // Días y productos que REALMENTE hay este mes. Se repueblan solo si cambió el
+  // conjunto: rearmar el <select> en cada repintado perdería la opción elegida.
+  const dias=[...new Set(todas.map(([,v])=>String(v.fecha_compra||'').slice(6,8)).filter(Boolean))].sort();
+  const selD=document.getElementById('vb-dia');
+  if(selD && selD.dataset.vals!==dias.join('|')){
+    selD.dataset.vals=dias.join('|');
+    selD.innerHTML='<option value="">Todos los días</option>'+
+      dias.map(d=>'<option value="'+d+'">Día '+d+'</option>').join('');
+    selD.value=_vbFiltro.dia||'';
+  }
+  const prods=[...new Set(todas.map(([,v])=>String(v.producto||'').trim()).filter(Boolean))].sort();
+  const selP=document.getElementById('vb-producto');
+  if(selP && selP.dataset.vals!==prods.join('|')){
+    selP.dataset.vals=prods.join('|');
+    selP.innerHTML='<option value="">Todos los productos</option>'+
+      prods.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
+    selP.value=_vbFiltro.producto||'';
+  }
+
   // Los chips de estado se arman con los estados que REALMENTE llegaron: los
   // define el bot, no esta app, así que una lista fija quedaría desactualizada
   // en cuanto cambien el flujo en ChateaPro.
@@ -2354,6 +2383,8 @@ function _vbRender(){
   const q=(_vbFiltro.q||'').toLowerCase();
   const filas=todas.filter(([,v])=>{
     if(_vbFiltro.estado && String(v.estado_orden||'')!==_vbFiltro.estado) return false;
+    if(_vbFiltro.dia && String(v.fecha_compra||'').slice(6,8)!==_vbFiltro.dia) return false;
+    if(_vbFiltro.producto && String(v.producto||'')!==_vbFiltro.producto) return false;
     if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.order,v.departamento]
       .some(x=>String(x||'').toLowerCase().includes(q))) return false;
     return true;
