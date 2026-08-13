@@ -144,21 +144,22 @@ select.nvcp-input option { background: #161B22; color: #E2EAF4; }
 
 .nvcp-hint-sm { font-size: 9.5px; color: #4A5568; margin-top: 5px; }
 
-.nvcp-btn-capture {
-  width: 100%;
-  padding: 9px;
+/* Aviso de que se puede pegar con Ctrl+V. No es un botón: el atajo funciona
+   sobre todo el panel, sin tener que enfocar nada. Reemplazó a .nvcp-btn-capture,
+   que abría el recorte de la pestaña visible. */
+#nvcp-paste-hint {
+  margin-top: 7px;
+  padding: 8px;
   border: 1.5px dashed rgba(57, 113, 230, .4);
   border-radius: 10px;
   background: rgba(57, 113, 230, .08);
   color: #a9c2f7;
   font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all .15s;
+  font-weight: 600;
+  text-align: center;
 }
 
-.nvcp-btn-capture:hover { background: rgba(57, 113, 230, .16); border-color: #3971E6; }
+#nvcp-paste-hint b { color: #d8e4fb; font-weight: 800; }
 
 #nvcp-img-preview-wrap { text-align: center; margin-bottom: 8px; }
 
@@ -317,36 +318,6 @@ select.nvcp-input option { background: #161B22; color: #E2EAF4; }
   margin-top: 12px;
 }
 
-/* ── Overlay de selección de área para "Capturar pantalla" ── */
-#nvcp-capture-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(7, 10, 14, .35);
-  cursor: crosshair;
-  z-index: 2147483647;
-}
-
-#nvcp-capture-box {
-  position: fixed;
-  display: none;
-  border: 1.5px dashed #3971E6;
-  background: rgba(57, 113, 230, .18);
-  pointer-events: none;
-}
-
-#nvcp-capture-hint {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #0D1117;
-  border: 1px solid rgba(255, 255, 255, .14);
-  color: #E2EAF4;
-  font-family: 'DM Sans', 'Segoe UI', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
-  pointer-events: none;
-}
+/* Acá estaban #nvcp-capture-overlay / -box / -hint, el recorte de pantalla.
+   Se retiraron junto con el botón "Capturar pantalla": la evidencia ahora entra
+   por archivo o por Ctrl+V (ver #nvcp-paste-hint más arriba). */

@@ -91,8 +91,8 @@
             <button type="button" id="nvcp-img-quitar" class="nvcp-link-btn">✕ Quitar imagen</button>
           </div>
           <div id="nvcp-img-opciones">
-            <button type="button" id="nvcp-capturar-btn" class="nvcp-btn-capture">📸 Capturar pantalla</button>
-            <input type="file" id="nvcp-m-img" accept="image/*" class="nvcp-input" style="margin-top:6px;">
+            <input type="file" id="nvcp-m-img" accept="image/*" class="nvcp-input">
+            <div id="nvcp-paste-hint">📋 o pegá una captura con <b>Ctrl + V</b></div>
           </div>
           <div class="nvcp-hint-sm">Se comprimirá automáticamente · Tamaño máximo recomendado: 5 MB</div>
         </div>
@@ -141,7 +141,6 @@
   const imgPreviewWrap = $('#nvcp-img-preview-wrap');
   const imgPreview = $('#nvcp-img-preview');
   const imgOpciones = $('#nvcp-img-opciones');
-  const capturarBtn = $('#nvcp-capturar-btn');
   const imgQuitarBtn = $('#nvcp-img-quitar');
   let imgEvidenciaData = null; // dataURL ya redimensionado, de archivo subido o de captura de pantalla
 
@@ -266,103 +265,40 @@
     }
   });
 
-  function cargarImagen(src) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('No se pudo cargar la captura'));
-      img.src = src;
-    });
-  }
-
-  function capturarTabVisible() {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: 'NVCP_CAPTURE' }, resp => {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
-        if (!resp || !resp.ok) { reject(new Error((resp && resp.error) || 'No se pudo capturar la pantalla')); return; }
-        resolve(resp.dataUrl);
-      });
-    });
-  }
-
-  async function capturarRegion(rect) {
+  // Pegar una captura con Ctrl+V. Reemplaza al botón "Capturar pantalla", que
+  // fotografiaba la pestaña visible: solo servía si la evidencia estaba en la
+  // propia página de Dropi, y las novedades se resuelven desde varios lados
+  // (WhatsApp, Chateapro, la web de la transportadora, una llamada).
+  //
+  // Mismo patrón que _novPasteOn en gestiones-diarias.js: el listener va en el
+  // `document` y no en el input —así se pega sin tener que enfocar nada— y solo
+  // actúa si el panel está abierto, se está en el formulario y lo pegado es una
+  // imagen. Si no lo es, NO se llama a preventDefault y pegar texto en el campo
+  // de evidencia sigue funcionando normal.
+  document.addEventListener('paste', async ev => {
+    if (!panel.classList.contains('open')) return;
+    if (screenForm.style.display === 'none') return;
+    const items = (ev.clipboardData && ev.clipboardData.items) || [];
+    let file = null;
+    for (const it of items) {
+      if (it.kind === 'file' && /^image\//.test(it.type)) { file = it.getAsFile(); break; }
+    }
+    if (!file) return;
+    ev.preventDefault();
     try {
-      const dataUrl = await capturarTabVisible();
-      const img = await cargarImagen(dataUrl);
-      const dpr = window.devicePixelRatio || 1;
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(rect.width * dpr);
-      canvas.height = Math.round(rect.height * dpr);
-      canvas.getContext('2d').drawImage(
-        img,
-        Math.round(rect.left * dpr), Math.round(rect.top * dpr), canvas.width, canvas.height,
-        0, 0, canvas.width, canvas.height
-      );
-      imgEvidenciaData = await resizeDataUrl(canvas.toDataURL('image/png'), 800, 0.72);
+      const raw = await blobToDataURL(file);
+      imgEvidenciaData = await resizeDataUrl(raw, 800, 0.72);
+      // Pegar una imagen es elegir evidencia de tipo imagen: si se estaba en
+      // modo texto se cambia solo, o la captura quedaría cargada y sin guardarse.
+      setTipo('img');
       mostrarPreviewImg();
+      formMsg.textContent = '📋 Captura pegada';
+      formMsg.className = 'ok';
     } catch (e) {
-      formMsg.textContent = e.message;
+      formMsg.textContent = 'No se pudo leer la imagen pegada.';
       formMsg.className = 'err';
     }
-  }
-
-  // Overlay de selección de área: oculta el panel (para que no salga en la
-  // captura), deja arrastrar un recuadro sobre la página y recorta esa zona.
-  function iniciarCaptura() {
-    const estabaAbierto = panel.classList.contains('open');
-    panel.classList.remove('open');
-
-    const overlay = document.createElement('div');
-    overlay.id = 'nvcp-capture-overlay';
-    const box = document.createElement('div');
-    box.id = 'nvcp-capture-box';
-    const hint = document.createElement('div');
-    hint.id = 'nvcp-capture-hint';
-    hint.textContent = 'Arrastra para seleccionar el área a capturar · Esc para cancelar';
-    overlay.appendChild(box);
-    overlay.appendChild(hint);
-    document.documentElement.appendChild(overlay);
-
-    let startX = 0, startY = 0, seleccionando = false;
-
-    function onDown(e) {
-      seleccionando = true;
-      startX = e.clientX; startY = e.clientY;
-      box.style.left = startX + 'px'; box.style.top = startY + 'px';
-      box.style.width = '0px'; box.style.height = '0px';
-      box.style.display = 'block';
-    }
-    function onMove(e) {
-      if (!seleccionando) return;
-      const x = Math.min(e.clientX, startX), y = Math.min(e.clientY, startY);
-      const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
-      box.style.left = x + 'px'; box.style.top = y + 'px'; box.style.width = w + 'px'; box.style.height = h + 'px';
-    }
-    function onUp() {
-      if (!seleccionando) return;
-      seleccionando = false;
-      const rect = box.getBoundingClientRect();
-      cleanup();
-      if (rect.width < 6 || rect.height < 6) { if (estabaAbierto) panel.classList.add('open'); return; }
-      capturarRegion(rect).finally(() => { if (estabaAbierto) panel.classList.add('open'); });
-    }
-    function onKey(e) {
-      if (e.key === 'Escape') { cleanup(); if (estabaAbierto) panel.classList.add('open'); }
-    }
-    function cleanup() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.removeEventListener('keydown', onKey);
-      overlay.remove();
-    }
-
-    overlay.addEventListener('mousedown', onDown);
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.addEventListener('keydown', onKey);
-  }
-
-  capturarBtn.addEventListener('click', iniciarCaptura);
+  });
 
   function fmtFecha(v) {
     if (!v) return '';

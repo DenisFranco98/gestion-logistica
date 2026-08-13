@@ -9,17 +9,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch(err => sendResponse({ ok: false, error: err.message }));
     return true; // respuesta async
   }
-  if (msg && msg.type === 'NVCP_CAPTURE') {
-    // chrome.tabs.captureVisibleTab solo se puede llamar desde el service worker,
-    // no desde un content script — por eso viaja por mensaje hasta acá.
-    const windowId = sender.tab && sender.tab.windowId;
-    chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, dataUrl => {
-      if (chrome.runtime.lastError) { sendResponse({ ok: false, error: chrome.runtime.lastError.message }); return; }
-      sendResponse({ ok: true, dataUrl });
-    });
-    return true; // respuesta async
-  }
 });
+// Acá vivía NVCP_CAPTURE, que fotografiaba la pestaña visible para la evidencia
+// de Novedades. Se retiró: solo servía si la evidencia estaba en la propia
+// página de Dropi, y las novedades se resuelven desde varios sitios. Ahora la
+// imagen se sube desde el PC o se pega con Ctrl+V, que no necesitan el service
+// worker. El permiso "tabs" del manifest se mantiene porque lo usa el popup de
+// Duplicados (chrome.tabs.query/sendMessage en popup-dropi.js).
 
 async function fetchImageAsDataUrl(url) {
   const resp = await fetch(url);

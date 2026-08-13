@@ -23,7 +23,7 @@ Cada una sigue funcionando de forma independiente en su propio sitio (`chateapro
 - **Novedades Dropi**: entra a `app.dropi.co/dashboard/novelties`, clic en el botón flotante 📝.
   1. Escribe el número de guía y **Buscar historial** — busca en todos los meses guardados de la tienda y muestra las novedades y evidencias ya registradas para esa guía (si las hay).
   2. Según el resultado, el botón cambia a **+ Registrar nueva novedad** (si es la primera vez) o **+ Agregar evidencia a esta novedad** (si ya existía — no se duplica el registro, se suma como nueva evidencia, igual que hace la plataforma).
-  3. Completa el formulario (igual al modal "Nueva Novedad" de `index.html`: fecha, guía, asesor, resultado de la gestión, imagen o texto de evidencia) y **Guardar**. Para la imagen, en vez de subir un archivo puedes usar **📸 Capturar pantalla**: oculta el panel, arrastra un recuadro sobre la parte de la pantalla que quieras (ej. el chat o la pantalla de Dropi mostrando la solución), y ese recorte queda cargado directo como evidencia — Esc cancela la selección.
+  3. Completa el formulario (igual al modal "Nueva Novedad" de `index.html`: fecha, guía, asesor, resultado de la gestión, imagen o texto de evidencia) y **Guardar**. La imagen de evidencia entra de dos formas: **eligiendo un archivo** del PC, o **pegando una captura con Ctrl + V** con el panel abierto en el formulario. No hace falta enfocar ningún campo antes de pegar, y si estabas en "Texto descriptivo" el modo cambia solo a imagen. Pegar texto sigue funcionando normal en el campo de evidencia.
      - Si registras una evidencia (imagen o texto), también debes elegir el **Modo de solución**: Llamada Talkyria, Solución Chateapro, Solución Llamada asesor, Contacto Wpp asesor u Otro. Ese dato queda registrado como una nota nueva en la gestión de esa guía (mismo lugar donde `index.html` guarda las notas manuales) — si la guía todavía no tiene una gestión creada en el panel, la novedad se guarda igual pero se avisa que la nota no pudo enlazarse.
   4. Al guardar, también se recalculan los contadores diarios (solucionadas/devueltas) de la pestaña **Gestión** de Gestiones Diarias — mismo cálculo que usa `index.html` (`_novSyncGD`), para que no queden desactualizados por haberse cargado desde aquí en vez de la plataforma. **El día que suma es el de la gestión, no el de la novedad**: si hoy 12 de agosto se trabaja una novedad creada en junio, el trabajo cuenta para el 12 de agosto.
 
@@ -35,6 +35,7 @@ shared.js               — auth Firebase + helpers compartidos (tienda, perfil,
 inject-auth.js          — lee la sesión de Firebase en redking-tulogistica.com (MAIN world)
 auth-bridge.js          — recibe esa sesión y la guarda para la extensión
 background.js           — fetch de imágenes cross-origin para Anticipos (evita CORS)
+                          (ya no captura pantalla: la evidencia entra por archivo o Ctrl+V)
 anticipos-content.js    — panel flotante en Chateapro
 anticipos-styles.css    — estilos del panel (paleta REDKING)
 dropi-content.js        — detector de duplicados en Dropi
