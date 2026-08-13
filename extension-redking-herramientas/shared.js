@@ -102,6 +102,41 @@ function agregarDB(path, auth, valor) {
     });
 }
 
+function borrarDB(path, auth) {
+  return fetch(`${DB_URL}/${path}.json?auth=${auth.idToken}`, { method: 'DELETE' })
+    .then(resp => { if (!resp.ok) throw new Error('No se pudo borrar ' + path); });
+}
+
+// ── FRENO CONTRA GESTIONES EN LOTE ───────────────────────────────────────
+// Portado de _puedeRegistrarGestion() en shared/app-shared.js, con los mismos
+// números. Ninguna persona registra decenas de gestiones en un par de segundos:
+// cuando eso pasa es un bucle acreditándole trabajo a quien tiene la pantalla
+// abierta (en el panel llegó a sumarle 102 gestiones en el mismo segundo a una
+// asesora que no había gestionado nada).
+//
+// La extensión escribe los MISMOS contadores que el panel, así que necesita la
+// misma red: si algún día algo llama en bucle a guardarEvidencia, se topa con
+// esto en vez de ensuciar meses de datos en silencio. No frena el trabajo real,
+// el límite está muy por encima del ritmo humano posible.
+const GEST_MAX = 12;        // gestiones permitidas...
+const GEST_VENTANA = 6000;  // ...en esta ventana de tiempo (ms)
+let _gestSellos = [];
+
+// Llamar SIEMPRE justo antes de crear una evidencia con resultado
+// (solucionada/devuelta), que es lo que suma al día.
+function puedeRegistrarGestion(motivo) {
+  const ahora = Date.now();
+  _gestSellos = _gestSellos.filter(t => ahora - t < GEST_VENTANA);
+  if (_gestSellos.length >= GEST_MAX) {
+    console.error('[FRENO gestiones] bloqueadas por ritmo imposible. Intentos en los últimos ' +
+      (GEST_VENTANA / 1000) + 's: ' + (_gestSellos.length + 1) + (motivo ? ' · origen: ' + motivo : '') +
+      '. Si esto se repite, hay un bucle registrando gestiones que nadie hizo.');
+    return false;
+  }
+  _gestSellos.push(ahora);
+  return true;
+}
+
 // Solo las tiendas asociadas a la cuenta logueada (igual que hace index.html):
 // admin → admin_empresas/{uid}; dueño/asesor → user_tiendas/{uid}; si ninguna
 // existe, la cuenta puede traer el nombre de tienda directo en users/{uid}.tienda.

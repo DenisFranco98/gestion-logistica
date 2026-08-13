@@ -370,7 +370,14 @@
     return isNaN(d) ? v : d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
-  function hoyISO() { return new Date().toISOString().slice(0, 10); }
+  // Fecha YYYY-MM-DD en la zona horaria del equipo. Nunca toISOString(): devuelve
+  // UTC, y en Colombia (UTC-5) a partir de las 19:00 ya informa el día siguiente,
+  // así que una novedad cargada de noche quedaba con fecha de mañana y su gestión
+  // sumaba al día equivocado. Mismo criterio que _hoyLocal() en app-shared.js.
+  function hoyISO(d) {
+    const f = d || new Date();
+    return f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+  }
 
   // Compatible con estructura vieja sol1/2/3 y nueva soluciones/{key}, igual que _novGetSols en index.html.
   function obtenerSoluciones(n) {
@@ -535,17 +542,22 @@
   // `gestion` (bucket retirado que nadie suma), y después contando las novedades
   // de toda la tienda en la fila de un solo asesor. Como el guardado es un PUT
   // del día completo, un cálculo mal hecho acá pisa lo que el panel contó bien.
-  function gestionesDe(n, mes) {
+  //
+  // `mesNodo` es el mes bajo el que vive la novedad, y solo se usa de respaldo:
+  // el mes que vale es el de la evidencia, porque una gestión suma el día en que
+  // se hizo aunque la novedad sea de meses atrás. Las evidencias viejas no traen
+  // `mes` y caen al del nodo, que es donde se contaban hasta ahora.
+  function gestionesDe(n, mesNodo) {
     return obtenerSoluciones(n || {})
       .filter(s => s && (s.estado === 'solucionada' || s.estado === 'devuelta'))
-      .filter(s => !mes || !s.mes || s.mes === mes)
       .map(s => ({
         estado: s.estado,
         // El uid manda, igual que en _novGestionesDe de la app. Las evidencias
         // anteriores no lo traen y caen al slug del nombre, que es la clave con
         // la que se guardaron en su momento.
         asesorKey: s.asesorUid || gdKey(s.asesor || (n || {}).asesor || ''),
-        dia: s.dia || (n || {}).dia || 0
+        dia: s.dia || (n || {}).dia || 0,
+        mes: s.mes || mesNodo || ''
       }));
   }
   // Guarda una evidencia dejando la imagen FUERA del registro, en
@@ -554,19 +566,46 @@
   // 16 MB contra 0,26 MB de datos reales. Tiene que coincidir con _novImgPath
   // de shared/app-shared.js.
   async function guardarEvidencia(mes, novedadId, solObj) {
+    // Mismo freno que _novGuardarSol en gestiones-diarias.js, y en el mismo
+    // punto: justo antes de crear una evidencia con resultado, que es lo que
+    // suma al día. Las de estado vacío no son gestión y no consumen cupo.
+    if (solObj && (solObj.estado === 'solucionada' || solObj.estado === 'devuelta')
+        && !puedeRegistrarGestion('registrar evidencia de novedad (extensión)')) {
+      throw new Error('Se frenó el registro: se intentaron demasiadas gestiones en pocos segundos. No se guardó nada — avisá a soporte.');
+    }
     const base = 'novedades/' + tienda.key + '/' + mes + '/' + novedadId + '/soluciones';
     const esImg = solObj.tipo === 'img' && solObj.val && String(solObj.val).startsWith('data:');
     if (!esImg) return agregarDB(base, auth, solObj);
     const binario = solObj.val;
-    solObj.val = ''; solObj.img = true;
-    // La evidencia se crea primero para conocer su clave, y recién ahí se sabe
-    // dónde guardar la imagen.
+    // La evidencia se crea SIN la marca `img` porque con REST la clave solo se
+    // conoce después del POST, y hasta que la foto no esté guardada no puede
+    // decir que la tiene. Si se marcara antes y fallara la subida, quedaría una
+    // evidencia apuntando a una imagen inexistente: se ve rota en el historial y
+    // encima cuenta como gestión. El panel no puede caer en ese estado porque
+    // reserva la clave con push() sin escribir; acá se compensa deshaciendo.
+    solObj.val = '';
     const solKey = await agregarDB(base, auth, solObj);
-    await escribirDB('nov_img/' + tienda.key + '/' + mes + '/' + novedadId + '/' + solKey, auth, binario);
+    try {
+      await escribirDB('nov_img/' + tienda.key + '/' + mes + '/' + novedadId + '/' + solKey, auth, binario);
+      await escribirDB(base + '/' + solKey + '/img', auth, true);
+      solObj.img = true;
+    } catch (e) {
+      // Sin imagen, la evidencia no debe quedar sumando una gestión vacía.
+      await borrarDB(base + '/' + solKey, auth).catch(() => {});
+      throw new Error('No se pudo guardar la imagen de la evidencia. No se registró nada: volvé a intentarlo.');
+    }
     return solKey;
   }
 
-  async function sincronizarGD(mes, dia, asesorKeyForzado) {
+  // `mesGestion`/`dia` son los de la GESTIÓN, no los de la novedad: si hoy, 12 de
+  // agosto, se soluciona una novedad creada en junio, el trabajo suma al 12 de
+  // agosto. Por eso se recorren TODOS los meses de novedades/{tienda} y no solo
+  // uno: la evidencia que hay que contar vive en el nodo de junio pero lleva
+  // mes:'2026-08' propio. Leyendo un solo mes, esa gestión no la contaba nadie —
+  // ni junio (la descartaba por mes distinto) ni agosto (donde no está la
+  // novedad). El nodo completo pesa poco porque las imágenes viven aparte, en
+  // nov_img/ (ver guardarEvidencia).
+  async function sincronizarGD(mesGestion, dia, asesorKeyForzado) {
     // El contador se escribe en la carpeta del uid, que es la clave canónica.
     // Antes iba a la del slug del nombre: eso le abría a la misma persona una
     // SEGUNDA carpeta en gestiones_diarias, y como además solo se contaban las
@@ -579,20 +618,22 @@
     // guardaron con el nombre y las nuevas con el uid.
     const claves = asesorKeyForzado ? [asesorKeyForzado]
                                     : [auth.uid, gdKey(asesorNombre)].filter(Boolean);
-    const [novedadesMes, dayDataActual] = await Promise.all([
-      leerDB('novedades/' + tienda.key + '/' + mes, auth).then(d => d || {}),
-      leerDB('gestiones_diarias/' + tienda.key + '/' + mes + '/' + asesorKey + '/dias/' + dia, auth).then(d => d || {})
+    const [todasLasNovedades, dayDataActual] = await Promise.all([
+      leerDB('novedades/' + tienda.key, auth).then(d => d || {}),
+      leerDB('gestiones_diarias/' + tienda.key + '/' + mesGestion + '/' + asesorKey + '/dias/' + dia, auth).then(d => d || {})
     ]);
     let soluc = 0, devuelt = 0;
-    Object.values(novedadesMes).forEach(n => {
-      gestionesDe(n, mes).forEach(g => {
-        if (g.dia !== dia || claves.indexOf(g.asesorKey) < 0) return;
-        if (g.estado === 'devuelta') devuelt++; else soluc++;
+    Object.entries(todasLasNovedades).forEach(([mesNodo, entradas]) => {
+      Object.values(entradas || {}).forEach(n => {
+        gestionesDe(n, mesNodo).forEach(g => {
+          if (g.mes !== mesGestion || g.dia !== dia || claves.indexOf(g.asesorKey) < 0) return;
+          if (g.estado === 'devuelta') devuelt++; else soluc++;
+        });
       });
     });
     dayDataActual.soluc = soluc; dayDataActual.devuelt = devuelt;
     delete dayDataActual.gestion; // campo retirado: se limpia al recalcular el día
-    await escribirDB('gestiones_diarias/' + tienda.key + '/' + mes + '/' + asesorKey + '/dias/' + dia, auth, dayDataActual);
+    await escribirDB('gestiones_diarias/' + tienda.key + '/' + mesGestion + '/' + asesorKey + '/dias/' + dia, auth, dayDataActual);
   }
 
   // Agrega el modo de solución como nota a la gestión de esa guía en gestiones_sync
@@ -660,16 +701,19 @@
         const novData = { guia, fecha: fmtFecha(mFecha.value) || mFecha.value, asesor: mAsesor.value.trim(), dia, ts: Date.now() };
         const id = await agregarDB('novedades/' + tienda.key + '/' + mes, auth, novData);
         if (solObj) await guardarEvidencia(mes, id, solObj);
-        // Día de la GESTIÓN, mes del NODO: las novedades y el contador viven en
-        // 'novedades/{tienda}/{mes}', así que hay que leer ahí para encontrarla.
-        // Sin evidencia no hubo gestión y no hay nada que recontar.
-        if (solObj) await sincronizarGD(mes, solObj.dia);
+        // Mes y día de la GESTIÓN, no los de la novedad: el contador que cambia
+        // es el del día en que se hizo el trabajo. Sin evidencia no hubo gestión
+        // y no hay nada que recontar.
+        if (solObj) await sincronizarGD(solObj.mes, solObj.dia);
         guiaActual = guia;
         guiaParaNota = guia;
       } else {
         if (!solObj) throw new Error('Agrega una imagen o un texto de evidencia.');
+        // La evidencia se cuelga de la novedad donde esté (target.mes), pero el
+        // contador que se recalcula es el del mes/día en que se gestionó. Son
+        // distintos cada vez que se trabaja una novedad de un mes anterior.
         await guardarEvidencia(target.mes, target.id, solObj);
-        await sincronizarGD(target.mes, solObj.dia);
+        await sincronizarGD(solObj.mes, solObj.dia);
       }
 
       // Si hay evidencia, deja constancia del modo de solución en las notas de la
