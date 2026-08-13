@@ -4218,7 +4218,7 @@ let _admPresenceTick = null;
 let _bordEmpresas = {};
 
 function _admTab(tab){
-  ['enlive','ranking','equipo','analitica','empresas','buscar','gdconsolid','auditoria','reportes','negocio'].forEach(t=>{
+  ['enlive','ranking','equipo','analitica','empresas','botventas','buscar','gdconsolid','auditoria','reportes','negocio'].forEach(t=>{
     const el = document.getElementById('adm-tab-'+t);
     if(el) el.style.display = t===tab ? 'block' : 'none';
     const btn = document.getElementById('tab-btn-'+t);
@@ -4231,6 +4231,7 @@ function _admTab(tab){
   if(tab==='analitica') _anlInicializar();
   if(tab==='ranking') _rnkInicializar();
   if(tab==='empresas') _admCargarEmpresas();
+  if(tab==='botventas') _botwCargar();
   if(tab==='buscar') setTimeout(()=>{ const i=document.getElementById('bord-input'); if(i) i.focus(); }, 100);
   if(tab==='gdconsolid'){
     // Pre-fill mes con el mes actual
@@ -6724,6 +6725,155 @@ window._mgaQuitarAsesor = function(username){
 
 window._cambiarEmpresa = function(empresaId){
   localStorage.setItem('lgs_empresa_actual', empresaId);
+};
+
+// ===== BOT DE VENTAS — workspaces y API keys =====================
+// Cada tienda que quiera recibir ventas del bot de ChateaPro necesita una
+// entrada en bot_workspaces/{codigo}: el código identifica la tienda y la API
+// key prueba que quien manda es su bot. Los dos hacen falta — el código viaja
+// dentro del payload y no es un secreto.
+//
+// Este nodo es el más sensible de la app: quien lea una key puede registrar
+// ventas falsas en esa tienda. Por eso las reglas lo dejan solo para admins
+// (ver api-ventas-bot/reglas-firebase.json) y acá la clave se muestra tapada.
+let _botwData = {};
+
+// 48 hex desde el generador criptográfico del navegador. Math.random() no sirve
+// para un secreto: es predecible si se conoce el estado del generador.
+function _botwGenKey(){
+  const a = new Uint8Array(24);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return Array.from(a).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Código legible a partir del nombre de la tienda ("3D Company" → WS-3D-COMPANY),
+// con sufijo si ya existe. Es lo que se pega en el flujo del bot, así que se
+// prefiere algo reconocible antes que un identificador opaco.
+function _botwGenCodigo(nombre){
+  const base = 'WS-' + String(nombre||'tienda').toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^A-Z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,20) || 'WS-TIENDA';
+  if(!_botwData[base]) return base;
+  let i=2; while(_botwData[base+'-'+i]) i++;
+  return base+'-'+i;
+}
+
+async function _botwCargar(){
+  const cont = document.getElementById('botw-list');
+  if(!cont || typeof _db==='undefined') return;
+  cont.innerHTML = '<div class="adm-empty">Cargando...</div>';
+  const adminId = localStorage.getItem('lgs_admin_id');
+  try{
+    const [snapWs, snapAE, snapEmp] = await Promise.all([
+      _db.ref('bot_workspaces').once('value'),
+      _db.ref('admin_empresas/'+adminId).once('value'),
+      _db.ref('empresas').once('value')
+    ]);
+    _botwData = snapWs.val() || {};
+    const misIds = Object.keys(snapAE.val()||{});
+    const empresas = snapEmp.val()||{};
+    // El selector de tienda solo ofrece las del admin: un workspace apuntando a
+    // una empresa ajena dejaría entrar ventas donde no corresponde.
+    const sel = document.getElementById('botw-empresa');
+    if(sel){
+      sel.innerHTML = '<option value="">Elegí la tienda...</option>' +
+        misIds.filter(id=>empresas[id]).map(id=>`<option value="${esc(id)}">${esc(empresas[id].nombre||id)}</option>`).join('');
+    }
+    _botwRender(empresas, misIds);
+  }catch(e){
+    cont.innerHTML = '<div class="adm-empty">No se pudo leer la configuración del bot: '+esc(e.message)+'</div>';
+  }
+}
+
+function _botwRender(empresas, misIds){
+  const cont = document.getElementById('botw-list');
+  if(!cont) return;
+  // Solo los workspaces de las tiendas de este admin.
+  const filas = Object.entries(_botwData).filter(([,w])=>!misIds || misIds.indexOf(w.empresaId)>=0);
+  if(!filas.length){
+    cont.innerHTML = '<div class="adm-empty">Todavía no hay ninguna tienda conectada al bot.</div>';
+    return;
+  }
+  cont.innerHTML = filas.map(([code,w])=>{
+    const nom = (empresas && empresas[w.empresaId] && empresas[w.empresaId].nombre) || w.nombre || w.empresaId;
+    const activo = w.activo !== false;
+    return `<div class="botw-card">
+      <div class="botw-card-top">
+        <div>
+          <div class="botw-code">${esc(code)}</div>
+          <div class="botw-tienda">${esc(nom)}</div>
+        </div>
+        <span class="botw-estado ${activo?'on':'off'}">${activo?'Activo':'Revocado'}</span>
+      </div>
+      <div class="botw-key-row">
+        <input type="password" readonly value="${esc(w.apiKey||'')}" id="botw-k-${esc(code)}" class="botw-key">
+        <button onclick="_botwVer('${esc(code)}',this)" title="Mostrar u ocultar">👁</button>
+        <button onclick="_botwCopiar('${esc(code)}')" title="Copiar">📋</button>
+      </div>
+      <div class="botw-acciones">
+        <button onclick="_botwToggle('${esc(code)}')">${activo?'Revocar':'Reactivar'}</button>
+        <button onclick="_botwRegenerar('${esc(code)}')">Generar clave nueva</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window._botwVer = function(code, btn){
+  const i = document.getElementById('botw-k-'+code);
+  if(!i) return;
+  const oculto = i.type === 'password';
+  i.type = oculto ? 'text' : 'password';
+  btn.textContent = oculto ? '🙈' : '👁';
+};
+
+window._botwCopiar = function(code){
+  const i = document.getElementById('botw-k-'+code);
+  if(!i) return;
+  navigator.clipboard.writeText(i.value)
+    .then(()=>toast('📋 Clave copiada — pegala en el bot y no la compartas'))
+    .catch(()=>toast('No se pudo copiar; mostrá la clave y copiala a mano'));
+};
+
+window._botwCrear = async function(){
+  const sel = document.getElementById('botw-empresa');
+  const empresaId = sel ? sel.value : '';
+  if(!empresaId){ _mAlert('Falta la tienda','Elegí a qué tienda le vas a conectar el bot.'); return; }
+  if(Object.values(_botwData).some(w=>w.empresaId===empresaId && w.activo!==false)){
+    if(!await _mConfirmP('Esa tienda ya está conectada',
+      'Ya tiene un workspace activo. Si creás otro, los dos van a poder registrar ventas en la misma tienda. ¿Seguís?')) return;
+  }
+  const nombre = sel.options[sel.selectedIndex].textContent;
+  const code = _botwGenCodigo(nombre);
+  const w = { apiKey: _botwGenKey(), empresaId, nombre, activo: true, creado: Date.now() };
+  try{
+    await _db.ref('bot_workspaces/'+code).set(w);
+    _botwData[code] = w;
+    await _botwCargar();
+    toast('✓ Workspace '+code+' creado — copiá la clave y pegala en ChateaPro', 5000);
+  }catch(e){ _mAlert('No se pudo crear', e.message); }
+};
+
+// Revocar no borra: el historial de ventas ya registradas se conserva y la
+// tienda puede volver a activarse sin rehacer la configuración del bot.
+window._botwToggle = async function(code){
+  const w = _botwData[code]; if(!w) return;
+  const activo = w.activo !== false;
+  if(activo && !await _mConfirmP('¿Revocar el acceso?',
+    'El bot va a dejar de poder registrar ventas en esta tienda hasta que lo reactivés. Las ventas ya guardadas no se tocan.','danger')) return;
+  await _db.ref('bot_workspaces/'+code+'/activo').set(!activo);
+  _botwData[code].activo = !activo;
+  await _botwCargar();
+  toast(activo ? 'Acceso revocado' : 'Acceso reactivado');
+};
+
+window._botwRegenerar = async function(code){
+  if(!await _mConfirmP('¿Generar una clave nueva?',
+    'La clave actual deja de servir en el acto. El bot va a fallar hasta que pegues la nueva en ChateaPro.','danger')) return;
+  const nueva = _botwGenKey();
+  await _db.ref('bot_workspaces/'+code+'/apiKey').set(nueva);
+  _botwData[code].apiKey = nueva;
+  await _botwCargar();
+  toast('Clave nueva generada — acordate de actualizarla en el bot', 5000);
 };
 
 // ===== MODALES UNIVERSALES =====

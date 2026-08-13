@@ -621,7 +621,7 @@ function _gdVolver(){
 // ── TABS GD ────────────────────────────────────────────────────────────
 function _gdTab(tab){
   _gdActiveTab=tab;
-  ['gestion','consolidado','novedades','reportes','anticipos','ro'].forEach(t=>{
+  ['gestion','consolidado','novedades','reportes','anticipos','ro','ventasbot'].forEach(t=>{
     const c=document.getElementById('gd-tab-'+t);
     const b=document.getElementById('gd-tab-btn-'+t);
     if(c) c.style.display=t===tab?(t==='gestion'?'flex':'block'):'none';
@@ -642,6 +642,7 @@ function _gdTab(tab){
   if(tab==='anticipos') _antInit();
   if(tab==='reportes') _repInit();
   if(tab==='ro') _roInit();
+  if(tab==='ventasbot') _vbInit();
 }
 
 // ── CONSOLIDADO ─────────────────────────────────────────────────────────
@@ -2290,3 +2291,113 @@ async function _antEliminar(tipo,id){
   _antRender(tipo);
 }
 
+
+// ── VENTAS BOT ────────────────────────────────────────────────────────────
+// Las ventas que registra el bot de ChateaPro por api-ventas-bot/. Es una vista
+// de SOLO LECTURA: el nodo lo escribe el endpoint con el Admin SDK y las reglas
+// lo dejan en read-only para la tienda. No se ponen inputs a propósito — editar
+// acá daría la impresión de que se guarda, y el bot lo pisaría en el próximo
+// envío del mismo pedido.
+//
+// No usa _leerTienda: ese helper migra nodos de la clave vieja a la nueva, y acá
+// no hay nada que migrar (el nodo nace con empresaId). Además la migración es
+// una escritura, que estas reglas no permiten.
+let _vbData={}, _vbFiltro={q:'',estado:''}, _vbSearchTimer=null;
+
+function _vbInit(){
+  const wrap=document.getElementById('vb-table-wrap');
+  if(!wrap) return;
+  wrap.innerHTML='<div style="padding:14px;color:var(--text-3);font-size:.72rem;text-align:center;">Cargando...</div>';
+  if(typeof _db==='undefined'){ _vbData={}; _vbRender(); return; }
+  _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes).once('value').then(snap=>{
+    _vbData=snap.val()||{};
+    _vbRender();
+  }).catch(e=>{
+    // El caso más probable es que la tienda todavía no esté conectada al bot:
+    // se explica en vez de mostrar un error crudo.
+    wrap.innerHTML='<div class="adm-empty">No se pudieron leer las ventas del bot.<br><span style="font-size:.7rem;">'+esc(e.message)+'</span></div>';
+  });
+}
+
+function _vbSearch(q){ _vbFiltro.q=q; if(_vbSearchTimer)clearTimeout(_vbSearchTimer); _vbSearchTimer=setTimeout(_vbRender,200); }
+function _vbEstChip(e,btn){
+  _vbFiltro.estado=e;
+  const cont=document.getElementById('vb-chips');
+  if(cont) cont.querySelectorAll('.tab-chip').forEach(b=>b.classList.toggle('on',b===btn));
+  _vbRender();
+}
+
+// dd/mm — la fecha se guarda como YYYYMMDD (texto), no como Date: se formatea
+// cortando, sin construir un Date que en UTC correría el día.
+function _vbFecha(v){
+  const s=String(v||'');
+  return s.length===8 ? s.slice(6,8)+'/'+s.slice(4,6) : (s||'—');
+}
+function _vbMonto(n){ const v=parseInt(n,10)||0; return v?'$ '+v.toLocaleString('es-CO'):'—'; }
+
+function _vbRender(){
+  const wrap=document.getElementById('vb-table-wrap');
+  if(!wrap) return;
+  const todas=Object.entries(_vbData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+
+  // Los chips de estado se arman con los estados que REALMENTE llegaron: los
+  // define el bot, no esta app, así que una lista fija quedaría desactualizada
+  // en cuanto cambien el flujo en ChateaPro.
+  const estados=[...new Set(todas.map(([,v])=>String(v.estado_orden||'').trim()).filter(Boolean))].sort();
+  const chips=document.getElementById('vb-chips');
+  if(chips && chips.dataset.estados!==estados.join('|')){
+    chips.dataset.estados=estados.join('|');
+    chips.innerHTML='<button class="tab-chip on" onclick="_vbEstChip(\'\',this)">Todos</button>'+
+      estados.map(e=>`<button class="tab-chip" onclick="_vbEstChip('${esc(e)}',this)">${esc(e)}</button>`).join('');
+  }
+
+  const q=(_vbFiltro.q||'').toLowerCase();
+  const filas=todas.filter(([,v])=>{
+    if(_vbFiltro.estado && String(v.estado_orden||'')!==_vbFiltro.estado) return false;
+    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.order,v.departamento]
+      .some(x=>String(x||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  const total=filas.reduce((s,[,v])=>s+(parseInt(v.valor,10)||0),0);
+  const unidades=filas.reduce((s,[,v])=>s+(parseInt(v.cantidad,10)||0),0);
+  const res=document.getElementById('vb-resumen');
+  if(res){
+    res.innerHTML = todas.length
+      ? `<div class="vb-kpi"><b>${filas.length}</b><span>ventas${filas.length<todas.length?' (de '+todas.length+')':''}</span></div>
+         <div class="vb-kpi"><b>${unidades}</b><span>unidades</span></div>
+         <div class="vb-kpi"><b>${_vbMonto(total)}</b><span>total${filas.length<todas.length?' filtrado':''}</span></div>`
+      : '';
+  }
+
+  if(!todas.length){
+    wrap.innerHTML='<div class="adm-empty">Todavía no llegó ninguna venta del bot este mes.<br>'+
+      '<span style="font-size:.7rem;">Si el bot ya está andando, revisá en el panel admin que la tienda esté conectada.</span></div>';
+    return;
+  }
+
+  const rows=filas.map(([,v])=>`<tr>
+    <td>${_vbFecha(v.fecha_compra)}</td>
+    <td>${esc(v.nombre||'—')}</td>
+    <td>${esc(v.telefono||'—')}</td>
+    <td>${esc(v.ciudad||'—')}${v.departamento?'<div class="vb-sub">'+esc(v.departamento)+'</div>':''}</td>
+    <td>${esc(v.producto||'—')}${v.order&&v.order!==v.producto?'<div class="vb-sub">'+esc(v.order)+'</div>':''}</td>
+    <td style="text-align:center;">${parseInt(v.cantidad,10)||0}</td>
+    <td style="text-align:right;font-family:var(--f-mono);">${_vbMonto(v.valor)}</td>
+    <td>${v.estado_orden?'<span class="vb-est">'+esc(v.estado_orden)+'</span>':'—'}${
+      Array.isArray(v.historial_estado)&&v.historial_estado.length
+        ? '<div class="vb-sub" title="'+esc(v.historial_estado.map(h=>h.de+' → '+h.a).join(' · '))+'">cambió '+v.historial_estado.length+'×</div>'
+        : ''}</td>
+    <td class="vb-anuncio">${esc(v.id_anuncio||'—')}</td>
+  </tr>`).join('');
+
+  wrap.innerHTML=`<table class="ant-tbl vb-tbl">
+    <thead><tr><th>FECHA</th><th>CLIENTE</th><th>TELÉFONO</th><th>CIUDAD</th><th>PRODUCTO</th><th>CANT.</th><th>VALOR</th><th>ESTADO</th><th>ID ANUNCIO</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="9" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Nada coincide con el filtro</td></tr>'}</tbody>
+    <tfoot><tr class="ant-total-row">
+      <td colspan="6" style="text-align:right;font-weight:800;">TOTAL${filas.length<todas.length?' (filtrado)':''}</td>
+      <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${_vbMonto(total)}</td>
+      <td colspan="2"></td>
+    </tr></tfoot>
+  </table>`;
+}

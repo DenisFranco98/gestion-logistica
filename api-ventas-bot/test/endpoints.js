@@ -89,6 +89,25 @@ const base = {
   const conBearer = await llamar(postVenta, { body: base, headers: { authorization: 'Bearer ' + KEY } });
   eq(conBearer.status, 200, 'la key también se acepta como Bearer');
 
+  console.log('\nAISLAMIENTO ENTRE TIENDAS — una key no puede escribir en otra tienda');
+  store.bot_workspaces['WS-OTRA'] = { apiKey: 'clave-de-la-otra-tienda', empresaId: '-OtraEmpresa', activo: true };
+  store.ventas_bot = {}; store.ventas_bot_idx = {};
+  // La key de 3D Company apuntando al workspace de la otra tienda.
+  const cruzado = await llamar(postVenta, { body: Object.assign({}, base, { workspace: 'WS-OTRA' }), headers: H });
+  eq(cruzado.status, 401, 'key de la tienda A + workspace de la tienda B → 401');
+  eq(get('ventas_bot/-OtraEmpresa'), undefined, 'no escribió nada en la otra tienda');
+  // Y al revés.
+  const cruzado2 = await llamar(postVenta, { body: base, headers: { 'x-api-key': 'clave-de-la-otra-tienda' } });
+  eq(cruzado2.status, 401, 'key de la tienda B + workspace de la tienda A → 401');
+  // La consulta tampoco deja espiar otra tienda.
+  const espiar = await llamar(getExiste, { method: 'GET', query: { workspace: 'WS-OTRA', telefono: '3001112233', fecha_compra: '2026-08-13' }, headers: H });
+  eq(espiar.status, 401, 'tampoco se puede consultar la existencia en otra tienda');
+  // Cada key escribe solo en SU empresaId, aunque el payload diga otra cosa.
+  const conTiendaFalsa = await llamar(postVenta, { body: Object.assign({}, base, { tienda: 'Tienda Ajena', empresaId: '-OtraEmpresa' }), headers: H });
+  eq(conTiendaFalsa.status, 200, 'el payload puede mentir sobre la tienda...');
+  eq(!!get('ventas_bot/-Oz9bT/2026-08/3001112233_20260813'), true, '...pero la venta cae en la tienda de la key');
+  eq(get('ventas_bot/-OtraEmpresa'), undefined, 'y no en la que decía el payload');
+
   console.log('\nDATOS OBLIGATORIOS');
   store.ventas_bot = {}; store.ventas_bot_idx = {};
   const sinTel = await llamar(postVenta, { body: Object.assign({}, base, { telefono: '' }), headers: H });

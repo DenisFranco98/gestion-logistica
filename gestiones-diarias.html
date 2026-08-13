@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260812a">
+<link rel="stylesheet" href="shared/shared.css?v=20260813a">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -90,6 +90,9 @@ window._sbEstadosToggle=function(){
       <div class="adm-sidebar-label">Tiendas</div>
       <button class="adm-nav-item" id="tab-btn-empresas" onclick="_admTab('empresas')">
         <span class="adm-nav-icon">🏪</span> Tiendas
+      </button>
+      <button class="adm-nav-item" id="tab-btn-botventas" onclick="_admTab('botventas')">
+        <span class="adm-nav-icon">🤖</span> Bot de ventas
       </button>
       <div class="adm-sidebar-label">Gestiones Diarias</div>
       <button class="adm-nav-item" id="tab-btn-gdconsolid" onclick="_admTab('gdconsolid')">
@@ -424,6 +427,25 @@ window._sbEstadosToggle=function(){
         <div id="adm-empresas-list" style="display:flex;flex-direction:column;gap:8px;">
           <div class="adm-empty">Cargando...</div>
         </div>
+      </div>
+
+      <!-- TAB: BOT DE VENTAS -->
+      <!-- Conecta el bot de ChateaPro con una tienda. El código identifica la
+           tienda y viaja dentro del payload; la clave prueba que quien manda es
+           el bot. Hacen falta los dos: el código no es un secreto. Ver
+           api-ventas-bot/ para los endpoints que consumen esto. -->
+      <div id="adm-tab-botventas" style="display:none;">
+        <div class="adm-sec-head"><div class="adm-sec-title">Bot de ventas — tiendas conectadas</div></div>
+        <div class="botw-intro">
+          Cada tienda conectada recibe las ventas que registra el bot de ChateaPro.
+          <b>La clave es un secreto</b>: quien la tenga puede registrar ventas en esa tienda.
+          Si se filtra, generá una nueva y actualizala en el bot.
+        </div>
+        <div class="botw-nuevo">
+          <select id="botw-empresa"><option value="">Elegí la tienda...</option></select>
+          <button onclick="_botwCrear()">+ Conectar tienda</button>
+        </div>
+        <div id="botw-list"><div class="adm-empty">Cargando...</div></div>
       </div>
 
       <!-- TAB: CONSOLIDADO GD -->
@@ -863,6 +885,7 @@ window._sbEstadosToggle=function(){
     <button class="gd-tab-btn" id="gd-tab-btn-reportes" onclick="_gdTab('reportes')">🚩 Reportes</button>
     <button class="gd-tab-btn" id="gd-tab-btn-anticipos" onclick="_gdTab('anticipos')">💰 Anticipos</button>
     <button class="gd-tab-btn" id="gd-tab-btn-ro" onclick="_gdTab('ro')">🏢 R.O.</button>
+    <button class="gd-tab-btn" id="gd-tab-btn-ventasbot" onclick="_gdTab('ventasbot')">🤖 Ventas Bot</button>
   </div>
   <div class="panel-main">
   <!-- TAB: Gestión -->
@@ -1046,6 +1069,20 @@ window._sbEstadosToggle=function(){
       </div>
     </div>
     <div id="nov-table-wrap"></div>
+  </div>
+
+  <!-- TAB: Ventas Bot -->
+  <!-- Solo lectura: estas ventas las escribe el endpoint de api-ventas-bot/ con
+       el Admin SDK, y las reglas dejan el nodo en read-only para la tienda. Acá
+       no hay inputs a propósito — corregir un dato desde acá daría la impresión
+       de que se guarda, y el bot lo volvería a pisar en el próximo envío. -->
+  <div id="gd-tab-ventasbot" style="display:none;">
+    <div class="vb-bar">
+      <input type="text" id="vb-buscar" placeholder="Buscar por cliente, teléfono, producto, ciudad u orden..." oninput="_vbSearch(this.value)">
+      <div class="vb-chips" id="vb-chips"></div>
+    </div>
+    <div id="vb-resumen" class="vb-resumen"></div>
+    <div id="vb-table-wrap"></div>
   </div>
   </div><!-- /panel-main -->
   </div><!-- /panel-body -->
@@ -1410,8 +1447,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260812a"></script>
-<script src="gestiones-diarias.js?v=20260812a"></script>
+<script src="shared/app-shared.js?v=20260813a"></script>
+<script src="gestiones-diarias.js?v=20260813a"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

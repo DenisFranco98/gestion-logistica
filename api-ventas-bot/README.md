@@ -126,19 +126,16 @@ npx vercel        # preview
 npx vercel --prod # producción
 ```
 
-### 5. Dar de alta el workspace de la tienda
+### 5. Conectar la tienda desde el panel
 
-En Firebase, crear a mano la primera entrada (después esto sale del panel admin):
+**Centro de Operaciones → 🤖 Bot de ventas** → elegí la tienda → *Conectar
+tienda*. Genera el código (`WS-3D-COMPANY`) y una clave de 48 hex, y los deja
+guardados en `bot_workspaces/{codigo}`. Desde ahí también se **revoca** (el bot
+deja de poder escribir sin borrar las ventas ya registradas) y se **genera una
+clave nueva** si la actual se filtró.
 
-```
-bot_workspaces/WS-3D-001: {
-  apiKey:    "<una clave larga y aleatoria>",
-  empresaId: "-Oz9bTggBEfOmUU3QtWC",
-  nombre:    "3D Company",
-  activo:    true,
-  creado:    1765432100000
-}
-```
+El selector solo ofrece las tiendas del admin logueado: un workspace apuntando a
+una empresa ajena dejaría entrar ventas donde no corresponde.
 
 El **workspace** dice a qué tienda va la venta; la **API key** prueba que quien
 manda es tu bot. Hacen falta las dos: el workspace viaja en el payload y no es
