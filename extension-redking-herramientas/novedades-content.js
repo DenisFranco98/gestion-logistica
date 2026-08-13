@@ -7,7 +7,6 @@
   let target = null; // match elegido para agregar evidencia, o null si se va a crear una novedad nueva
   let modo = 'nueva'; // 'nueva' | 'evidencia'
   let estadoActivo = 'solucionada';
-  let tipoActivo = 'img';
 
   // ── Botón flotante ──────────────────────────────────────────────────────
   const toggleBtn = document.createElement('button');
@@ -79,13 +78,14 @@
           <button type="button" class="nvcp-tipo-btn" id="nvcp-estado-dev">📦 Producto devuelto</button>
         </div>
 
-        <div id="nvcp-tipo-wrap">
-          <div class="nvcp-tipo-row">
-            <button type="button" class="nvcp-tipo-btn active" id="nvcp-tipo-img">📷 Imagen de evidencia</button>
-            <button type="button" class="nvcp-tipo-btn" id="nvcp-tipo-txt">✍️ Texto descriptivo</button>
-          </div>
-        </div>
+        <!-- Imagen y nota son campos independientes y SIEMPRE visibles, valga el
+             resultado que valga: se puede adjuntar la foto, escribir la nota o
+             las dos cosas, y todo queda como UNA sola evidencia (= una gestión).
+             Igual que el modal "Nueva Novedad" del panel. Antes había un selector
+             "Imagen / Texto" que obligaba a elegir, y encima una devolución solo
+             admitía texto. -->
         <div id="nvcp-img-wrap">
+          <label style="margin-top:10px;">Imagen de evidencia (opcional)</label>
           <div id="nvcp-img-preview-wrap" style="display:none;">
             <img id="nvcp-img-preview" class="nvcp-ev-img">
             <button type="button" id="nvcp-img-quitar" class="nvcp-link-btn">✕ Quitar imagen</button>
@@ -96,7 +96,8 @@
           </div>
           <div class="nvcp-hint-sm">Se comprimirá automáticamente · Tamaño máximo recomendado: 5 MB</div>
         </div>
-        <div id="nvcp-txt-wrap" style="display:none;">
+        <div id="nvcp-txt-wrap">
+          <label style="margin-top:10px;">Nota de la gestión (opcional)</label>
           <textarea id="nvcp-m-txt" class="nvcp-input" rows="3" placeholder="Describe la gestión realizada..."></textarea>
         </div>
 
@@ -131,7 +132,6 @@
   const mAsesor = $('#nvcp-m-asesor');
   const solFecha = $('#nvcp-sol-fecha');
   const solModo = $('#nvcp-sol-modo');
-  const tipoWrap = $('#nvcp-tipo-wrap');
   const imgWrap = $('#nvcp-img-wrap');
   const txtWrap = $('#nvcp-txt-wrap');
   const mImg = $('#nvcp-m-img');
@@ -288,9 +288,6 @@
     try {
       const raw = await blobToDataURL(file);
       imgEvidenciaData = await resizeDataUrl(raw, 800, 0.72);
-      // Pegar una imagen es elegir evidencia de tipo imagen: si se estaba en
-      // modo texto se cambia solo, o la captura quedaría cargada y sin guardarse.
-      setTipo('img');
       mostrarPreviewImg();
       formMsg.textContent = '📋 Captura pegada';
       formMsg.className = 'ok';
@@ -367,11 +364,16 @@
   function renderEvidencia(s) {
     const color = s.estado === 'solucionada' ? '#39E67A' : s.estado === 'devuelta' ? '#E6B539' : '#3971E6';
     const label = s.estado === 'solucionada' ? '✅ Solucionada' : s.estado === 'devuelta' ? '📦 Devuelta' : '📋 En gestión';
+    const escapar = t => String(t || '').replace(/</g, '&lt;');
     let cuerpo = '';
     if (s.tipo === 'img') {
+      // Una evidencia de tipo imagen puede traer nota: van juntas desde el mismo
+      // guardado y son una sola gestión. Sin pintarla, la explicación quedaba
+      // guardada pero invisible en el historial.
       cuerpo = `<img src="${s.val}" class="nvcp-ev-img">`;
+      if (s.nota && String(s.nota).trim()) cuerpo += `<div class="nvcp-ev-txt">${escapar(s.nota)}</div>`;
     } else {
-      cuerpo = `<div class="nvcp-ev-txt">${(s.val || '').replace(/</g, '&lt;')}</div>`;
+      cuerpo = `<div class="nvcp-ev-txt">${escapar(s.val)}</div>`;
     }
     return `<div class="nvcp-ev-card" style="border-color:${color}55;">
       <div class="nvcp-ev-hdr" style="background:${color}22;color:${color};">
@@ -409,26 +411,17 @@
   });
 
   // ── Pantalla 3: Formulario ──────────────────────────────────────────────
+  // El resultado (solucionada / devuelta) no condiciona qué evidencia se puede
+  // adjuntar: los dos admiten imagen, nota o ambas. Antes una devolución solo
+  // dejaba escribir texto.
   function setEstado(estado) {
     estadoActivo = estado;
     $('#nvcp-estado-sol').classList.toggle('active', estado === 'solucionada');
     $('#nvcp-estado-dev').classList.toggle('active', estado === 'devuelta');
-    if (estado === 'devuelta') { tipoWrap.style.display = 'none'; setTipo('txt'); }
-    else { tipoWrap.style.display = 'block'; setTipo('img'); }
-  }
-
-  function setTipo(tipo) {
-    tipoActivo = tipo;
-    $('#nvcp-tipo-img').classList.toggle('active', tipo === 'img');
-    $('#nvcp-tipo-txt').classList.toggle('active', tipo === 'txt');
-    imgWrap.style.display = tipo === 'img' ? 'block' : 'none';
-    txtWrap.style.display = tipo === 'txt' ? 'block' : 'none';
   }
 
   $('#nvcp-estado-sol').addEventListener('click', () => setEstado('solucionada'));
   $('#nvcp-estado-dev').addEventListener('click', () => setEstado('devuelta'));
-  $('#nvcp-tipo-img').addEventListener('click', () => setTipo('img'));
-  $('#nvcp-tipo-txt').addEventListener('click', () => setTipo('txt'));
 
   nuevaBtn.addEventListener('click', () => {
     modo = target ? 'evidencia' : 'nueva';
@@ -616,14 +609,24 @@
         dia: fSol.getDate(),
         mes: fSol.getFullYear() + '-' + String(fSol.getMonth() + 1).padStart(2, '0')
       };
+      // Foto y nota de la misma gestión van en UNA sola evidencia, igual que en
+      // _novGuardar del panel. Si se guardaran por separado contarían 2 en el
+      // contador del día y pintarían 2 cuadros, como si fueran dos trabajos
+      // distintos sobre la misma novedad.
+      //   · foto (+ nota si la hay) → {tipo:'img', val:<imagen>, nota:'...'}
+      //   · solo nota               → {tipo:'txt', val:'...'}
       let solObj = null;
-      if (tipoActivo === 'img') {
+      const txt = mTxt.value.trim();
+      if (imgEvidenciaData || txt) {
+        solObj = { estado: estadoActivo, fechaLabel: fmtFecha(solFecha.value), ts: Date.now(), ...solMeta };
         if (imgEvidenciaData) {
-          solObj = { estado: estadoActivo, tipo: 'img', val: imgEvidenciaData, fechaLabel: fmtFecha(solFecha.value), ts: Date.now(), ...solMeta };
+          solObj.tipo = 'img';
+          solObj.val = imgEvidenciaData;
+          if (txt) solObj.nota = txt;
+        } else {
+          solObj.tipo = 'txt';
+          solObj.val = txt;
         }
-      } else {
-        const txt = mTxt.value.trim();
-        if (txt) solObj = { estado: estadoActivo, tipo: 'txt', val: txt, fechaLabel: fmtFecha(solFecha.value), ts: Date.now(), ...solMeta };
       }
       const modoSolucion = solModo.value;
       if (solObj && !modoSolucion) throw new Error('Selecciona el modo de solución.');
@@ -658,7 +661,10 @@
       if (solObj) {
         const estadoLabel = estadoActivo === 'solucionada' ? 'Novedad solucionada' : 'Producto devuelto';
         let notaTexto = estadoLabel + ' — Modo de solución: ' + modoSolucion;
-        if (tipoActivo === 'txt' && mTxt.value.trim()) notaTexto += ': ' + mTxt.value.trim();
+        // La nota entra vaya sola o acompañando a una foto: antes solo se
+        // copiaba cuando la evidencia era de tipo texto, así que al adjuntar
+        // imagen la explicación se perdía para quien mira la gestión.
+        if (txt) notaTexto += ': ' + txt;
         try { notaGuardada = await agregarNotaGestion(guiaParaNota, notaTexto); }
         catch (e) { notaGuardada = false; }
       }
