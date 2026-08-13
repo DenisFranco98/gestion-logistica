@@ -6813,10 +6813,99 @@ function _botwRender(empresas, misIds){
       <div class="botw-acciones">
         <button onclick="_botwToggle('${esc(code)}')">${activo?'Revocar':'Reactivar'}</button>
         <button onclick="_botwRegenerar('${esc(code)}')">Generar clave nueva</button>
+        <button onclick="_botwDocs('${esc(code)}',this)">📄 Cómo conectarlo</button>
       </div>
+      <div class="botw-docs" id="botw-docs-${esc(code)}" style="display:none;"></div>
     </div>`;
   }).join('');
 }
+
+// URL base de las Cloud Functions. Sale del projectId con el que se inicializó
+// Firebase y no de una constante escrita a mano: si algún día se cambia de
+// proyecto, la documentación del panel sigue diciendo la verdad.
+function _botwBaseUrl(){
+  let pid = 'TU-PROYECTO';
+  try{ pid = (firebase.app().options.projectId) || pid; }catch(e){}
+  return 'https://us-central1-'+pid+'.cloudfunctions.net';
+}
+
+// Bloque de copiar-y-pegar para configurar el bot. Va con el workspace de ESTA
+// tienda ya puesto: la fuente de error más común es pegar el ejemplo genérico
+// del README y olvidarse de reemplazar el código.
+//
+// La clave NO se escribe en los ejemplos, ni siquiera en el header: quedaría a
+// la vista de cualquiera que pase por detrás y en cualquier captura de pantalla.
+// Se deja el marcador y el botón de copiar de arriba, que sí la entrega.
+window._botwDocs = function(code, btn){
+  const cont = document.getElementById('botw-docs-'+code);
+  if(!cont) return;
+  if(cont.style.display !== 'none'){ cont.style.display='none'; btn.textContent='📄 Cómo conectarlo'; return; }
+  btn.textContent='📄 Ocultar';
+  const base = _botwBaseUrl();
+  const bloque = (titulo, texto, id) => `
+    <div class="botw-doc-b">
+      <div class="botw-doc-h"><span>${titulo}</span><button onclick="_botwCopiarTxt('${id}')">Copiar</button></div>
+      <pre id="${id}">${esc(texto)}</pre>
+    </div>`;
+
+  const body = JSON.stringify({
+    workspace: code,
+    tienda: (_botwData[code]||{}).nombre || '',
+    fecha_compra: '2026-08-13',
+    fecha_registro: '2026-08-13 09:12',
+    nombre: 'Nombre del cliente',
+    telefono: '3001112233',
+    ciudad: 'Medellín',
+    departamento: 'Antioquia',
+    order: '2 CEPILLOS DE BAMBU',
+    producto: 'CEPILLO BAMBU',
+    cantidad: 2,
+    valor: 89000,
+    estado_orden: 'CONFIRMADO',
+    id_anuncio: '120312345678'
+  }, null, 2);
+
+  cont.innerHTML = `
+    <div class="botw-doc-intro">
+      El bot hace <b>dos llamadas</b>: primero pregunta si el pedido ya está, y solo si no está lo registra.
+      Así no se duplica cuando el cliente vuelve a escribir.
+    </div>
+
+    <div class="botw-doc-paso"><b>1</b> Consultar si el pedido ya existe</div>
+    ${bloque('GET · URL con los datos en la dirección',
+      base+'/ventasExiste?workspace='+code+'&telefono=3001112233&fecha_compra=2026-08-13',
+      'botw-d1-'+code)}
+    <div class="botw-doc-nota">Responde <code>{"existe": true}</code> o <code>{"existe": false}</code>.
+    Si da <code>true</code>, el flujo termina ahí: ese pedido ya está registrado.</div>
+
+    <div class="botw-doc-paso"><b>2</b> Registrar la venta</div>
+    ${bloque('POST · dirección', base+'/ventas', 'botw-d2-'+code)}
+    ${bloque('Encabezados', 'Content-Type: application/json\nX-Api-Key: (la clave de arriba, botón 📋)', 'botw-d3-'+code)}
+    ${bloque('Cuerpo (body) en formato JSON', body, 'botw-d4-'+code)}
+
+    <div class="botw-doc-nota">
+      <b>Qué es obligatorio:</b> <code>workspace</code>, <code>telefono</code> y <code>fecha_compra</code>.
+      Esos tres identifican el pedido; el resto puede ir vacío y se completa después.<br>
+      <b>valor</b> es el total de la orden, no el precio por unidad.<br>
+      <b>fecha_compra</b> acepta <code>2026-08-13</code> o <code>13/08/2026</code>.<br>
+      <b>order</b> es el pedido completo ("2 CEPILLOS DE BAMBU") y <b>producto</b> solo el nombre ("CEPILLO BAMBU").
+    </div>
+
+    <div class="botw-doc-nota warn">
+      Si el mismo pedido llega dos veces, <b>no se duplica</b>: se actualiza el estado y responde
+      <code>{"duplicado": true}</code>. Siempre responde <code>200</code>, incluso cuando ya existía,
+      para que el bot no lo reintente en vano.
+    </div>`;
+  cont.style.display='block';
+};
+
+window._botwCopiarTxt = function(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  navigator.clipboard.writeText(el.textContent)
+    .then(()=>toast('📋 Copiado'))
+    .catch(()=>toast('No se pudo copiar; seleccionalo y copialo a mano'));
+};
 
 window._botwVer = function(code, btn){
   const i = document.getElementById('botw-k-'+code);

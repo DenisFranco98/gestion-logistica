@@ -145,7 +145,14 @@ una empresa ajena dejaría entrar ventas donde no corresponde.
 
 ### 4. Configurar ChateaPro
 
-Apuntar el webhook a la URL de `ventas`, con la clave en un header:
+**La documentación para pegar en el bot está en el panel**, dentro de la tarjeta
+de cada tienda: botón *📄 Cómo conectarlo*. Sale con el workspace de esa tienda
+ya puesto y con botón de copiar en cada bloque — evita el error más común, que es
+pegar el ejemplo genérico y olvidarse de reemplazar el código. La clave no se
+escribe ahí a propósito: se copia con el botón 📋 de arriba.
+
+Lo mismo, en resumen: apuntar el webhook a la URL de `ventas`, con la clave en un
+header:
 
 ```
 X-Api-Key: <la clave>
