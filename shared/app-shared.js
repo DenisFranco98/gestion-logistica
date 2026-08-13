@@ -6813,6 +6813,7 @@ function _botwRender(empresas, misIds){
       <div class="botw-acciones">
         <button onclick="_botwToggle('${esc(code)}')">${activo?'Revocar':'Reactivar'}</button>
         <button onclick="_botwRegenerar('${esc(code)}')">Generar clave nueva</button>
+        <button onclick="_botwCambiarCodigo('${esc(code)}')">Cambiar código</button>
         <button onclick="_botwDocs('${esc(code)}',this)">📄 Cómo conectarlo</button>
       </div>
       <div class="botw-docs" id="botw-docs-${esc(code)}" style="display:none;"></div>
@@ -6923,24 +6924,89 @@ window._botwCopiar = function(code){
     .catch(()=>toast('No se pudo copiar; mostrá la clave y copiala a mano'));
 };
 
+// El código lo pone el usuario: tiene que ser el MISMO que el bot manda en el
+// campo `workspace` del payload. En ChateaPro ese valor ya existe —es el id del
+// workspace, un número como 230003— y usarlo evita tener que escribir a mano un
+// código inventado en cada flujo del bot y mantener dos nomenclaturas en
+// paralelo. Si se deja vacío se sugiere uno a partir del nombre de la tienda.
 window._botwCrear = async function(){
   const sel = document.getElementById('botw-empresa');
+  const inpCode = document.getElementById('botw-codigo');
   const empresaId = sel ? sel.value : '';
   if(!empresaId){ _mAlert('Falta la tienda','Elegí a qué tienda le vas a conectar el bot.'); return; }
+  const nombre = sel.options[sel.selectedIndex].textContent;
+
+  let code = _botwNormCode(inpCode ? inpCode.value : '');
+  if(!code) code = _botwGenCodigo(nombre);
+  if(_botwData[code]){
+    _mAlert('Ese código ya está en uso','El código "'+code+'" ya está conectado a otra tienda. Usá uno distinto.');
+    return;
+  }
   if(Object.values(_botwData).some(w=>w.empresaId===empresaId && w.activo!==false)){
     if(!await _mConfirmP('Esa tienda ya está conectada',
       'Ya tiene un workspace activo. Si creás otro, los dos van a poder registrar ventas en la misma tienda. ¿Seguís?')) return;
   }
-  const nombre = sel.options[sel.selectedIndex].textContent;
-  const code = _botwGenCodigo(nombre);
   const w = { apiKey: _botwGenKey(), empresaId, nombre, activo: true, creado: Date.now() };
   try{
     await _db.ref('bot_workspaces/'+code).set(w);
     _botwData[code] = w;
+    if(inpCode) inpCode.value='';
     await _botwCargar();
     toast('✓ Workspace '+code+' creado — copiá la clave y pegala en ChateaPro', 5000);
   }catch(e){ _mAlert('No se pudo crear', e.message); }
 };
+
+// Firebase no admite . # $ [ ] / en las claves, y un espacio de más rompería la
+// comparación contra lo que manda el bot. Se conservan mayúsculas y minúsculas
+// tal como se escriban: el endpoint compara el código exacto.
+function _botwNormCode(v){
+  return String(v||'').trim().replace(/\s+/g,'-').replace(/[.#$[\]/]/g,'-');
+}
+
+// Cambiar el código de un workspace ya creado. Firebase no permite renombrar una
+// clave, así que se escribe el nodo nuevo y se borra el viejo — conservando la
+// misma API key, para no tener que volver a configurarla en el bot.
+window._botwCambiarCodigo = async function(code){
+  const w = _botwData[code]; if(!w) return;
+  const nuevo = _botwNormCode(await _botwPedirTexto(
+    'Código del workspace',
+    'Tiene que ser el mismo valor que el bot manda en el campo "workspace". En ChateaPro es el id del workspace, un número como 230003.',
+    code));
+  if(!nuevo || nuevo === code) return;
+  if(_botwData[nuevo]){ _mAlert('Ese código ya está en uso','El código "'+nuevo+'" ya está conectado a otra tienda.'); return; }
+  try{
+    await _db.ref('bot_workspaces/'+nuevo).set(w);
+    await _db.ref('bot_workspaces/'+code).remove();
+    delete _botwData[code]; _botwData[nuevo] = w;
+    await _botwCargar();
+    toast('✓ Ahora el código es '+nuevo+' — la clave sigue siendo la misma', 5000);
+  }catch(e){ _mAlert('No se pudo cambiar', e.message); }
+};
+
+// Pedir un texto con el mismo estilo que el resto de los modales, en vez del
+// prompt() del navegador, que rompe la estética y algunos navegadores bloquean.
+function _botwPedirTexto(titulo, msg, valor){
+  return new Promise(resolve=>{
+    const bg = document.createElement('div');
+    bg.className = 'adm-modal-bg visible';
+    bg.innerHTML = `<div class="adm-modal" style="max-width:420px;">
+      <h3>${esc(titulo)}</h3>
+      <p style="font-size:.76rem;color:var(--text-2);line-height:1.5;margin:0 0 12px;">${esc(msg)}</p>
+      <div class="adm-field"><input type="text" id="botw-prompt-inp" value="${esc(valor||'')}" autocomplete="off"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button class="adm-btn-sec" id="botw-prompt-no">Cancelar</button>
+        <button class="adm-btn" id="botw-prompt-si">Guardar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(bg);
+    const inp = bg.querySelector('#botw-prompt-inp');
+    inp.focus(); inp.select();
+    const cerrar = v => { bg.remove(); resolve(v); };
+    bg.querySelector('#botw-prompt-no').onclick = ()=>cerrar('');
+    bg.querySelector('#botw-prompt-si').onclick = ()=>cerrar(inp.value);
+    inp.onkeydown = e => { if(e.key==='Enter') cerrar(inp.value); if(e.key==='Escape') cerrar(''); };
+  });
+}
 
 // Revocar no borra: el historial de ventas ya registradas se conserva y la
 // tienda puede volver a activarse sin rehacer la configuración del bot.

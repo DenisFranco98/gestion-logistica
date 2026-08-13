@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260813b">
+<link rel="stylesheet" href="shared/shared.css?v=20260813c">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -458,6 +458,11 @@ window._sbEstadosToggle=function(){
         </div>
         <div class="botw-nuevo">
           <select id="botw-empresa"><option value="">Elegí la tienda...</option></select>
+          <!-- El código tiene que ser EL MISMO que el bot manda en el campo
+               workspace del payload. En ChateaPro ese valor ya existe: es el id
+               del workspace, un número como 230003. Se deja escribirlo para no
+               tener que mantener dos nomenclaturas en paralelo. -->
+          <input type="text" id="botw-codigo" placeholder="Código del workspace (ej: 230003)" autocomplete="off">
           <button onclick="_botwCrear()">+ Conectar tienda</button>
         </div>
         <div id="botw-list"><div class="adm-empty">Cargando...</div></div>
@@ -1084,7 +1089,7 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260813b"></script>
+<script src="shared/app-shared.js?v=20260813c"></script>
 <script>
 // ===== MODE SELECT (router del landing) =====
 function _modoLogistica(){
