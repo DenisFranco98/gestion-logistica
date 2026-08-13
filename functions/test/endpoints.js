@@ -1,7 +1,7 @@
-// Prueba los endpoints REALES contra un Firebase simulado en memoria.
+// Prueba los handlers REALES de index.js contra un Firebase simulado en memoria.
 //
-// No se toca el código de producción: se intercepta el require de
-// 'firebase-admin' antes de cargarlos, así corre exactamente lo que se va a
+// No se toca el código de producción: se interceptan los require de
+// 'firebase-admin' y 'firebase-functions' antes de cargarlo, así corre exactamente lo que se va a
 // desplegar. Verifica lo que no se puede comprobar leyendo: que un reintento no
 // duplique, que un cambio de estado se registre, y que la autenticación corte.
 //
@@ -29,14 +29,17 @@ const fakeAdmin = {
     })
   })
 };
+// firebase-functions tampoco hace falta instalarlo: onRequest solo tiene que
+// devolver el handler para que el test lo llame directo.
+const fakeFunctions = { onRequest: (opts, fn) => (fn || opts) };
 const orig = Module._load;
 Module._load = function (request) {
   if (request === 'firebase-admin') return fakeAdmin;
+  if (request === 'firebase-functions/v2/https') return fakeFunctions;
   return orig.apply(this, arguments);
 };
 
-const postVenta = require('../api/ventas/index.js');
-const getExiste = require('../api/ventas/existe.js');
+const { ventas: postVenta, existe: getExiste } = require('../index.js')._handlers;
 
 // ── Utilidades ───────────────────────────────────────────────────────────
 function llamar(handler, { method = 'POST', body = null, query = {}, headers = {} }) {

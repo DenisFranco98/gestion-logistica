@@ -2,33 +2,26 @@
 // conexión a Firebase, autenticación del bot, y la normalización de teléfono y
 // fecha de la que depende la clave de cada venta.
 // ── Firebase ──────────────────────────────────────────────────────────────
-// Se usa el Admin SDK con una cuenta de servicio, no las claves del navegador:
-// este proceso escribe del lado del servidor y no pasa por las reglas de
-// seguridad, así que la credencial NUNCA puede estar en el código. Va en la
-// variable de entorno FIREBASE_SERVICE_ACCOUNT (el JSON completo de la cuenta
-// de servicio, en una sola línea).
+// Corriendo dentro de Cloud Functions, initializeApp() sin argumentos toma las
+// credenciales del propio proyecto: no hace falta cuenta de servicio, ni clave
+// privada que guardar y rotar, ni variables de entorno. Es la ventaja concreta
+// de estar en el mismo proyecto que la base.
+//
+// Escribe con permisos de administrador, así que NO pasa por las reglas de
+// seguridad: la validación de quién puede escribir qué la hace este código, no
+// las reglas. Por eso las reglas dejan ventas_bot en solo lectura.
 //
 // El require va acá dentro y no arriba a propósito: así este módulo se puede
 // cargar (y testear la normalización, que es lo que decide la clave de cada
-// venta) sin necesidad de la dependencia ni de credenciales. De paso, una
-// petición que falla antes de tocar la base no paga el costo de cargar el SDK.
+// venta) sin necesidad de la dependencia. De paso, una petición que falla antes
+// de tocar la base no paga el costo de cargar el SDK.
 //
-// Vercel reutiliza el proceso entre invocaciones: initializeApp explota si se
-// llama dos veces, por eso el guard sobre admin.apps.length.
+// La instancia se reutiliza entre invocaciones en caliente: initializeApp
+// explota si se llama dos veces, por eso el guard sobre admin.apps.length.
 function db() {
   const admin = require('firebase-admin');
-  if (!admin.apps.length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!raw) throw new Error('Falta la variable FIREBASE_SERVICE_ACCOUNT');
-    let cred;
-    try { cred = JSON.parse(raw); }
-    catch (e) { throw new Error('FIREBASE_SERVICE_ACCOUNT no es un JSON válido'); }
-    admin.initializeApp({
-      credential: admin.credential.cert(cred),
-      databaseURL: process.env.FIREBASE_DB_URL
-    });
-  }
-  return require('firebase-admin').database();
+  if (!admin.apps.length) admin.initializeApp();
+  return admin.database();
 }
 
 // ── Normalización de la clave ────────────────────────────────────────────

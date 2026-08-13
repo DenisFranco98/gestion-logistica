@@ -1,8 +1,0 @@
-node_modules/
-.vercel/
-
-# NUNCA versionar credenciales. La cuenta de servicio de Firebase va como
-# variable de entorno en Vercel (FIREBASE_SERVICE_ACCOUNT), no en un archivo.
-.env
-.env.*
-*serviceAccount*.json

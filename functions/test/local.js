@@ -3,7 +3,7 @@
 // api/_lib.js (el require de firebase-admin es lazy justamente para esto).
 //
 //   node test/local.js
-const L = require('../api/_lib');
+const L = require('../lib');
 
 let ok = 0, fail = 0;
 function eq(actual, esperado, titulo) {
