@@ -1,0 +1,57 @@
+{
+  "_comentario": [
+    "Reglas para los nodos nuevos. NO es el archivo completo de reglas: hay que",
+    "PEGAR estos tres bloques dentro de las reglas que ya existen, al mismo nivel",
+    "que 'users', 'user_tiendas', 'gestiones_diarias', etc. Si se publica este",
+    "archivo tal cual, se borra todo lo demás.",
+    "",
+    "Consola de Firebase -> Realtime Database -> Reglas."
+  ],
+
+  "ventas_bot": {
+    "_comentario": [
+      "Las ventas que manda el bot. Escribe SOLO el endpoint, que usa el Admin",
+      "SDK y no pasa por estas reglas: por eso .write es false para todos, y no",
+      "hay forma de inyectar ventas desde el navegador.",
+      "Lee cualquiera que tenga acceso a esa tienda, con el mismo criterio que",
+      "usa el resto de la app: estar en user_tiendas o ser admin de la empresa."
+    ],
+    "$empresaId": {
+      ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+      ".write": false
+    }
+  },
+
+  "ventas_bot_idx": {
+    "_comentario": [
+      "Índice para responder '¿ya existe este pedido?' sin leer el mes entero.",
+      "Mismo criterio: lo escribe solo el endpoint."
+    ],
+    "$empresaId": {
+      ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+      ".write": false
+    }
+  },
+
+  "bot_workspaces": {
+    "_comentario": [
+      "Acá vive la API key de cada tienda, así que es el nodo más sensible de",
+      "todo esto: quien la lea puede registrar ventas falsas.",
+      "",
+      "Solo los admins pueden leerlo y escribirlo. Un asesor NO debe poder verlo",
+      "aunque sea de su propia tienda. El endpoint lo lee con el Admin SDK, que",
+      "se saltea estas reglas, así que no hace falta darle acceso a nadie más.",
+      "",
+      "Estructura de cada entrada:",
+      "  bot_workspaces/{workspace}: {",
+      "    apiKey:    '...',        <- secreto que manda el bot",
+      "    empresaId: '-Oz9bT...',  <- tienda a la que van las ventas",
+      "    nombre:    '3D Company',",
+      "    activo:    true,         <- false revoca sin borrar el historial",
+      "    creado:    1765...",
+      "  }"
+    ],
+    ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+    ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+  }
+}

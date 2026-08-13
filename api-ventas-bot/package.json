@@ -1,0 +1,13 @@
+{
+  "name": "api-ventas-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Endpoints para que el bot de ChateaPro registre y consulte ventas en REDKING",
+  "scripts": {
+    "dev": "vercel dev",
+    "test": "node test/local.js && node test/endpoints.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
