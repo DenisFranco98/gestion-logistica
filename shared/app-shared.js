@@ -6815,6 +6815,7 @@ function _botwRender(empresas, misIds){
         <button onclick="_botwRegenerar('${esc(code)}')">Generar clave nueva</button>
         <button onclick="_botwCambiarCodigo('${esc(code)}')">Cambiar código</button>
         <button onclick="_botwDocs('${esc(code)}',this)">📄 Cómo conectarlo</button>
+        <button class="botw-del" onclick="_botwEliminar('${esc(code)}')">Eliminar integración</button>
       </div>
       <div class="botw-docs" id="botw-docs-${esc(code)}" style="display:none;"></div>
     </div>`;
@@ -6873,16 +6874,27 @@ window._botwDocs = function(code, btn){
     </div>
 
     <div class="botw-doc-paso"><b>1</b> Consultar si el pedido ya existe</div>
-    ${bloque('GET · URL con los datos en la dirección',
+    <div class="botw-doc-nota">Se puede de dos formas y dan lo mismo. <b>Conviene el POST</b>:
+    se configura igual que el paso 2 —misma dirección de estilo, mismos encabezados, los datos en el
+    cuerpo— así los dos pedidos del bot quedan iguales y no hay que armar una URL con variables.</div>
+    ${bloque('POST · dirección', base+'/ventasExiste', 'botw-d1-'+code)}
+    ${bloque('POST · cuerpo (body) en formato JSON',
+      JSON.stringify({ workspace: code, telefono: '3001112233', fecha_compra: '2026-08-13' }, null, 2),
+      'botw-d1b-'+code)}
+    ${bloque('Alternativa · GET, con los datos en la dirección',
       base+'/ventasExiste?workspace='+code+'&telefono=3001112233&fecha_compra=2026-08-13',
-      'botw-d1-'+code)}
-    <div class="botw-doc-nota">Responde <code>{"existe": true}</code> o <code>{"existe": false}</code>.
-    Si da <code>true</code>, el flujo termina ahí: ese pedido ya está registrado.</div>
+      'botw-d1c-'+code)}
+    <div class="botw-doc-nota">Los encabezados son los mismos del paso 2 (incluida la clave).
+    Responde <code>{"existe": true}</code> o <code>{"existe": false}</code>.
+    Si da <code>true</code>, el flujo termina ahí: ese pedido ya está registrado.
+    En <i>Ruta JSON</i> usá <code>$.existe</code>.</div>
 
     <div class="botw-doc-paso"><b>2</b> Registrar la venta</div>
     ${bloque('POST · dirección', base+'/ventas', 'botw-d2-'+code)}
     ${bloque('Encabezados', 'Content-Type: application/json\nX-Api-Key: (la clave de arriba, botón 📋)', 'botw-d3-'+code)}
     ${bloque('Cuerpo (body) en formato JSON', body, 'botw-d4-'+code)}
+    <div class="botw-doc-nota">En <i>Ruta JSON</i> usá <code>$.duplicado</code> para saber si el
+    pedido ya estaba. <b>Ojo:</b> <code>$.existe</code> es del paso 1; esta respuesta no lo trae.</div>
 
     <div class="botw-doc-nota">
       <b>Qué es obligatorio:</b> <code>workspace</code>, <code>telefono</code> y <code>fecha_compra</code>.
@@ -7019,6 +7031,24 @@ window._botwToggle = async function(code){
   _botwData[code].activo = !activo;
   await _botwCargar();
   toast(activo ? 'Acceso revocado' : 'Acceso reactivado');
+};
+
+// Borra la conexión con el bot. NO toca las ventas ya registradas: viven en
+// ventas_bot/{empresaId}, que no depende de este nodo. Se avisa explícitamente
+// porque lo natural es suponer lo contrario, y también se ofrece "Revocar", que
+// corta el acceso sin perder la configuración.
+window._botwEliminar = async function(code){
+  const w = _botwData[code]; if(!w) return;
+  if(!await _mConfirmP('¿Eliminar la integración?',
+    'Se borra el código "'+code+'" y su clave. El bot va a dejar de poder registrar ventas en esta tienda de inmediato, y para volver a conectarlo hay que crear la integración de nuevo y pegar una clave nueva en ChateaPro.\n\n' +
+    'Las ventas ya registradas NO se borran: siguen en la pestaña Ventas Bot.\n\n' +
+    'Si solo querés cortar el acceso un rato, usá "Revocar" en vez de esto.', 'danger')) return;
+  try{
+    await _db.ref('bot_workspaces/'+code).remove();
+    delete _botwData[code];
+    await _botwCargar();
+    toast('Integración '+code+' eliminada — las ventas ya registradas se conservan', 5000);
+  }catch(e){ _mAlert('No se pudo eliminar', e.message); }
 };
 
 window._botwRegenerar = async function(code){
