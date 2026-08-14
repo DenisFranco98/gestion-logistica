@@ -4649,13 +4649,27 @@ function generarPDF(){
   const accionables=pedidos.filter(p=>!sinAccion(p)&&p.estadoKey!=='pendiente');
   const total=accionables.length;
   const gestionados=accionables.filter(p=>estaCompleta(p)).length;
-  const contestaron=pedidos.filter(p=>gestiones[p.id]?.llamada==='contestó').length;
-  const noContestaron=pedidos.filter(p=>gestiones[p.id]?.llamada==='no_contestó').length;
-  const waEnviados=pedidos.filter(p=>gestiones[p.id]?.wa_enviado).length;
-  const chatepro=pedidos.filter(p=>gestiones[p.id]?.chatepro).length;
-  const finalizados=pedidos.filter(p=>gestiones[p.id]?.gestion_final).length;
-  const autoSinNovedad=pedidos.filter(p=>sinAccion(p)).length;
   const pct=total?Math.round(gestionados/total*100):0;
+
+  // ── Cómo fue el contacto y qué resultado tuvo ──────────────────────────
+  // Las dos salen de los desplegables de la card. Se leen con la misma
+  // resolución que usa la card al pintarse: `contacto_metodo` y
+  // `resultado_gestion` son los campos actuales, y detrás quedan los viejos
+  // (llamada_ofic / chatepro / wa_enviado, y gestion_final / devolucion /
+  // mensajes_listos) para que las gestiones anteriores al rediseño sigan
+  // contando. Sin ese respaldo, un tablero restaurado mostraría todo en cero.
+  const _contactoDe=g=>g&&(g.contacto_metodo||(g.llamada_ofic?'llamada':g.chatepro?'chatepro':g.wa_enviado?'whatsapp':''))||'';
+  const _resultadoDe=g=>g&&(g.gestion_final?'finalizar':(g.resultado_gestion||(g.devolucion?'devolver':g.mensajes_listos?'fondo':'')))||'';
+  const cuenta=(fn,val)=>pedidos.filter(p=>fn(gestiones[p.id])===val).length;
+
+  const porLlamada  = cuenta(_contactoDe,'llamada');
+  const porChatepro = cuenta(_contactoDe,'chatepro');
+  const porWhatsapp = cuenta(_contactoDe,'whatsapp');
+  const contactados = porLlamada+porChatepro+porWhatsapp;
+
+  const resFinalizadas = cuenta(_resultadoDe,'finalizar');
+  const resDevueltas   = cuenta(_resultadoDe,'devolver');
+  const resFondo       = cuenta(_resultadoDe,'fondo');
   const secStats=ESTADOS.filter(est=>est.key!=='pendiente_sin_guia'&&est.key!=='pendiente'&&!estadosDesactivados.has(est.key)).map(est=>{
     const gr=pedidos.filter(p=>p.estadoKey===est.key&&!sinAccion(p));
     const gest=gr.filter(p=>estaCompleta(p));
@@ -4671,18 +4685,31 @@ function generarPDF(){
       <div class="pdf-stat-grid">
         <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${total}</div><div class="lbl">Total pedidos</div></div>
         <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${gestionados}</div><div class="lbl">Gestionados</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--danger)">${total-gestionados}</div><div class="lbl">Pendientes</div></div>
+        <div class="pdf-stat"><div class="val" style="color:var(--danger)">${total-gestionados}</div><div class="lbl">Falta gestionar</div></div>
         <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${pct}%</div><div class="lbl">Completado</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${contestaron}</div><div class="lbl">Contestaron</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--text-2)">${noContestaron}</div><div class="lbl">No contestaron</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${waEnviados}</div><div class="lbl">WA enviados</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${chatepro}</div><div class="lbl">${CFG.bot||'Bot'}</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${finalizados}</div><div class="lbl">NC Finalizados</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--text-2)">${autoSinNovedad}</div><div class="lbl">Transito OK</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${fmtMin(durTotal)}</div><div class="lbl">Tiempo activo</div></div>
+      </div>
+    </div>
+    <div class="pdf-section"><h3>¿Cómo fue el contacto?</h3>
+      <div class="pdf-stat-grid">
+        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${porChatepro}</div><div class="lbl">${CFG.bot||'ChateaPro'}</div></div>
+        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${porLlamada}</div><div class="lbl">Llamada</div></div>
+        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${porWhatsapp}</div><div class="lbl">WhatsApp</div></div>
+        <div class="pdf-stat"><div class="val" style="color:var(--text-2)">${contactados}</div><div class="lbl">Total contactados</div></div>
+      </div>
+    </div>
+    <div class="pdf-section"><h3>Resultado de la gestión</h3>
+      <div class="pdf-stat-grid">
+        <div class="pdf-stat"><div class="val" style="color:var(--success)">${resFinalizadas}</div><div class="lbl">Finalizadas</div></div>
+        <div class="pdf-stat"><div class="val" style="color:var(--warning)">${resDevueltas}</div><div class="lbl">Devueltas</div></div>
+        <div class="pdf-stat"><div class="val" style="color:var(--text-2)">${resFondo}</div><div class="lbl">Pasadas al fondo</div></div>
+      </div>
+    </div>
+    <div class="pdf-section"><h3>Tiempo y ritmo</h3>
+      <div class="pdf-stat-grid">
+        <div class="pdf-stat"><div class="val" style="color:var(--text-1)">${fmtMin(durTotal)}</div><div class="lbl">Duración de la gestión</div></div>
         <div class="pdf-stat"><div class="val" style="color:var(--warning)">${contadorPausas}</div><div class="lbl">Pausas usadas</div></div>
         <div class="pdf-stat"><div class="val" style="color:var(--warning)">${fmtMin(totalPausadoMs+(pausaActiva&&pausaInicio?Date.now()-pausaInicio:0))}</div><div class="lbl">Tiempo pausado</div></div>
-        <div class="pdf-stat"><div class="val" style="color:var(--warning)">${contadorAlertasInactividad}</div><div class="lbl">Alertas inactividad</div></div>
+        <div class="pdf-stat"><div class="val" style="color:var(--warning)">${contadorAlertasInactividad}</div><div class="lbl">Inactividades</div></div>
       </div>
     </div>
     <div class="pdf-section"><h3>Resultados por estado</h3>
