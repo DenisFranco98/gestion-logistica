@@ -2357,9 +2357,7 @@ function _vbInit(conservarFiltros){
       const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
     }
     _vbUltima=Date.now();
-    // La inversión en pauta se lee junto con las ventas: la analítica la necesita
-    // para el CPA y no vale la pena una segunda vuelta al abrir esa vista.
-    _vbAdsCargar().then(_vbRender);
+    _vbRender();
   }).catch(e=>{
     // El caso más probable es que la tienda todavía no esté conectada al bot:
     // se explica en vez de mostrar un error crudo.
@@ -2619,42 +2617,36 @@ function _vbAgrupar(filas, campoFn, vacio){
   return [...m.values()];
 }
 
-// Inversión en pauta por producto, cargada a mano. Vive en su propio nodo y no
-// dentro de la venta porque es un dato del MES y del producto, no de cada venta:
-// meterlo en cada registro obligaría a repetirlo y a mantenerlo sincronizado.
+// Inversión en pauta por producto: es una CALCULADORA, no un dato de la app.
+// Se teclea para ver el CPA en el momento y se pierde al recargar la página o
+// al cambiar de mes. No se guarda en ningún lado a propósito —decisión del
+// usuario el 2026-08-13—, así que tampoco hace falta nodo en Firebase, reglas,
+// ni permisos: lo que cada uno escribe solo lo ve él, en su pantalla, hasta que
+// recargue.
 //
-//   ventas_bot_ads/{empresaId}/{mes}/{claveProducto} = número
+// Si algún día hace falta que quede registrado y compartido, ese es otro
+// requisito: implicaría nodo propio, regla nueva y decidir quién lo edita.
 //
 // La clave se normaliza con _gdKey, igual que el catálogo de productos: sin eso
 // "CEPILLO BAMBU" y "Cepillo Bambu" serían dos entradas y el CPA saldría mal.
-let _vbAds={}, _vbAdsTimer={};
+let _vbAds={};
 
 function _vbAdsKey(producto){ return _gdKey(String(producto||'').trim().replace(/\s+/g,' ')); }
 
-function _vbAdsCargar(){
-  if(typeof _db==='undefined') return Promise.resolve();
-  return _db.ref('ventas_bot_ads/'+_gdTK()+'/'+_gdMes).once('value')
-    .then(s=>{ _vbAds=s.val()||{}; })
-    .catch(()=>{ _vbAds={}; });   // sin permiso o sin datos: se sigue mostrando la tabla
-}
-
-// Se guarda con un respiro para no escribir en cada tecla, igual que _antCambio.
 function _vbAdsSet(producto, valor, inp){
-  if(!_gdEsDueno()){ _mAlert('Solo el dueño de la tienda','Tu perfil de asesor no puede cargar la inversión en pauta.'); return; }
   const k=_vbAdsKey(producto);
   const n=parseInt(String(valor).replace(/[^\d]/g,''),10)||0;
-  _vbAds[k]=n;
+  if(n) _vbAds[k]=n; else delete _vbAds[k];
   if(inp){ inp.value = n ? n.toLocaleString('es-CO') : ''; }
   _vbRender();
-  if(_vbAdsTimer[k]) clearTimeout(_vbAdsTimer[k]);
-  _vbAdsTimer[k]=setTimeout(()=>{
-    if(typeof _db==='undefined') return;
-    _db.ref('ventas_bot_ads/'+_gdTK()+'/'+_gdMes+'/'+k).set(n)
-      .catch(e=>_mAlert('No se pudo guardar la inversión',
-        /permission|denied/i.test(e.message||'')
-          ? 'Firebase rechazó la escritura. Falta agregar el nodo ventas_bot_ads a las reglas, o la cuenta no figura como dueña de esta tienda.'
-          : e.message));
-  }, 700);
+}
+
+// Borra todo lo tecleado de una vez. Con varios productos, limpiar campo por
+// campo para probar otro escenario es tedioso.
+function _vbAdsLimpiar(){
+  _vbAds={};
+  _vbRender();
+  toast('Inversión borrada');
 }
 
 // `conAds` agrega las dos columnas de pauta: la inversión, que se carga a mano,
@@ -2665,7 +2657,8 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
   // (cuánto aporta cada uno) y anuncios por cantidad de ventas (cuál trae más).
   grupos.sort((a,b)=> b[ordenarPor]-a[ordenarPor] || b.facturacion-a.facturacion);
   const maxFact = grupos.reduce((m,g)=>Math.max(m,g.facturacion),0) || 1;
-  const editable = _gdEsDueno() && !(typeof _esAuditoria==='function' && _esAuditoria());
+  // Editable para cualquiera: no se guarda nada, es una cuenta que cada uno
+  // hace en su pantalla. En auditoría también, por lo mismo.
   let totalAds = 0;
 
   const filas = grupos.map(g=>{
@@ -2679,10 +2672,8 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
       // ventas, que es lo contrario de "todavía no sé cuánto costó".
       const cpa = (ads && g.ventas) ? Math.round(ads/g.ventas) : 0;
       colsAds = `
-      <td style="text-align:right;">${editable
-        ? `<input class="vb-ads-inp" value="${ads?ads.toLocaleString('es-CO'):''}" placeholder="0" inputmode="numeric"
-                  onchange="_vbAdsSet('${esc(g.clave).replace(/'/g,'&#39;')}',this.value,this)">`
-        : `<span class="vb-ads-ro">${ads?_vbMonto(ads):'—'}</span>`}</td>
+      <td style="text-align:right;"><input class="vb-ads-inp" value="${ads?ads.toLocaleString('es-CO'):''}" placeholder="0" inputmode="numeric"
+                  onchange="_vbAdsSet('${esc(g.clave).replace(/'/g,'&#39;')}',this.value,this)"></td>
       <td style="text-align:right;font-family:var(--f-mono);${cpa?'':'color:var(--text-3);'}">${cpa?_vbMonto(cpa):'—'}</td>`;
     }
     return `<tr>
@@ -2716,7 +2707,11 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
       <tbody>${filas || `<tr><td colspan="${cols}" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Sin datos</td></tr>`}</tbody>
       ${pie}
     </table>
-    ${conAds?'<div class="vb-ana-nota">La inversión se carga a mano y es del mes completo, así que el CPA no cambia al filtrar por día.</div>':''}
+    ${conAds?`<div class="vb-ana-nota">
+      🧮 La inversión es solo para calcular: <b>no se guarda</b> — al recargar la página o cambiar de mes se borra.
+      Como es del mes completo, el CPA no cambia si filtrás por día.
+      ${totalAds?'<button class="vb-ads-limpiar" onclick="_vbAdsLimpiar()">Borrar lo tecleado</button>':''}
+    </div>`:''}
   </div>`;
 }
 

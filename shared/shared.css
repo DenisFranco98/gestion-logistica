@@ -1535,3 +1535,5 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-ads-inp:focus{outline:none;border-color:var(--accent);}
 .vb-ads-ro{font-family:var(--f-mono);font-size:.68rem;color:var(--text-2);}
 .vb-ana-nota{font-size:.62rem;color:var(--text-3);margin-top:5px;font-style:italic;}
+.vb-ads-limpiar{margin-left:8px;border:1.5px solid var(--border);background:var(--bg-hover);color:var(--text-2);border-radius:6px;padding:2px 8px;font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;font-style:normal;}
+.vb-ads-limpiar:hover{color:var(--text-1);border-color:var(--border-strong);}

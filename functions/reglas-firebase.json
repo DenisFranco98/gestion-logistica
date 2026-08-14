@@ -73,15 +73,6 @@
       }
     },
 
-    // Inversión en pauta por producto, cargada a mano desde la analítica de
-    // Ventas Bot. La lee toda la tienda —hace falta para ver el CPA— pero solo
-    // la escribe el DUEÑO: es información de costos.
-    "ventas_bot_ads": {
-      "$empresaId": {
-        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
-        ".write": "auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
-      }
-    },
 
     // ── EL RESTO ─────────────────────────────────────────────────────────
     // Los 28 nodos que ya existían, con el mismo permiso que tienen hoy. No se
