@@ -1649,8 +1649,10 @@ function renderPills(){
     sp.style.cssText='border-color:'+est.color+';color:'+(ac?'white':est.color)+';background:'+(ac?est.color:'');
     sp.innerHTML=est.icon+' '+est.label+' <strong>('+pend+')</strong>';
     sp.onclick=()=>{
-      if(!ac){if(!tiemposPorSeccion[est.key])tiemposPorSeccion[est.key]={inicio:Date.now(),fin:null};else tiemposPorSeccion[est.key].inicio=Date.now();}
-      else if(tiemposPorSeccion[est.key]){tiemposPorSeccion[est.key].fin=Date.now();}
+      // El rato que va desde el último tick es de la sección que se está
+      // dejando, así que se le imputa ANTES de cambiar el filtro. Si no, los
+      // cambios rápidos de estado no contarían para ninguna.
+      _tickTiempoActivo();
       filtroActivo=ac?null:est.key;renderAll();guardar();
     };
     div.appendChild(sp);
@@ -1661,7 +1663,7 @@ function renderPills(){
     const pAc=filtroActivo==='pendiente';
     pBtn.style.cssText='border-color:var(--danger);color:'+(pAc?'white':'#dc2626')+';background:'+(pAc?'#dc2626':'');
     pBtn.innerHTML='⏳ Sin guía <strong>('+pendSinGuia+')</strong>';
-    pBtn.onclick=()=>{filtroActivo=pAc?null:'pendiente';renderAll();};
+    pBtn.onclick=()=>{_tickTiempoActivo();filtroActivo=pAc?null:'pendiente';renderAll();};
     div.appendChild(pBtn);
   }
 }
@@ -4674,7 +4676,11 @@ function generarPDF(){
     const gr=pedidos.filter(p=>p.estadoKey===est.key&&!sinAccion(p));
     const gest=gr.filter(p=>estaCompleta(p));
     const t=tiemposPorSeccion[est.key];
-    const dur=t&&t.fin?(t.fin-t.inicio):t?(ahora-t.inicio):null;
+    // .ms es el tiempo acumulado real. El {inicio,fin} es el formato viejo, que
+    // puede venir en una sesión restaurada: se respeta si está cerrado, y si
+    // quedó abierto se descarta —era justamente lo que hacía que todos los
+    // estados mostraran el mismo tiempo transcurrido.
+    const dur=!t?null:(t.ms!=null?t.ms:(t.fin?t.fin-t.inicio:null));
     return{est,total:gr.length,gestionados:gest.length,dur};
   }).filter(s=>s.total>0);
 
@@ -4713,7 +4719,7 @@ function generarPDF(){
     </div>
     <div class="pdf-section"><h3>Resultados por estado</h3>
       <table class="pdf-table">
-        <thead><tr><th>Estado</th><th>Pedidos</th><th>Gestionados</th><th>% Completado</th><th>Tiempo</th></tr></thead>
+        <thead><tr><th>Estado</th><th>Pedidos</th><th>Gestionados</th><th>% Completado</th><th>Tiempo dedicado</th></tr></thead>
         <tbody>${secStats.map(s=>`<tr>
           <td>${s.est.icon} ${s.est.label}</td>
           <td>${s.total}</td>
@@ -4722,6 +4728,7 @@ function generarPDF(){
           <td>${fmtMin(s.dur)}</td>
         </tr>`).join('')}</tbody>
       </table>
+      <div style="font-size:10px;color:var(--text-3);margin-top:6px">El tiempo dedicado se cuenta mientras el estado está filtrado con su pastilla; el rato de trabajo sobre el tablero completo no se le imputa a ninguno, así que la suma es menor que la duración total.</div>
     </div>
 `;
   document.getElementById('pdf-modal').classList.add('open');
@@ -4911,6 +4918,16 @@ function _tickTiempoActivo(){
   if(!pedidos.length || pausaActiva) return;
   if(ahora - _ultimaInteraccion > ACTIVO_MAX) return;
   tiempoActivoMs += delta;
+  // El mismo minuto se le imputa a la sección que se esté mirando. Antes el
+  // tiempo por estado era (ahora - cuando filtré), así que si alguien abría las
+  // cuatro pastillas y no las cerraba, las cuatro marcaban el mismo tiempo
+  // transcurrido: 48 min en las cuatro. Sin filtro no se imputa a ninguna —está
+  // mirando el tablero completo—, así que la suma por estado puede ser menor que
+  // la duración total, y eso es correcto.
+  if(filtroActivo){
+    const t = tiemposPorSeccion[filtroActivo] || (tiemposPorSeccion[filtroActivo] = {ms:0});
+    t.ms = (t.ms||0) + delta;
+  }
 }
 
 function iniciarTimerInactividad(){
