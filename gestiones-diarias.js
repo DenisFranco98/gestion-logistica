@@ -2307,6 +2307,25 @@ async function _antEliminar(tipo,id){
 // una escritura, que estas reglas no permiten.
 let _vbData={}, _vbFiltro={q:'',estado:'',dia:'',producto:''}, _vbSearchTimer=null, _vbUltima=0;
 
+// Paginación. El tamaño se recuerda entre sesiones porque es una preferencia de
+// cómo mirar, no algo que cambie con los datos; la página no, siempre se arranca
+// en la primera.
+const _VB_TAMS=[10,50,100,200];
+let _vbPag={ tam: 50, pagina: 1 };
+try{ const t=parseInt(localStorage.getItem('lgs_vb_tam'),10); if(_VB_TAMS.indexOf(t)>=0) _vbPag.tam=t; }catch(e){}
+
+// Cualquier cambio de filtro vuelve a la página 1: quedarse en la 4 después de
+// filtrar mostraría una tabla vacía aunque haya resultados.
+function _vbPagReset(){ _vbPag.pagina=1; }
+
+function _vbPagTam(v){
+  const t=parseInt(v,10)||50;
+  _vbPag.tam=t; _vbPag.pagina=1;
+  try{ localStorage.setItem('lgs_vb_tam', String(t)); }catch(e){}
+  _vbRender();
+}
+function _vbPagIr(p){ _vbPag.pagina=p; _vbRender(); const t=document.getElementById('gd-tab-ventasbot'); if(t) t.scrollTop=0; }
+
 // `conservarFiltros` distingue los dos motivos para leer:
 //  · abrir el tab o cambiar de mes → se limpian, porque un día o un producto del
 //    mes anterior puede no existir en este y la tabla quedaría vacía sin motivo
@@ -2345,11 +2364,11 @@ async function _vbRecargar(btn){
   toast(nuevas>0 ? '✓ '+nuevas+(nuevas===1?' venta nueva':' ventas nuevas') : 'Sin ventas nuevas');
 }
 
-function _vbFiltroSet(campo,valor){ _vbFiltro[campo]=valor; _vbRender(); }
+function _vbFiltroSet(campo,valor){ _vbFiltro[campo]=valor; _vbPagReset(); _vbRender(); }
 
-function _vbSearch(q){ _vbFiltro.q=q; if(_vbSearchTimer)clearTimeout(_vbSearchTimer); _vbSearchTimer=setTimeout(_vbRender,200); }
+function _vbSearch(q){ _vbFiltro.q=q; if(_vbSearchTimer)clearTimeout(_vbSearchTimer); _vbSearchTimer=setTimeout(()=>{_vbPagReset();_vbRender();},200); }
 function _vbEstChip(e,btn){
-  _vbFiltro.estado=e;
+  _vbFiltro.estado=e; _vbPagReset();
   const cont=document.getElementById('vb-chips');
   if(cont) cont.querySelectorAll('.tab-chip').forEach(b=>b.classList.toggle('on',b===btn));
   _vbRender();
@@ -2431,7 +2450,16 @@ function _vbRender(){
   // Firebase, que además solo permite eliminar, no crear ni modificar.
   const puedeBorrar = _gdEsDueno() && !(typeof _esAuditoria==='function' && _esAuditoria());
 
-  const rows=filas.map(([k,v])=>`<tr>
+  // Corte de página. `filas` ya viene filtrado y los totales se calcularon sobre
+  // TODO lo filtrado, no sobre la página: paginar es una forma de mirar, no un
+  // filtro más. Si el filtro dejó menos resultados que la página en la que se
+  // estaba, se cae a la última que exista en vez de mostrar una tabla vacía.
+  const paginas = Math.max(1, Math.ceil(filas.length / _vbPag.tam));
+  if(_vbPag.pagina > paginas) _vbPag.pagina = paginas;
+  const desde = (_vbPag.pagina - 1) * _vbPag.tam;
+  const enPagina = filas.slice(desde, desde + _vbPag.tam);
+
+  const rows=enPagina.map(([k,v])=>`<tr>
     <td>${_vbFecha(v.fecha_compra)}</td>
     <td>${esc(v.nombre||'—')}</td>
     <td>${esc(v.telefono||'—')}</td>
@@ -2457,6 +2485,8 @@ function _vbRender(){
       <td colspan="${cols-7}"></td>
     </tr></tfoot>
   </table>`;
+
+  _vbPagRender(filas.length, paginas, desde, enPagina.length);
 }
 
 // Borrar una venta del bot. Solo el DUEÑO de la tienda: la regla de Firebase es
@@ -2489,4 +2519,50 @@ async function _vbEliminar(clave){
         ? 'Firebase rechazó el borrado. Suele ser que la cuenta no figura como dueña de esta tienda, o que faltan las reglas nuevas de ventas_bot.'
         : e.message);
   }
+}
+
+// Controles de paginación, debajo de la tabla.
+//
+// Los números de página no se pintan todos: con 40 páginas la barra sería más
+// larga que la tabla. Se muestra una ventana alrededor de la actual, más la
+// primera y la última, que son las que uno busca de reojo.
+function _vbPagRender(totalFilas, paginas, desde, enPagina){
+  const cont=document.getElementById('vb-paginacion');
+  if(!cont) return;
+
+  // Con una sola página igual se deja elegir el tamaño: es lo que permite pasar
+  // de 10 a 200 cuando hay más datos. Lo que se oculta es el paso de páginas.
+  const selector=`<div class="vb-pag-tam">
+      <span>Mostrar</span>
+      <select onchange="_vbPagTam(this.value)">
+        ${_VB_TAMS.map(t=>`<option value="${t}"${t===_vbPag.tam?' selected':''}>${t}</option>`).join('')}
+      </select>
+      <span>por página</span>
+    </div>`;
+
+  if(!totalFilas){ cont.innerHTML=selector; return; }
+
+  const p=_vbPag.pagina;
+  const rango=`<div class="vb-pag-info">Mostrando <b>${desde+1}–${desde+enPagina}</b> de <b>${totalFilas}</b></div>`;
+
+  let botones='';
+  if(paginas>1){
+    const btn=(txt,pag,extra='')=>`<button class="vb-pag-btn ${extra}" ${pag?`onclick="_vbPagIr(${pag})"`:'disabled'}>${txt}</button>`;
+    botones+=btn('‹', p>1?p-1:0);
+    // Ventana de páginas: la actual, una a cada lado, y siempre la primera y la
+    // última. Los saltos se marcan con puntos suspensivos.
+    const set=new Set([1, paginas, p, p-1, p+1]);
+    const nums=[...set].filter(n=>n>=1&&n<=paginas).sort((a,b)=>a-b);
+    let ant=0;
+    nums.forEach(n=>{
+      if(ant && n-ant>1) botones+='<span class="vb-pag-gap">…</span>';
+      botones+=btn(n, n===p?0:n, n===p?'actual':'');
+      ant=n;
+    });
+    botones+=btn('›', p<paginas?p+1:0);
+  }
+
+  cont.innerHTML = rango +
+    (botones?`<div class="vb-pag-btns">${botones}</div>`:'') +
+    selector;
 }

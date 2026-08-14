@@ -1507,3 +1507,16 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
    vista qué columna es cuál. El fondo de .ant-tbl th ya es opaco, así que las
    filas pasan por debajo sin transparentarse. */
 .vb-tbl thead th{position:sticky;top:0;z-index:2;}
+
+/* Paginación de Ventas Bot */
+.vb-pag{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px;padding-bottom:8px;}
+.vb-pag-info{font-size:.7rem;color:var(--text-2);}
+.vb-pag-info b{color:var(--text-1);font-family:var(--f-mono);}
+.vb-pag-btns{display:flex;gap:4px;align-items:center;flex-wrap:wrap;}
+.vb-pag-btn{min-width:30px;height:30px;padding:0 8px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-2);font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;}
+.vb-pag-btn:hover:not(:disabled){color:var(--text-1);border-color:var(--border-strong);}
+.vb-pag-btn:disabled{opacity:.35;cursor:default;}
+.vb-pag-btn.actual{background:var(--accent);border-color:var(--accent);color:var(--accent-text);cursor:default;}
+.vb-pag-gap{color:var(--text-3);font-size:.72rem;padding:0 2px;}
+.vb-pag-tam{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--text-2);}
+.vb-pag-tam select{padding:5px 8px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.72rem;font-family:inherit;}
