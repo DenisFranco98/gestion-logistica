@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260813f">
+<link rel="stylesheet" href="shared/shared.css?v=20260813g">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1089,6 +1089,9 @@ window._sbEstadosToggle=function(){
            aparecer, y los productos los define el bot. -->
       <select id="vb-dia" onchange="_vbFiltroSet('dia',this.value)"><option value="">Todos los días</option></select>
       <select id="vb-producto" onchange="_vbFiltroSet('producto',this.value)"><option value="">Todos los productos</option></select>
+      <!-- La tabla se lee una vez al abrir el tab, no queda suscrita: una venta
+           que entra mientras está abierta no aparece sola. -->
+      <button id="vb-refrescar" class="vb-btn-ref" onclick="_vbRecargar(this)" title="Buscar ventas nuevas">↻</button>
       <div class="vb-chips" id="vb-chips"></div>
     </div>
     <div id="vb-resumen" class="vb-resumen"></div>
@@ -1457,8 +1460,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260813f"></script>
-<script src="gestiones-diarias.js?v=20260813f"></script>
+<script src="shared/app-shared.js?v=20260813g"></script>
+<script src="gestiones-diarias.js?v=20260813g"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

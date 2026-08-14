@@ -2305,26 +2305,44 @@ async function _antEliminar(tipo,id){
 // No usa _leerTienda: ese helper migra nodos de la clave vieja a la nueva, y acá
 // no hay nada que migrar (el nodo nace con empresaId). Además la migración es
 // una escritura, que estas reglas no permiten.
-let _vbData={}, _vbFiltro={q:'',estado:'',dia:'',producto:''}, _vbSearchTimer=null;
+let _vbData={}, _vbFiltro={q:'',estado:'',dia:'',producto:''}, _vbSearchTimer=null, _vbUltima=0;
 
-function _vbInit(){
+// `conservarFiltros` distingue los dos motivos para leer:
+//  · abrir el tab o cambiar de mes → se limpian, porque un día o un producto del
+//    mes anterior puede no existir en este y la tabla quedaría vacía sin motivo
+//    aparente;
+//  · el botón Actualizar → se conservan, porque quien está mirando algo filtrado
+//    quiere ver si entró algo nuevo ahí, no volver a empezar.
+function _vbInit(conservarFiltros){
   const wrap=document.getElementById('vb-table-wrap');
   if(!wrap) return;
-  wrap.innerHTML='<div style="padding:14px;color:var(--text-3);font-size:.72rem;text-align:center;">Cargando...</div>';
-  if(typeof _db==='undefined'){ _vbData={}; _vbRender(); return; }
-  _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes).once('value').then(snap=>{
+  if(!conservarFiltros) wrap.innerHTML='<div style="padding:14px;color:var(--text-3);font-size:.72rem;text-align:center;">Cargando...</div>';
+  if(typeof _db==='undefined'){ _vbData={}; _vbRender(); return Promise.resolve(); }
+  return _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes).once('value').then(snap=>{
     _vbData=snap.val()||{};
-    // Al cambiar de mes se limpian los filtros: un dia o un producto del mes
-    // anterior puede no existir en este, y la tabla quedaria vacia sin motivo
-    // aparente. El buscador tambien, por coherencia.
-    _vbFiltro={q:'',estado:'',dia:'',producto:''};
-    const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
+    if(!conservarFiltros){
+      _vbFiltro={q:'',estado:'',dia:'',producto:''};
+      const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
+    }
+    _vbUltima=Date.now();
     _vbRender();
   }).catch(e=>{
     // El caso más probable es que la tienda todavía no esté conectada al bot:
     // se explica en vez de mostrar un error crudo.
     wrap.innerHTML='<div class="adm-empty">No se pudieron leer las ventas del bot.<br><span style="font-size:.7rem;">'+esc(e.message)+'</span></div>';
   });
+}
+
+// La tabla se lee una vez al abrir el tab (con .once, no una suscripción viva),
+// así que una venta que entra mientras está abierta no aparece sola. Este botón
+// evita tener que recargar la página entera.
+async function _vbRecargar(btn){
+  if(btn){ btn.disabled=true; btn.classList.add('girando'); }
+  const antes=Object.keys(_vbData||{}).length;
+  await _vbInit(true);
+  if(btn){ btn.disabled=false; btn.classList.remove('girando'); }
+  const nuevas=Object.keys(_vbData||{}).length-antes;
+  toast(nuevas>0 ? '✓ '+nuevas+(nuevas===1?' venta nueva':' ventas nuevas') : 'Sin ventas nuevas');
 }
 
 function _vbFiltroSet(campo,valor){ _vbFiltro[campo]=valor; _vbRender(); }
@@ -2397,7 +2415,8 @@ function _vbRender(){
     res.innerHTML = todas.length
       ? `<div class="vb-kpi"><b>${filas.length}</b><span>ventas${filas.length<todas.length?' (de '+todas.length+')':''}</span></div>
          <div class="vb-kpi"><b>${unidades}</b><span>unidades</span></div>
-         <div class="vb-kpi"><b>${_vbMonto(total)}</b><span>total${filas.length<todas.length?' filtrado':''}</span></div>`
+         <div class="vb-kpi"><b>${_vbMonto(total)}</b><span>total${filas.length<todas.length?' filtrado':''}</span></div>
+         ${_vbUltima?'<div class="vb-actualizado">Datos al '+new Date(_vbUltima).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+'</div>':''}`
       : '';
   }
 

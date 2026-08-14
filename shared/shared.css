@@ -1492,3 +1492,9 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-bar select{padding:8px 10px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.74rem;font-family:inherit;max-width:190px;}
 .botw-acciones .botw-del{border-color:var(--danger-soft);color:var(--danger-strong);}
 .botw-acciones .botw-del:hover{border-color:var(--danger-strong);color:var(--danger-strong);background:var(--danger-soft);}
+.vb-btn-ref{width:34px;height:34px;flex-shrink:0;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-2);font-size:1rem;cursor:pointer;font-family:inherit;line-height:1;}
+.vb-btn-ref:hover{color:var(--text-1);border-color:var(--border-strong);}
+.vb-btn-ref:disabled{opacity:.5;cursor:default;}
+.vb-btn-ref.girando{animation:vb-giro .7s linear infinite;}
+@keyframes vb-giro{to{transform:rotate(360deg);}}
+.vb-actualizado{align-self:center;font-size:.62rem;color:var(--text-3);font-weight:600;}
