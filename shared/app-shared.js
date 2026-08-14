@@ -8342,24 +8342,48 @@ function _gdadmDayTotals(dias){
 function _pct(n,d){ return d?Math.round(n/d*100)+'%':'—'; }
 function _avg(n,d){ return d?(n/d).toFixed(1):'—'; }
 
+// Quién trabajó en el período que se está mirando, sea el mes entero o el día
+// elegido. Las tiendas arrastran cuentas viejas y gente que nunca llegó a
+// cargar nada: aparecían igual, en cero, y en la tabla por colaborador cada una
+// se llevaba una columna vacía a lo ancho de los 31 días.
+//
+// Ocultarlas NO cambia ninguna cifra —quien está en cero suma cero a todos los
+// totales—, salvo los promedios POR PERSONA, que ahora se dividen entre los que
+// de verdad trabajaron en vez de diluirse entre los que no.
+//
+// El criterio es tener gestiones (`gral>0`), no tener carpeta: una carpeta
+// creada por una observación suelta, sin una sola gestión, es exactamente el
+// caso que se quiere sacar.
+function _gdadmConTrabajo(){
+  const con=[], sin=[];
+  _gdadmAsesores.forEach(a=>{ (_gdadmDayTotals(a.dias).gral>0 ? con : sin).push(a); });
+  return {con,sin};
+}
+// Los ocultos se nombran abajo en vez de desaparecer sin más: "no cargó nada"
+// es justamente el dato que un admin necesita ver. Una persona puede tener
+// cuenta en varias tiendas y ahí no hay nada que fusionar —son equipos
+// distintos—, pero el nombre repetido a secas se lee como un error
+// ("YISETH · YISETH"): se aclara la tienda solo a los repetidos.
+function _gdadmSinTrabajoLbl(sin){
+  const veces={};
+  sin.forEach(a=>{ veces[a.nombre]=(veces[a.nombre]||0)+1; });
+  return sin.map(a=>veces[a.nombre]>1?a.nombre+' ('+a.tienda+')':a.nombre);
+}
+function _gdadmAvisoSin(sin){
+  if(!sin.length) return '';
+  return '<div style="font-size:.68rem;color:var(--text-3);margin-bottom:8px;">'+
+    'Sin gestiones '+(_gdadmDiaSel?'ese día':'en el mes')+' ('+sin.length+'): '+
+    esc(_gdadmSinTrabajoLbl(sin).join(' · '))+'</div>';
+}
+
 // ── Tabla 1: RANKING ─────────────────────────────────────
 function _gdadmRenderRanking(){
   const el=document.getElementById('gdadm-content');
   let rows='', totals={conf:0,cancel:0,soluc:0,recupNov:0,recupCarri:0,ventasWpp:0,gral:0};
-  // Con un día elegido, quien no tiene registro ese día llenaría la tabla de
-  // ceros: se saca de la lista y se nombra abajo, que es el dato que importa
-  // ahí ("no cargó"), sin ensuciar la comparación entre los que sí trabajaron.
-  const sinRegistro=[];
-  const visibles=!_gdadmDiaSel ? _gdadmAsesores : _gdadmAsesores.filter(a=>{
-    if((a.dias||{})[_gdadmDiaSel]) return true;
-    sinRegistro.push(a); return false;
-  });
-  // Una persona puede tener cuenta en varias tiendas y ahí no hay nada que
-  // fusionar —son equipos distintos—, pero el nombre repetido a secas se lee
-  // como un error ("YISETH · YISETH"). Se aclara la tienda solo a los repetidos.
-  const vecesSinReg={};
-  sinRegistro.forEach(a=>{ vecesSinReg[a.nombre]=(vecesSinReg[a.nombre]||0)+1; });
-  const sinRegistroLbl=sinRegistro.map(a=>vecesSinReg[a.nombre]>1?a.nombre+' ('+a.tienda+')':a.nombre);
+  // Quien está en cero llenaría la tabla de ceros y ensuciaría la comparación
+  // entre los que sí trabajaron. Antes esto valía solo con un día elegido; en
+  // el mes entero seguían apareciendo las cuentas que nunca cargaron nada.
+  const {con:visibles, sin:sinRegistro}=_gdadmConTrabajo();
   visibles.forEach((a,i)=>{
     const t=_gdadmDayTotals(a.dias);
     // La columna NOVEDADES muestra solucionadas + devueltas, y CARRITOS
@@ -8385,7 +8409,7 @@ function _gdadmRenderRanking(){
     </tr>`;
   });
   el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">EQUIPO · RANKING · BONIFICACIONES · ${_gdadmPeriodoLbl()}</div>
-  ${sinRegistro.length?`<div style="font-size:.68rem;color:var(--text-3);margin-bottom:8px;">Sin registro ese día (${sinRegistro.length}): ${esc(sinRegistroLbl.join(' · '))}</div>`:''}
+  ${_gdadmAvisoSin(sinRegistro)}
   <div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr>
       <th>#</th><th>NOMBRE</th><th>TIENDA</th><th>TOTAL GEST.</th>
@@ -8407,29 +8431,39 @@ function _gdadmRenderRanking(){
 // ── Tabla 2: POR COLABORADOR ──────────────────────────────
 function _gdadmRenderCollab(){
   const el=document.getElementById('gdadm-content');
-  let rows='', mesTotals=_gdadmAsesores.map(()=>0), diasTotalArr=[];
+  const titulo=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO DIARIO — TOTAL GESTIONES POR COLABORADOR · ${_gdadmPeriodoLbl()}</div>`;
+  // Solo los que trabajaron en el período. Cada columna vacía se llevaba un
+  // ancho completo a lo largo de todos los días del mes, y con varias tiendas
+  // seleccionadas la tabla se iba de pantalla antes de mostrar a los que sí.
+  const {con:asesores, sin}=_gdadmConTrabajo();
+  if(!asesores.length){
+    el.innerHTML=titulo+_gdadmAvisoSin(sin)+
+      '<div style="padding:20px;color:var(--text-3);font-size:.78rem;">Nadie registró gestiones '+
+      (_gdadmDiaSel?'ese día':'en este mes')+'.</div>';
+    return;
+  }
+  let rows='', mesTotals=asesores.map(()=>0);
   _gdadmDiasLista().forEach(d=>{
     let rowTotal=0;
-    let cells=_gdadmAsesores.map((a,i)=>{
+    let cells=asesores.map((a,i)=>{
       const g=_gdadmGralDia(a.dias[d]);
       mesTotals[i]+=g; rowTotal+=g; return `<td>${g||''}</td>`;
     }).join('');
-    diasTotalArr.push(rowTotal);
-    rows+=`<tr><td style="font-weight:700;">${d}</td>${cells}<td class="hi" style="font-weight:700;">${rowTotal||''}</td><td>${rowTotal?_avg(rowTotal,_gdadmAsesores.length||1):''}  </td></tr>`;
+    rows+=`<tr><td style="font-weight:700;">${d}</td>${cells}<td class="hi" style="font-weight:700;">${rowTotal||''}</td><td>${rowTotal?_avg(rowTotal,asesores.length):''}  </td></tr>`;
   });
   const grandTotal=mesTotals.reduce((a,b)=>a+b,0);
-  const multiTienda=new Set(_gdadmAsesores.map(a=>a.tienda)).size>1;
-  const aHeaders=_gdadmAsesores.map(a=>`<th>${a.nombre.split(' ')[0]}${multiTienda?'<br><span style="font-weight:400;opacity:.6;font-size:.55rem;">🏪 '+a.tienda+'</span>':''}</th>`).join('');
-  const aTotals=mesTotals.map((t,i)=>`<td class="hi">${t}</td>`).join('');
+  const multiTienda=new Set(asesores.map(a=>a.tienda)).size>1;
+  const aHeaders=asesores.map(a=>`<th>${a.nombre.split(' ')[0]}${multiTienda?'<br><span style="font-weight:400;opacity:.6;font-size:.55rem;">🏪 '+a.tienda+'</span>':''}</th>`).join('');
+  const aTotals=mesTotals.map(t=>`<td class="hi">${t}</td>`).join('');
   const aProms=mesTotals.map(t=>`<td>${_avg(t,_gdadmDivisor())}</td>`).join('');
   const totLbl=_gdadmDiaSel?'TOTAL DÍA':'TOTAL MES';
-  el.innerHTML=`<div style="font-size:.7rem;font-weight:800;color:var(--text-1);margin-bottom:8px;letter-spacing:.3px;">CONSOLIDADO DIARIO — TOTAL GESTIONES POR COLABORADOR · ${_gdadmPeriodoLbl()}</div>
-  <div style="overflow:auto;"><table class="gdadm-table">
+  el.innerHTML=titulo+_gdadmAvisoSin(sin)+
+  `<div style="overflow:auto;"><table class="gdadm-table">
     <thead><tr><th>DÍA</th>${aHeaders}<th>TOTAL DÍA</th><th>PROM.</th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot>
       <tr class="total-row"><td>${totLbl}</td>${aTotals}<td>${grandTotal}</td><td>${_avg(grandTotal,_gdadmDivisor())}</td></tr>
-      <tr class="prom-row"><td>PROMEDIO</td>${aProms}<td>${_avg(grandTotal,_gdadmDivisor())}</td><td>${_avg(grandTotal/_gdadmAsesores.length||0,_gdadmDivisor())}</td></tr>
+      <tr class="prom-row"><td>PROMEDIO</td>${aProms}<td>${_avg(grandTotal,_gdadmDivisor())}</td><td>${_avg(grandTotal/asesores.length,_gdadmDivisor())}</td></tr>
     </tfoot>
   </table></div>`;
 }
