@@ -8190,13 +8190,20 @@ function _gdadmCargar(){
   if(!tiendas.length||!mes){_mAlert('Faltan filtros','Seleccioná al menos una tienda y un mes.');return;}
   const el=document.getElementById('gdadm-content');
   el.innerHTML='<div style="padding:20px;color:var(--text-3);font-size:.78rem;">Cargando...</div>';
-  Promise.all(tiendas.map(t=>
-    _db.ref('gestiones_diarias/'+t.key+'/'+mes).once('value').then(snap=>{
-      // Si la tienda todavía no migró a la clave por id, leer la ruta vieja.
-      if(snap.exists()||!t.keyLegacy||t.keyLegacy===t.key) return {tienda:t,snap};
-      return _db.ref('gestiones_diarias/'+t.keyLegacy+'/'+mes).once('value').then(sv=>({tienda:t,snap:sv}));
-    })
-  )).then(results=>{
+  // Se lee /users junto con las gestiones para poder resolver el nombre cuando
+  // la carpeta no trae `_nombre`. Sin esto la columna mostraba el uid crudo:
+  // KAREN GOMEZ salía como "KAREN · Paquetin" (donde sí estaba el rótulo) y
+  // como "ISDV7MAJ..." en Calzalandia y Medsock, leyéndose como tres personas.
+  Promise.all([
+    _db.ref('users').once('value').then(s=>s.val()||{}),
+    Promise.all(tiendas.map(t=>
+      _db.ref('gestiones_diarias/'+t.key+'/'+mes).once('value').then(snap=>{
+        // Si la tienda todavía no migró a la clave por id, leer la ruta vieja.
+        if(snap.exists()||!t.keyLegacy||t.keyLegacy===t.key) return {tienda:t,snap};
+        return _db.ref('gestiones_diarias/'+t.keyLegacy+'/'+mes).once('value').then(sv=>({tienda:t,snap:sv}));
+      })
+    ))
+  ]).then(([users,results])=>{
     // raw = { asesorKey: { _nombre, dias:{1:{...},2:{...},...}, notas }, ... }
     _gdadmAsesores=[];
     const [y,m]=mes.split('-').map(Number);
@@ -8215,7 +8222,12 @@ function _gdadmCargar(){
       // del uid y las que solo traían el nombre (extensión y Gestor Logístico,
       // hasta que se les agregó el uid) caían a la del slug. Acá se suman en la
       // del uid. Sin esto, arreglar el origen no repara lo ya guardado.
-      const nombreDe=e=>String(e[1]._nombre||e[0]).trim();
+      // El `_nombre` es el rótulo que deja el propio módulo, pero no siempre
+      // está: una carpeta creada por un recuento (_novSyncGD, la extensión) nace
+      // sin él. Por eso se cae a /users antes que a la clave cruda — mismo
+      // criterio que _auditListaAsesores. Mostrar el uid no es solo feo:
+      // rompe el `esSlug` de abajo y parte a la persona en varias columnas.
+      const nombreDe=e=>String(e[1]._nombre||(users[e[0]]||{}).asesor||e[0]).trim();
       // Es carpeta vieja si su clave ES el slug de su propio nombre; la del uid
       // nunca coincide consigo misma porque el uid no se deriva del nombre.
       const esSlug=e=>_gdKey(nombreDe(e))===e[0];

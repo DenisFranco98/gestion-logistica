@@ -1169,7 +1169,7 @@ function guardar(){
   if(_guardarTimer) clearTimeout(_guardarTimer);
   _guardarTimer = setTimeout(()=>{
     try{
-      localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiemposPorSeccion,totalPausadoMs,contadorPausas,contadorAlertasInactividad,estadosDesactivados:[...estadosDesactivados],ordenSecciones:ordenSecciones||[],mesCargado:window._mesCargado||null,ts:Date.now()}));
+      localStorage.setItem(LS_KEY,JSON.stringify({pedidos,gestiones,waCounters,sesionInicio,tiempoActivoMs,tiemposPorSeccion,totalPausadoMs,contadorPausas,contadorAlertasInactividad,estadosDesactivados:[...estadosDesactivados],ordenSecciones:ordenSecciones||[],mesCargado:window._mesCargado||null,ts:Date.now()}));
       const now=new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
       const el=document.getElementById('save-st');if(el)el.textContent='💾 '+now;
     }catch(e){}
@@ -1203,6 +1203,13 @@ function restaurar(){
     sesionInicio=d.sesionInicio||Date.now();
     tiemposPorSeccion=d.tiemposPorSeccion||{};
     totalPausadoMs=d.totalPausadoMs||0;
+    // Tiempo activo acumulado. Las sesiones guardadas antes de este cambio no lo
+    // traen: se estima con lo que va de la carga al último guardado —acotado a
+    // 12 h— en vez de dejarlo en cero, que borraría el trabajo de la jornada.
+    tiempoActivoMs = (d.tiempoActivoMs!=null)
+      ? d.tiempoActivoMs
+      : Math.max(0, Math.min((d.ts||0)-(d.sesionInicio||0), 12*3600000) - (d.totalPausadoMs||0));
+    _ultimaInteraccion=Date.now(); _ultimoTickActivo=Date.now();
     contadorPausas=d.contadorPausas||0;
     contadorAlertasInactividad=d.contadorAlertasInactividad||0;
     estadosDesactivados=d.estadosDesactivados&&d.estadosDesactivados.length?new Set(d.estadosDesactivados):new Set();
@@ -1343,6 +1350,7 @@ function _cargarArchivo(file){
     ultimaGestion=Date.now();
     contadorAlertasInactividad=0;
     pausaActiva=false;pausaInicio=null;totalPausadoMs=0;contadorPausas=0;
+    tiempoActivoMs=0;_ultimaInteraccion=Date.now();_ultimoTickActivo=Date.now();
     const _btnP=document.getElementById('btn-pausa');
     if(_btnP){_btnP.style.background='rgba(245,158,11,.25)';_btnP.style.borderColor='rgba(245,158,11,.4)';_btnP.style.color='#fcd34d';_btnP.textContent='⏸ Pausa';}
     document.getElementById('alerta-inac').classList.remove('show');
@@ -4503,73 +4511,64 @@ function volverACargar(){
 
 
 
-async function copiarInformeFinalImagen(){
-  const btn=document.getElementById('btn-copiar-pdf');
-  btn.disabled=true;btn.textContent='Generando...';
+// Captura un bloque del informe y lo deja en el portapapeles, o lo descarga si
+// el navegador no permite escribir imágenes.
+//
+// Antes el fallback era window.open(blobURL): eso lo bloquea el bloqueador de
+// popups —no hay gesto del usuario cuando corre, porque llega después de
+// html2canvas y de toBlob—, así que al fallar el portapapeles el botón no hacía
+// NADA visible. Se descarga, que es lo que ya hacía el "Capturar registro" del
+// Consolidado y funciona en todos los navegadores.
+//
+// Y el toBlob se promisifica: con callback, los errores de adentro no llegaban
+// al catch de afuera y quedaban invisibles.
+async function _infCapturar(selBox, selBtns, idBtn, nombreArch){
+  const btn=document.getElementById(idBtn);
+  const box=document.querySelector(selBox);
+  const btns=box?box.querySelector(selBtns):null;
+  if(!box){ toast('⚠️ No se encontró el informe en pantalla'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Generando...'; }
   try{
-    const box=document.querySelector('.pdf-box');
-    const btns=box.querySelector('.pdf-btns');
-    btns.style.display='none';
-    const canvas=await html2canvas(box,{
-      scale:2,
-      backgroundColor:'#ffffff',
-      useCORS:true,
-      logging:false
-    });
-    btns.style.display='';
-    canvas.toBlob(async blob=>{
-      try{
-        await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
-        btn.textContent='Copiado!';
-        btn.style.background='#15803d';
-        setTimeout(()=>{btn.disabled=false;btn.textContent='Copiar imagen';btn.style.background='';},2200);
-      }catch(e){
-        const url=URL.createObjectURL(blob);
-        window.open(url,'_blank');
-        btn.disabled=false;btn.textContent='Copiar imagen';
-        toast('Imagen abierta en nueva pestaña — guarda y comparte');
-      }
-    },'image/png');
+    if(typeof html2canvas!=='function') throw new Error('no se pudo cargar la librería de captura');
+    if(btns) btns.style.display='none';
+    const canvas=await html2canvas(box,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    if(btns) btns.style.display='';
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+    if(!blob) throw new Error('no se pudo generar la imagen');
+    try{
+      if(!navigator.clipboard||!window.ClipboardItem) throw new Error('sin portapapeles');
+      await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+      if(btn){ btn.textContent='¡Copiado!'; btn.style.background='#15803d'; }
+      toast('📋 Informe copiado — pégalo en WhatsApp');
+    }catch(errClip){
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download=nombreArch; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),4000);
+      toast('📥 Tu navegador no deja copiar imágenes: se descargó '+nombreArch,4500);
+    }
   }catch(e){
-    btn.disabled=false;btn.textContent='Copiar imagen';
-    toast('Error al generar imagen');
+    if(btns) btns.style.display='';
+    // El mensaje real, no un "Error al generar imagen" que no dice nada.
+    console.error('[INFORME] captura falló',e);
+    toast('⚠️ No se pudo capturar: '+(e&&e.message||e),4000);
+  }finally{
+    if(btn) setTimeout(()=>{ btn.disabled=false; btn.textContent='📸 Copiar imagen'; btn.style.background=''; },2200);
   }
 }
 
+function _infNombreArch(pref){
+  const d=new Date();
+  const f=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return pref+'_'+f+'.png';
+}
+
+async function copiarInformeFinalImagen(){
+  return _infCapturar('.pdf-box','.pdf-btns','btn-copiar-pdf',_infNombreArch('Informe_final'));
+}
+
 async function copiarInformeImagen(){
-  const btn=document.getElementById('btn-copiar-inf');
-  btn.disabled=true;btn.textContent='Generando...';
-  try{
-    const box=document.querySelector('.inf-box');
-    // Temporarily hide the buttons row
-    const btns=box.querySelector('.inf-btns');
-    btns.style.display='none';
-    const canvas=await html2canvas(box,{
-      scale:2,
-      backgroundColor:'#ffffff',
-      useCORS:true,
-      logging:false
-    });
-    btns.style.display='';
-    canvas.toBlob(async blob=>{
-      try{
-        await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
-        btn.textContent='Copiado!';
-        btn.style.background='#15803d';
-        setTimeout(()=>{btn.disabled=false;btn.textContent='Copiar imagen';btn.style.background='';},2200);
-      }catch(e){
-        // Fallback: open in new tab so user can save manually
-        const url=URL.createObjectURL(blob);
-        window.open(url,'_blank');
-        btn.disabled=false;btn.textContent='Copiar imagen';
-        toast('Imagen abierta en nueva pestaña — guarda y comparte');
-      }
-    },'image/png');
-  }catch(e){
-    btn.disabled=false;btn.textContent='Copiar imagen';
-    toast('Error al generar imagen');
-    console.error(e);
-  }
+  return _infCapturar('.inf-box','.inf-btns','btn-copiar-inf',_infNombreArch('Informe_inicial'));
 }
 
 function generarInformeInicial(){
@@ -4637,7 +4636,13 @@ function generarPDF(){
   const ahora=Date.now();
   // Tiempo real trabajado = total transcurrido − tiempo pausado acumulado
   const pausadoAcumulado=totalPausadoMs+(pausaActiva&&pausaInicio?ahora-pausaInicio:0);
-  const durTotal=sesionInicio?Math.max(0,(ahora-sesionInicio)-pausadoAcumulado):0;
+  // Tiempo REALMENTE trabajado, acumulado minuto a minuto (ver _tickTiempoActivo),
+  // no (ahora - sesionInicio): eso contaba como trabajo cada hora con la pestaña
+  // abierta sin usar, y llegó a mostrar 215 h.
+  // Se le suma el tramo desde el último tick para que no se vea "atrasado" hasta
+  // un minuto cuando el informe se abre justo después de gestionar.
+  _tickTiempoActivo();
+  const durTotal=tiempoActivoMs;
   const hoy=new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const horaInicio=sesionInicio?new Date(sesionInicio).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'—';
   const horaFin=new Date(ahora).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
@@ -4755,6 +4760,7 @@ function limpiarApp(){
   _cardFocus=null;document.getElementById('kb-hint')?.classList.remove('show');
   if(_inactTimer){clearInterval(_inactTimer);_inactTimer=null;}
   pausaActiva=false;pausaInicio=null;totalPausadoMs=0;contadorPausas=0;
+  tiempoActivoMs=0;_ultimoTickActivo=Date.now();
   const btnP=document.getElementById('btn-pausa');
   if(btnP){btnP.style.background='rgba(245,158,11,.25)';btnP.style.borderColor='rgba(245,158,11,.4)';btnP.style.color='#fcd34d';btnP.textContent='⏸ Pausa';}
   document.getElementById('upload-zone').style.display='none';
@@ -4856,9 +4862,36 @@ function resetInactividad(){
   ultimaGestion=Date.now();
   document.getElementById('alerta-inac').classList.remove('show');
 }
+// ── TIEMPO ACTIVO ─────────────────────────────────────────────────────
+// Se ACUMULA tick a tick en vez de calcularse como (ahora - sesionInicio).
+// Con la resta, todo lo que pasaba con la pestaña abierta contaba como trabajo:
+// un asesor con el tablero abierto una semana veía 215 h de "Tiempo activo".
+// Tampoco alcanzaba con descontar las pausas, porque nadie pausa antes de irse.
+//
+// Cada minuto se suma ese minuto solo si hay un archivo cargado, no está en
+// pausa, y hubo interacción real hace menos de ACTIVO_MAX. Es el mismo pulso que
+// ya alimentaba las alertas de inactividad, pero con su propia marca: la alerta
+// pisa `ultimaGestion` al dispararse y eso haría parecer activa una pestaña
+// olvidada.
+const ACTIVO_MAX = 5*60*1000;   // sin tocar nada por más de esto, no se cuenta
+let tiempoActivoMs = 0, _ultimaInteraccion = Date.now(), _ultimoTickActivo = Date.now();
+
+function _tickTiempoActivo(){
+  const ahora = Date.now();
+  const delta = ahora - _ultimoTickActivo;
+  _ultimoTickActivo = ahora;
+  // Un delta enorme es la pestaña que estuvo suspendida (portátil cerrado, u
+  // otra pestaña): no es trabajo, y sumarlo traería de vuelta el problema.
+  if(delta > 2*60*1000) return;
+  if(!pedidos.length || pausaActiva) return;
+  if(ahora - _ultimaInteraccion > ACTIVO_MAX) return;
+  tiempoActivoMs += delta;
+}
+
 function iniciarTimerInactividad(){
   if(_inactTimer)clearInterval(_inactTimer);
   _inactTimer=setInterval(()=>{
+    _tickTiempoActivo();
     if(!pedidos.length)return;
     if(pausaActiva)return; // ← no alertar si está en pausa
     const mins=Math.round((Date.now()-ultimaGestion)/60000);
@@ -4878,6 +4911,7 @@ function iniciarTimerInactividad(){
   let _lastInteract=0;
   function _onInteract(){
     const now=Date.now();
+    _ultimaInteraccion=now;   // sin throttle: es el pulso del tiempo activo
     if(now-_lastInteract<30000)return; // throttle: máximo una actualización cada 30s
     _lastInteract=now;
     if(pedidos.length&&!pausaActiva)ultimaGestion=now;
@@ -4885,6 +4919,7 @@ function iniciarTimerInactividad(){
   document.addEventListener('click',_onInteract,true);
   document.addEventListener('keydown',_onInteract,true);
   document.addEventListener('scroll',_onInteract,true);
+  document.addEventListener('mousemove',_onInteract,{capture:true,passive:true});
 })();
 
 // ── PAUSA DE ACTIVIDAD ─────────────────────────────────────────────────
