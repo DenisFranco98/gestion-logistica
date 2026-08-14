@@ -1,79 +1,109 @@
+// ARCHIVO COMPLETO DE REGLAS. Se pega tal cual, reemplazando todo lo que haya
+// hoy en: Consola de Firebase -> Realtime Database -> Reglas -> Publicar.
+//
+// QUÉ CAMBIA respecto de las reglas actuales
+// ------------------------------------------
+// Hoy la raíz dice .read/.write "auth != null": cualquier cuenta logueada puede
+// leer y escribir TODA la base. En Firebase, una regla de arriba que concede NO
+// se puede restringir más abajo —las reglas hijas solo suman permisos, nunca los
+// quitan—, así que para proteger un solo nodo hay que bajar ese permiso a cada
+// nodo por separado.
+//
+// Eso es todo lo que hace este archivo: los 28 nodos que ya existían quedan
+// EXACTAMENTE igual que hoy ("auth != null"), y solo cambian los tres del bot de
+// ventas.
+//
+// OJO: al sacar el permiso de la raíz, un nodo NUEVO que no esté listado acá
+// queda bloqueado. Si más adelante se agrega algo que escriba en un nodo nuevo,
+// hay que sumarlo a esta lista o va a fallar con permission_denied.
+//
+// ESTO NO ES UN BLINDAJE DE LA BASE. Los 28 nodos siguen abiertos a cualquier
+// cuenta logueada: un asesor puede leer y escribir los datos de otras tiendas, y
+// /users y /admins siguen accesibles. Es solo el primer paso, el que cierra lo
+// del bot. Cerrar el resto es un trabajo aparte, nodo por nodo, verificando que
+// cada módulo siga funcionando.
 {
-  "_comentario": [
-    "Reglas para los nodos nuevos. NO es el archivo completo de reglas: hay que",
-    "PEGAR estos tres bloques dentro de las reglas que ya existen, al mismo nivel",
-    "que 'users', 'user_tiendas', 'gestiones_diarias', etc. Si se publica este",
-    "archivo tal cual, se borra todo lo demás.",
-    "",
-    "Consola de Firebase -> Realtime Database -> Reglas."
-  ],
+  "rules": {
 
-  "ventas_bot": {
-    "_comentario": [
-      "Las ventas que manda el bot. Las CREA solo el endpoint, que usa el Admin",
-      "SDK y no pasa por estas reglas: por eso .write es false a nivel de tienda",
-      "y no hay forma de inyectar ventas falsas desde el navegador.",
-      "",
-      "Lee cualquiera que tenga acceso a esa tienda, con el mismo criterio que",
-      "usa el resto de la app: estar en user_tiendas o ser admin de la empresa.",
-      "",
-      "BORRAR es la única escritura permitida desde la app, y solo al DUEÑO de",
-      "esa tienda. La condición '!newData.exists()' es lo que lo hace seguro:",
-      "autoriza a eliminar, pero no a crear ni a modificar. Sin eso, dar permiso",
-      "de escritura para poder borrar habilitaría también inventar ventas o",
-      "cambiarles el importe desde la consola del navegador.",
-      "",
-      "Un asesor no puede borrar aunque la venta sea de su tienda, y un admin",
-      "auditando tampoco: la auditoría es de solo lectura."
-    ],
-    "$empresaId": {
-      ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
-      ".write": false,
-      "$mes": {
+    // ── BOT DE VENTAS ────────────────────────────────────────────────────
+    // Acá vive la API key de cada tienda: quien la lea puede registrar ventas
+    // falsas en esa tienda. Es el único nodo secreto de la app, por eso lo ven
+    // solo los admins — un asesor no debe verlo ni el de su propia tienda.
+    // Las Cloud Functions lo leen con el Admin SDK, que se saltea estas reglas.
+    "bot_workspaces": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+
+    // Las ventas del bot. Las CREA solo la Cloud Function, que usa el Admin SDK
+    // y no pasa por estas reglas: por eso .write es false a nivel de tienda y no
+    // hay forma de inyectar ventas falsas desde el navegador.
+    //
+    // Lee cualquiera con acceso a esa tienda, con el mismo criterio que usa el
+    // resto de la app: estar en user_tiendas o ser admin de la empresa.
+    //
+    // BORRAR es la única escritura permitida desde la app, y solo al DUEÑO de
+    // esa tienda. El "!newData.exists()" es lo que lo hace seguro: autoriza a
+    // eliminar, pero no a crear ni a modificar. Sin eso, abrir la escritura para
+    // poder borrar habilitaría también inventar ventas o cambiarles el importe
+    // desde la consola del navegador.
+    "ventas_bot": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": false,
+        "$mes": {
+          "$ventaId": {
+            ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+          }
+        }
+      }
+    },
+
+    // Índice para responder "¿ya existe este pedido?" sin leer el mes entero.
+    // Mismo criterio. Al borrar una venta hay que borrar TAMBIÉN su entrada acá,
+    // o la consulta seguiría diciendo que el pedido existe y el bot no volvería
+    // a mandarlo nunca.
+    "ventas_bot_idx": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": false,
         "$ventaId": {
           ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
         }
       }
-    }
-  },
+    },
 
-  "ventas_bot_idx": {
-    "_comentario": [
-      "Índice para responder '¿ya existe este pedido?' sin leer el mes entero.",
-      "Mismo criterio: lo crea solo el endpoint y solo el dueño puede borrar.",
-      "",
-      "Al borrar una venta hay que borrar TAMBIÉN su entrada acá, o la consulta",
-      "seguiría respondiendo que el pedido existe y el bot no volvería a",
-      "mandarlo nunca."
-    ],
-    "$empresaId": {
-      ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
-      ".write": false,
-      "$ventaId": {
-        ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
-      }
-    }
-  },
-
-  "bot_workspaces": {
-    "_comentario": [
-      "Acá vive la API key de cada tienda, así que es el nodo más sensible de",
-      "todo esto: quien la lea puede registrar ventas falsas.",
-      "",
-      "Solo los admins pueden leerlo y escribirlo. Un asesor NO debe poder verlo",
-      "aunque sea de su propia tienda. El endpoint lo lee con el Admin SDK, que",
-      "se saltea estas reglas, así que no hace falta darle acceso a nadie más.",
-      "",
-      "Estructura de cada entrada:",
-      "  bot_workspaces/{workspace}: {",
-      "    apiKey:    '...',        <- secreto que manda el bot",
-      "    empresaId: '-Oz9bT...',  <- tienda a la que van las ventas",
-      "    nombre:    '3D Company',",
-      "    activo:    true,         <- false revoca sin borrar el historial",
-      "    creado:    1765...",
-      "  }"
-    ],
-    ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
-    ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    // ── EL RESTO ─────────────────────────────────────────────────────────
+    // Los 28 nodos que ya existían, con el mismo permiso que tienen hoy. No se
+    // cambia nada de cómo venían funcionando; están listados uno por uno solo
+    // porque al sacar el permiso de la raíz hay que dárselo a cada uno.
+    "historial_diario":   { ".read": "auth != null", ".write": "auth != null" },
+    "evt_hist":           { ".read": "auth != null", ".write": "auth != null" },
+    "session_hist":       { ".read": "auth != null", ".write": "auth != null" },
+    "session_reports":    { ".read": "auth != null", ".write": "auth != null" },
+    "user_fotos":         { ".read": "auth != null", ".write": "auth != null" },
+    "empresa_asesores":   { ".read": "auth != null", ".write": "auth != null" },
+    "gestiones_sync":     { ".read": "auth != null", ".write": "auth != null" },
+    "users":              { ".read": "auth != null", ".write": "auth != null" },
+    "gestiones_diarias":  { ".read": "auth != null", ".write": "auth != null" },
+    "user_tiendas":       { ".read": "auth != null", ".write": "auth != null" },
+    "logistica_guias":    { ".read": "auth != null", ".write": "auth != null" },
+    "logistica_live":     { ".read": "auth != null", ".write": "auth != null" },
+    "config":             { ".read": "auth != null", ".write": "auth != null" },
+    "anticipos":          { ".read": "auth != null", ".write": "auth != null" },
+    "empresas":           { ".read": "auth != null", ".write": "auth != null" },
+    "admins":             { ".read": "auth != null", ".write": "auth != null" },
+    "admin_empresas":     { ".read": "auth != null", ".write": "auth != null" },
+    "reportes":           { ".read": "auth != null", ".write": "auth != null" },
+    "reportes_img":       { ".read": "auth != null", ".write": "auth != null" },
+    "login_audit":        { ".read": "auth != null", ".write": "auth != null" },
+    "novedades":          { ".read": "auth != null", ".write": "auth != null" },
+    "nov_img":            { ".read": "auth != null", ".write": "auth != null" },
+    "presence":           { ".read": "auth != null", ".write": "auth != null" },
+    "control_financiero": { ".read": "auth != null", ".write": "auth != null" },
+    "catalogo_productos": { ".read": "auth != null", ".write": "auth != null" },
+    "notes":              { ".read": "auth != null", ".write": "auth != null" },
+    "ro":                 { ".read": "auth != null", ".write": "auth != null" },
+    "rechazados_hist":    { ".read": "auth != null", ".write": "auth != null" }
   }
 }
