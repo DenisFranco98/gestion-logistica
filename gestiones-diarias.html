@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="shared/shared.css?v=20260813i">
+<link rel="stylesheet" href="shared/shared.css?v=20260813j">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1083,7 +1083,7 @@ window._sbEstadosToggle=function(){
        de que se guarda, y el bot lo volvería a pisar en el próximo envío. -->
   <div id="gd-tab-ventasbot" style="display:none;">
     <div class="vb-bar">
-      <input type="text" id="vb-buscar" placeholder="Buscar por cliente, teléfono, producto, ciudad u orden..." oninput="_vbSearch(this.value)">
+      <input type="text" id="vb-buscar" placeholder="Buscar por cliente, teléfono, producto, ciudad, orden o ID de anuncio..." oninput="_vbSearch(this.value)">
       <!-- Los dos selectores se llenan con lo que hay en el mes que se está
            viendo, no con una lista fija: los días sin ventas no tienen por qué
            aparecer, y los productos los define el bot. -->
@@ -1095,6 +1095,13 @@ window._sbEstadosToggle=function(){
       <div class="vb-chips" id="vb-chips"></div>
     </div>
     <div id="vb-resumen" class="vb-resumen"></div>
+    <!-- Dos formas de mirar los MISMOS datos filtrados: el detalle venta por
+         venta, o el resumen agrupado. Los filtros de arriba valen para las dos. -->
+    <div class="vb-vistas">
+      <button class="tab-chip on" id="vb-vista-detalle" onclick="_vbVistaSet('detalle')">📋 Detalle</button>
+      <button class="tab-chip" id="vb-vista-analitica" onclick="_vbVistaSet('analitica')">📊 Analítica</button>
+    </div>
+    <div id="vb-analitica" style="display:none;"></div>
     <div id="vb-table-wrap"></div>
     <!-- Paginación: va DESPUÉS de la tabla porque es donde se llega leyendo.
          Los totales de arriba y el del pie siguen siendo de todo lo filtrado,
@@ -1464,8 +1471,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260813i"></script>
-<script src="gestiones-diarias.js?v=20260813i"></script>
+<script src="shared/app-shared.js?v=20260813j"></script>
+<script src="gestiones-diarias.js?v=20260813j"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

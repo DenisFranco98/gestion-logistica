@@ -2326,6 +2326,19 @@ function _vbPagTam(v){
 }
 function _vbPagIr(p){ _vbPag.pagina=p; _vbRender(); const t=document.getElementById('gd-tab-ventasbot'); if(t) t.scrollTop=0; }
 
+// Detalle (venta por venta) o Analítica (agrupado). Miran los MISMOS datos
+// filtrados: cambiar de vista no cambia qué se está mirando, solo cómo.
+let _vbVista='detalle';
+function _vbVistaSet(v){
+  _vbVista=v;
+  ['detalle','analitica'].forEach(x=>{
+    const b=document.getElementById('vb-vista-'+x);
+    if(b) b.classList.toggle('on', x===v);
+  });
+  _vbRender();
+  const t=document.getElementById('gd-tab-ventasbot'); if(t) t.scrollTop=0;
+}
+
 // `conservarFiltros` distingue los dos motivos para leer:
 //  · abrir el tab o cambiar de mes → se limpian, porque un día o un producto del
 //    mes anterior puede no existir en este y la tabla quedaría vacía sin motivo
@@ -2422,7 +2435,9 @@ function _vbRender(){
     if(_vbFiltro.estado && String(v.estado_orden||'')!==_vbFiltro.estado) return false;
     if(_vbFiltro.dia && String(v.fecha_compra||'').slice(6,8)!==_vbFiltro.dia) return false;
     if(_vbFiltro.producto && String(v.producto||'')!==_vbFiltro.producto) return false;
-    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.order,v.departamento]
+    // id_anuncio entra en la búsqueda porque es el paso natural después de ver
+    // en la analítica cuál anuncio vende más: se copia y se filtra por él.
+    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.order,v.departamento,v.id_anuncio]
       .some(x=>String(x||'').toLowerCase().includes(q))) return false;
     return true;
   });
@@ -2444,6 +2459,20 @@ function _vbRender(){
       '<span style="font-size:.7rem;">Si el bot ya está andando, revisá en el panel admin que la tienda esté conectada.</span></div>';
     return;
   }
+
+  // La analítica trabaja sobre `filas` —lo filtrado, no la página— y se turna
+  // con la tabla de detalle. Se sale acá porque el resto arma el detalle.
+  const anaEl=document.getElementById('vb-analitica');
+  const pagEl=document.getElementById('vb-paginacion');
+  if(_vbVista==='analitica'){
+    wrap.style.display='none';
+    if(pagEl) pagEl.style.display='none';
+    if(anaEl){ anaEl.style.display='block'; _vbRenderAnalitica(filas, total); }
+    return;
+  }
+  wrap.style.display='';
+  if(pagEl) pagEl.style.display='';
+  if(anaEl) anaEl.style.display='none';
 
   // Borrar es solo del DUEÑO, y nunca en auditoría (que es de solo lectura).
   // Esto decide si se PINTA el botón; quien de verdad autoriza es la regla de
@@ -2565,4 +2594,68 @@ function _vbPagRender(totalFilas, paginas, desde, enPagina){
   cont.innerHTML = rango +
     (botones?`<div class="vb-pag-btns">${botones}</div>`:'') +
     selector;
+}
+
+// ── Analítica de Ventas Bot ───────────────────────────────────────────────
+// Dos agrupaciones sobre lo que esté filtrado: por producto y por anuncio.
+// No es un módulo de reportes: son las dos preguntas concretas que se hacen
+// mirando esta tabla —qué se vende y qué anuncio lo trae—, así que se resuelven
+// acá mismo en vez de mandar a otra pantalla.
+//
+// `filas` viene filtrado (no paginado) y `totalGeneral` es su facturación, que
+// se usa para el porcentaje de cada línea.
+function _vbAgrupar(filas, campoFn, vacio){
+  const m=new Map();
+  filas.forEach(([,v])=>{
+    const k=String(campoFn(v)||'').trim() || vacio;
+    const g=m.get(k) || {clave:k, ventas:0, unidades:0, facturacion:0};
+    g.ventas++;
+    g.unidades += parseInt(v.cantidad,10)||0;
+    g.facturacion += parseInt(v.valor,10)||0;
+    m.set(k,g);
+  });
+  return [...m.values()];
+}
+
+function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral){
+  // El orden lo decide para qué sirve cada tabla: productos por facturación
+  // (cuánto aporta cada uno) y anuncios por cantidad de ventas (cuál trae más).
+  grupos.sort((a,b)=> b[ordenarPor]-a[ordenarPor] || b.facturacion-a.facturacion);
+  const maxFact = grupos.reduce((m,g)=>Math.max(m,g.facturacion),0) || 1;
+  const filas = grupos.map(g=>{
+    const pct = totalGeneral ? (g.facturacion/totalGeneral*100) : 0;
+    return `<tr>
+      <td>${esc(g.clave)}</td>
+      <td style="text-align:center;font-family:var(--f-mono);">${g.ventas}</td>
+      <td style="text-align:center;font-family:var(--f-mono);">${g.unidades}</td>
+      <td style="text-align:right;font-family:var(--f-mono);">${_vbMonto(g.facturacion)}</td>
+      <td class="vb-ana-barra">
+        <div class="vb-ana-track"><div class="vb-ana-fill" style="width:${(g.facturacion/maxFact*100).toFixed(1)}%"></div></div>
+        <span>${pct.toFixed(1)}%</span>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="vb-ana-bloque">
+    <div class="vb-ana-titulo">${titulo} <span>${grupos.length}</span></div>
+    <table class="ant-tbl vb-tbl vb-ana-tbl">
+      <thead><tr><th>${encabezado}</th><th>VENTAS</th><th>UNID.</th><th>FACTURACIÓN</th><th>% DEL TOTAL</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Sin datos</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+function _vbRenderAnalitica(filas, totalGeneral){
+  const cont=document.getElementById('vb-analitica');
+  if(!cont) return;
+  if(!filas.length){
+    cont.innerHTML='<div class="adm-empty">Nada que analizar con este filtro.</div>';
+    return;
+  }
+  // Las ventas sin id de anuncio se agrupan aparte en vez de descartarse: si son
+  // muchas, eso mismo es el dato (ventas que no se están pudiendo atribuir).
+  cont.innerHTML =
+    _vbTablaAnalitica('Por producto', 'PRODUCTO',
+      _vbAgrupar(filas, v=>v.producto, '(sin producto)'), 'facturacion', totalGeneral) +
+    _vbTablaAnalitica('Por anuncio', 'ID DEL ANUNCIO',
+      _vbAgrupar(filas, v=>v.id_anuncio, '(sin anuncio)'), 'ventas', totalGeneral);
 }

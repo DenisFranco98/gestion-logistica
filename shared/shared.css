@@ -1520,3 +1520,14 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-pag-gap{color:var(--text-3);font-size:.72rem;padding:0 2px;}
 .vb-pag-tam{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--text-2);}
 .vb-pag-tam select{padding:5px 8px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.72rem;font-family:inherit;}
+
+/* Analítica de Ventas Bot */
+.vb-vistas{display:flex;gap:6px;margin-bottom:10px;}
+.vb-ana-bloque{margin-bottom:18px;}
+.vb-ana-titulo{font-size:.72rem;font-weight:800;color:var(--text-1);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
+.vb-ana-titulo span{background:var(--bg-hover);color:var(--text-2);border-radius:20px;padding:1px 8px;font-size:.62rem;font-weight:700;}
+.vb-ana-tbl td{padding:5px 6px;}
+.vb-ana-barra{width:190px;}
+.vb-ana-barra span{font-size:.62rem;color:var(--text-2);font-family:var(--f-mono);margin-left:6px;}
+.vb-ana-track{display:inline-block;width:110px;height:7px;border-radius:4px;background:var(--bg-hover);overflow:hidden;vertical-align:middle;}
+.vb-ana-fill{height:100%;background:var(--accent);border-radius:4px;}
