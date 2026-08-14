@@ -1497,6 +1497,34 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-bar select{padding:8px 10px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.74rem;font-family:inherit;max-width:190px;}
 .botw-acciones .botw-del{border-color:var(--danger-soft);color:var(--danger-strong);}
 .botw-acciones .botw-del:hover{border-color:var(--danger-strong);color:var(--danger-strong);background:var(--danger-soft);}
+/* ── CALENDARIO DE RANGO (Ventas Bot) ────────────────────────────────────
+   El botón muestra el rango elegido y abre una grilla del mes. Va en un wrap
+   con position:relative para que el popover se ancle al botón; .vb-bar es flex
+   con wrap, así que anclarlo a la barra lo dejaría descolocado al reacomodarse
+   los controles en pantallas angostas. */
+.vb-cal-wrap{position:relative;flex-shrink:0;}
+.vb-cal-btn{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.74rem;font-family:inherit;font-weight:600;cursor:pointer;white-space:nowrap;}
+.vb-cal-btn:hover{border-color:var(--border-strong);}
+.vb-cal-btn.on{border-color:var(--accent);color:var(--accent);}
+.vb-cal{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--bg-card);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);padding:12px;box-shadow:0 12px 32px rgba(0,0,0,.35);width:266px;}
+.vb-cal-tit{font-size:.62rem;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;text-align:center;margin-bottom:9px;}
+.vb-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.vb-cal-dow{font-size:.55rem;font-weight:800;color:var(--text-3);text-align:center;padding-bottom:4px;}
+.vb-cal-d{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:none;border-radius:7px;background:var(--bg-inset);color:var(--text-1);font-size:.7rem;font-weight:700;font-family:var(--f-mono);cursor:pointer;padding:0;}
+.vb-cal-d:hover{background:var(--bg-hover);}
+/* Un día sin ventas se puede elegir igual —sirve como extremo de un rango—,
+   pero se ve apagado para no salir a buscar ahí. */
+.vb-cal-d.vacio{color:var(--text-3);background:transparent;font-weight:500;}
+/* Los días de en medio quedan redondeados como los demás y no en bloque: la
+   grilla tiene 3px de separación, así que un borde recto no llega a unirse con
+   el vecino y se ve como cuadrados sueltos en vez de una franja. */
+.vb-cal-d.rango{background:var(--accent-soft);color:var(--accent);}
+.vb-cal-d.punta{background:var(--accent);color:var(--accent-text);border-radius:7px;}
+.vb-cal-d.hueco{visibility:hidden;cursor:default;}
+.vb-cal-pie{display:flex;gap:6px;margin-top:10px;}
+.vb-cal-pie button{flex:1;padding:6px 8px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text-2);font-size:.66rem;font-weight:700;font-family:inherit;cursor:pointer;}
+.vb-cal-pie button:hover{color:var(--text-1);border-color:var(--border-strong);}
+.vb-cal-ayuda{font-size:.6rem;color:var(--text-3);text-align:center;margin-top:8px;line-height:1.4;}
 .vb-btn-ref{width:34px;height:34px;flex-shrink:0;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-2);font-size:1rem;cursor:pointer;font-family:inherit;line-height:1;}
 .vb-btn-ref:hover{color:var(--text-1);border-color:var(--border-strong);}
 .vb-btn-ref:disabled{opacity:.5;cursor:default;}

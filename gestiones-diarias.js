@@ -624,6 +624,10 @@ function _gdVolver(){
 // ── TABS GD ────────────────────────────────────────────────────────────
 function _gdTab(tab){
   _gdActiveTab=tab;
+  // El calendario de Ventas Bot es un popover con un listener en el documento:
+  // si se cambia de tab con él abierto, queda escuchando clics para un panel
+  // que ya nadie ve.
+  _vbCalCerrar();
   ['gestion','consolidado','novedades','reportes','anticipos','ro','ventasbot'].forEach(t=>{
     const c=document.getElementById('gd-tab-'+t);
     const b=document.getElementById('gd-tab-btn-'+t);
@@ -2305,7 +2309,14 @@ async function _antEliminar(tipo,id){
 // No usa _leerTienda: ese helper migra nodos de la clave vieja a la nueva, y acá
 // no hay nada que migrar (el nodo nace con empresaId). Además la migración es
 // una escritura, que estas reglas no permiten.
-let _vbData={}, _vbFiltro={q:'',estado:'',dia:'',producto:''}, _vbSearchTimer=null, _vbUltima=0;
+// El filtro de días es un RANGO (d1..d2) dentro del mes que se está viendo, en
+// números de día. Se guardan como números y no como fechas completas porque la
+// tabla ya es de un solo mes: comparar 5..10 contra el DD de fecha_compra evita
+// construir Date, que en UTC correría el día (ver _hoyLocal en el resto de la
+// app). d1=0 significa "todos los días"; d1 sin d2 es un día suelto.
+let _vbData={}, _vbFiltro={q:'',estado:'',d1:0,d2:0,producto:''}, _vbSearchTimer=null, _vbUltima=0;
+// Días que tienen al menos una venta este mes: el calendario los resalta.
+let _vbDiasConVenta=new Set();
 
 // Paginación. El tamaño se recuerda entre sesiones porque es una preferencia de
 // cómo mirar, no algo que cambie con los datos; la página no, siempre se arranca
@@ -2353,8 +2364,9 @@ function _vbInit(conservarFiltros){
   return _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes).once('value').then(snap=>{
     _vbData=snap.val()||{};
     if(!conservarFiltros){
-      _vbFiltro={q:'',estado:'',dia:'',producto:''};
+      _vbFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
       const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
+      _vbCalCerrar();
     }
     _vbUltima=Date.now();
     _vbRender();
@@ -2387,6 +2399,102 @@ function _vbEstChip(e,btn){
   _vbRender();
 }
 
+// ── CALENDARIO DE RANGO ──────────────────────────────────────────────────
+// Reemplaza al <select> de "Día 05": con un mes entero en la lista había que
+// desplegarla para saber qué días tuvieron ventas, y no había forma de pedir
+// "del 5 al 10". El mes es el de la barra de arriba —el mismo que ya manda en
+// los totales, la analítica y la lectura de Firebase—, así que acá solo se
+// elige el tramo. Un rango que cruce meses es otra cosa: obligaría a leer
+// varios nodos y a que "total del mes" deje de significar algo.
+const _VB_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function _vbMesCorto(){ return _VB_MESES[(parseInt((_gdMes||'').split('-')[1],10)||1)-1]; }
+
+function _vbCalLabel(){
+  const lbl=document.getElementById('vb-dia-lbl'), btn=document.getElementById('vb-dia-btn');
+  if(!lbl) return;
+  const {d1,d2}=_vbFiltro;
+  const dd=n=>String(n).padStart(2,'0');
+  lbl.textContent = !d1 ? 'Todos los días'
+    : (!d2||d2===d1) ? dd(d1)+' '+_vbMesCorto()
+    : dd(d1)+' – '+dd(d2)+' '+_vbMesCorto();
+  if(btn) btn.classList.toggle('on', !!d1);
+}
+
+function _vbCalToggle(ev){
+  if(ev) ev.stopPropagation();
+  const c=document.getElementById('vb-cal'); if(!c) return;
+  if(c.style.display==='block'){ _vbCalCerrar(); return; }
+  c.style.display='block';
+  _vbCalRender();
+  // Un clic afuera cierra. Se puede registrar en el acto porque el clic que
+  // abrió ya frenó su propagación arriba y no va a llegar al documento; con un
+  // setTimeout, un clic disparado en el mismo tick no encontraba el listener.
+  // El listener se quita al cerrar, así que nunca queda más de uno.
+  document.addEventListener('click',_vbCalFuera);
+}
+function _vbCalFuera(ev){
+  const w=ev.target.closest?ev.target.closest('.vb-cal-wrap'):null;
+  if(!w) _vbCalCerrar();
+}
+function _vbCalCerrar(){
+  const c=document.getElementById('vb-cal');
+  if(c) c.style.display='none';
+  document.removeEventListener('click',_vbCalFuera);
+}
+
+function _vbCalRender(){
+  const c=document.getElementById('vb-cal'); if(!c) return;
+  const total=_gdDiasEnMes(_gdMes||'2000-01');
+  const [y,m]=(_gdMes||'2000-01').split('-').map(Number);
+  // getDay() da 0=domingo; acá la semana arranca en lunes, como el calendario
+  // que usa la gente. Este Date es solo para saber en qué columna cae el día 1
+  // del mes: no se compara ni se guarda, así que el desfase de UTC no aplica.
+  const primero=(new Date(y,m-1,1).getDay()+6)%7;
+  const {d1,d2}=_vbFiltro;
+  const hasta=d2||d1;
+
+  let celdas='';
+  ['L','M','M','J','V','S','D'].forEach(d=>celdas+='<div class="vb-cal-dow">'+d+'</div>');
+  for(let i=0;i<primero;i++) celdas+='<button class="vb-cal-d hueco" disabled></button>';
+  for(let d=1;d<=total;d++){
+    const cls=['vb-cal-d'];
+    if(!_vbDiasConVenta.has(d)) cls.push('vacio');
+    if(d1 && d>d1 && d<hasta) cls.push('rango');
+    if(d1 && (d===d1||d===hasta)) cls.push('punta');
+    celdas+='<button class="'+cls.join(' ')+'" onclick="_vbCalDia('+d+',event)">'+d+'</button>';
+  }
+
+  c.innerHTML=
+    '<div class="vb-cal-tit">'+(typeof _cfMesLabel==='function'?_cfMesLabel(_gdMes):_gdMes)+'</div>'+
+    '<div class="vb-cal-grid">'+celdas+'</div>'+
+    '<div class="vb-cal-ayuda">'+(d1&&!d2?'Elegí el día final del rango':'Tocá un día, y otro para el rango')+'</div>'+
+    '<div class="vb-cal-pie">'+
+      '<button onclick="_vbCalLimpiar(event)">Todos los días</button>'+
+      '<button onclick="_vbCalCerrar()">Cerrar</button>'+
+    '</div>';
+}
+
+// Primer toque fija el inicio; el segundo, el final. Un tercero vuelve a
+// empezar, que es lo que uno espera al querer corregir el rango. Si el segundo
+// día es anterior al primero se invierten en vez de rechazarlo: la intención es
+// clarísima y hacer que el usuario adivine el orden sería gratuito.
+function _vbCalDia(d,ev){
+  if(ev) ev.stopPropagation();
+  if(!_vbFiltro.d1 || _vbFiltro.d2){ _vbFiltro.d1=d; _vbFiltro.d2=0; }
+  else if(d<_vbFiltro.d1){ _vbFiltro.d2=_vbFiltro.d1; _vbFiltro.d1=d; }
+  else _vbFiltro.d2=d;
+  // _vbRender repinta el calendario si está abierto, así que no hace falta
+  // llamarlo acá: un solo camino para dibujarlo.
+  _vbPagReset(); _vbRender();
+}
+function _vbCalLimpiar(ev){
+  if(ev) ev.stopPropagation();
+  _vbFiltro.d1=0; _vbFiltro.d2=0;
+  // _vbRender repinta el calendario si está abierto, así que no hace falta
+  // llamarlo acá: un solo camino para dibujarlo.
+  _vbPagReset(); _vbRender();
+}
+
 // dd/mm — la fecha se guarda como YYYYMMDD (texto), no como Date: se formatea
 // cortando, sin construir un Date que en UTC correría el día.
 function _vbFecha(v){
@@ -2400,16 +2508,14 @@ function _vbRender(){
   if(!wrap) return;
   const todas=Object.entries(_vbData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
 
-  // Días y productos que REALMENTE hay este mes. Se repueblan solo si cambió el
+  // Días con ventas: los usa el calendario para resaltarlos. Se recalcula en
+  // cada repintado porque es barato y así el ↻ los actualiza solo.
+  _vbDiasConVenta=new Set(todas.map(([,v])=>parseInt(String(v.fecha_compra||'').slice(6,8),10)).filter(Boolean));
+  _vbCalLabel();
+  if(document.getElementById('vb-cal')?.style.display==='block') _vbCalRender();
+
+  // Los productos que REALMENTE hay este mes. Se repueblan solo si cambió el
   // conjunto: rearmar el <select> en cada repintado perdería la opción elegida.
-  const dias=[...new Set(todas.map(([,v])=>String(v.fecha_compra||'').slice(6,8)).filter(Boolean))].sort();
-  const selD=document.getElementById('vb-dia');
-  if(selD && selD.dataset.vals!==dias.join('|')){
-    selD.dataset.vals=dias.join('|');
-    selD.innerHTML='<option value="">Todos los días</option>'+
-      dias.map(d=>'<option value="'+d+'">Día '+d+'</option>').join('');
-    selD.value=_vbFiltro.dia||'';
-  }
   const prods=[...new Set(todas.map(([,v])=>String(v.producto||'').trim()).filter(Boolean))].sort();
   const selP=document.getElementById('vb-producto');
   if(selP && selP.dataset.vals!==prods.join('|')){
@@ -2433,7 +2539,11 @@ function _vbRender(){
   const q=(_vbFiltro.q||'').toLowerCase();
   const filas=todas.filter(([,v])=>{
     if(_vbFiltro.estado && String(v.estado_orden||'')!==_vbFiltro.estado) return false;
-    if(_vbFiltro.dia && String(v.fecha_compra||'').slice(6,8)!==_vbFiltro.dia) return false;
+    if(_vbFiltro.d1){
+      const d=parseInt(String(v.fecha_compra||'').slice(6,8),10)||0;
+      // Sin d2 todavía (se eligió un solo extremo) el rango es ese día suelto.
+      if(!d || d<_vbFiltro.d1 || d>(_vbFiltro.d2||_vbFiltro.d1)) return false;
+    }
     if(_vbFiltro.producto && String(v.producto||'')!==_vbFiltro.producto) return false;
     // id_anuncio entra en la búsqueda porque es el paso natural después de ver
     // en la analítica cuál anuncio vende más: se copia y se filtra por él.
