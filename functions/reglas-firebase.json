@@ -10,26 +10,48 @@
 
   "ventas_bot": {
     "_comentario": [
-      "Las ventas que manda el bot. Escribe SOLO el endpoint, que usa el Admin",
-      "SDK y no pasa por estas reglas: por eso .write es false para todos, y no",
-      "hay forma de inyectar ventas desde el navegador.",
+      "Las ventas que manda el bot. Las CREA solo el endpoint, que usa el Admin",
+      "SDK y no pasa por estas reglas: por eso .write es false a nivel de tienda",
+      "y no hay forma de inyectar ventas falsas desde el navegador.",
+      "",
       "Lee cualquiera que tenga acceso a esa tienda, con el mismo criterio que",
-      "usa el resto de la app: estar en user_tiendas o ser admin de la empresa."
+      "usa el resto de la app: estar en user_tiendas o ser admin de la empresa.",
+      "",
+      "BORRAR es la única escritura permitida desde la app, y solo al DUEÑO de",
+      "esa tienda. La condición '!newData.exists()' es lo que lo hace seguro:",
+      "autoriza a eliminar, pero no a crear ni a modificar. Sin eso, dar permiso",
+      "de escritura para poder borrar habilitaría también inventar ventas o",
+      "cambiarles el importe desde la consola del navegador.",
+      "",
+      "Un asesor no puede borrar aunque la venta sea de su tienda, y un admin",
+      "auditando tampoco: la auditoría es de solo lectura."
     ],
     "$empresaId": {
       ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
-      ".write": false
+      ".write": false,
+      "$mes": {
+        "$ventaId": {
+          ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+        }
+      }
     }
   },
 
   "ventas_bot_idx": {
     "_comentario": [
       "Índice para responder '¿ya existe este pedido?' sin leer el mes entero.",
-      "Mismo criterio: lo escribe solo el endpoint."
+      "Mismo criterio: lo crea solo el endpoint y solo el dueño puede borrar.",
+      "",
+      "Al borrar una venta hay que borrar TAMBIÉN su entrada acá, o la consulta",
+      "seguiría respondiendo que el pedido existe y el bot no volvería a",
+      "mandarlo nunca."
     ],
     "$empresaId": {
       ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
-      ".write": false
+      ".write": false,
+      "$ventaId": {
+        ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+      }
     }
   },
 

@@ -2407,7 +2407,12 @@ function _vbRender(){
     return;
   }
 
-  const rows=filas.map(([,v])=>`<tr>
+  // Borrar es solo del DUEÑO, y nunca en auditoría (que es de solo lectura).
+  // Esto decide si se PINTA el botón; quien de verdad autoriza es la regla de
+  // Firebase, que además solo permite eliminar, no crear ni modificar.
+  const puedeBorrar = _gdEsDueno() && !(typeof _esAuditoria==='function' && _esAuditoria());
+
+  const rows=filas.map(([k,v])=>`<tr>
     <td>${_vbFecha(v.fecha_compra)}</td>
     <td>${esc(v.nombre||'—')}</td>
     <td>${esc(v.telefono||'—')}</td>
@@ -2420,15 +2425,49 @@ function _vbRender(){
         ? '<div class="vb-sub" title="'+esc(v.historial_estado.map(h=>h.de+' → '+h.a).join(' · '))+'">cambió '+v.historial_estado.length+'×</div>'
         : ''}</td>
     <td class="vb-anuncio">${esc(v.id_anuncio||'—')}</td>
+    ${puedeBorrar?`<td style="text-align:center;"><button class="ant-del-btn" title="Eliminar esta venta" onclick="_vbEliminar('${esc(k)}')">🗑️</button></td>`:''}
   </tr>`).join('');
 
+  const cols = puedeBorrar ? 10 : 9;
   wrap.innerHTML=`<table class="ant-tbl vb-tbl">
-    <thead><tr><th>FECHA</th><th>CLIENTE</th><th>TELÉFONO</th><th>CIUDAD</th><th>PRODUCTO</th><th>CANT.</th><th>VALOR</th><th>ESTADO</th><th>ID ANUNCIO</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="9" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Nada coincide con el filtro</td></tr>'}</tbody>
+    <thead><tr><th>FECHA</th><th>CLIENTE</th><th>TELÉFONO</th><th>CIUDAD</th><th>PRODUCTO</th><th>CANT.</th><th>VALOR</th><th>ESTADO</th><th>ID ANUNCIO</th>${puedeBorrar?'<th></th>':''}</tr></thead>
+    <tbody>${rows||`<tr><td colspan="${cols}" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Nada coincide con el filtro</td></tr>`}</tbody>
     <tfoot><tr class="ant-total-row">
       <td colspan="6" style="text-align:right;font-weight:800;">TOTAL${filas.length<todas.length?' (filtrado)':''}</td>
       <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${_vbMonto(total)}</td>
-      <td colspan="2"></td>
+      <td colspan="${cols-7}"></td>
     </tr></tfoot>
   </table>`;
+}
+
+// Borrar una venta del bot. Solo el DUEÑO de la tienda: la regla de Firebase es
+// la que autoriza —y solo permite eliminar, nunca crear ni modificar—, así que
+// un asesor que llame esto a mano igual recibe permission_denied.
+//
+// Se borran los DOS nodos. Si quedara la entrada del índice, /ventasExiste
+// seguiría respondiendo que ese pedido existe y el bot no volvería a mandarlo
+// nunca: la venta desaparecería de la tabla y no habría forma de recuperarla
+// salvo cambiándole el teléfono o la fecha al cliente.
+async function _vbEliminar(clave){
+  const v=_vbData[clave]; if(!v) return;
+  if(!_gdEsDueno()){ _mAlert('Solo el dueño de la tienda','Tu perfil de asesor no puede eliminar ventas.'); return; }
+  if(typeof _esAuditoria==='function' && _esAuditoria()){ _mAlert('Estás auditando','La auditoría es de solo lectura.'); return; }
+
+  const detalle=[v.nombre, v.telefono, v.producto, _vbMonto(v.valor)].filter(Boolean).join(' · ');
+  if(!await _mConfirmP('¿Eliminar esta venta?',
+    detalle+'\n\nNo se puede deshacer. Si el bot vuelve a mandar ese mismo pedido (mismo teléfono y misma fecha de compra), se registra de nuevo.','danger')) return;
+
+  try{
+    await _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes+'/'+clave).remove();
+    // El índice no cuelga del mes: es ventas_bot_idx/{tienda}/{clave}.
+    await _db.ref('ventas_bot_idx/'+_gdTK()+'/'+clave).remove();
+    delete _vbData[clave];
+    _vbRender();
+    toast('Venta eliminada');
+  }catch(e){
+    _mAlert('No se pudo eliminar',
+      /permission|denied/i.test(e.message||'')
+        ? 'Firebase rechazó el borrado. Suele ser que la cuenta no figura como dueña de esta tienda, o que faltan las reglas nuevas de ventas_bot.'
+        : e.message);
+  }
 }
