@@ -13,7 +13,7 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const {
   db, cors, body, autenticar, fbKey,
-  claveVenta, mesDe, normTelefono, normFecha, aNumero
+  claveVenta, mesDe, normTelefono, normFecha, aNumero, aEntero
 } = require('./lib');
 
 // La misma región que la base de datos. Cruzar de región le sumaría a cada
@@ -108,7 +108,7 @@ async function handlerVentas(req, res) {
       // BAMBU"); `producto` es solo el nombre, sin cantidades ("CEPILLO BAMBU").
       order: String(tomar(d, 'order', 'ORDER', 'orden')),
       producto: String(tomar(d, 'producto', 'PRODUCTO', 'PRODUCTO ESCOGIDO', 'producto_escogido')),
-      cantidad: aNumero(tomar(d, 'cantidad', 'CANTIDAD')),
+      cantidad: aEntero(tomar(d, 'cantidad', 'CANTIDAD')),
       // El valor es el TOTAL de la orden, no el precio unitario.
       valor: aNumero(tomar(d, 'valor', 'VALOR', 'total')),
       estado_orden: estado,

@@ -141,15 +141,50 @@ function body(req) {
   return b;
 }
 
-// Los bots suelen mandar el importe como "89.000" o "$ 89.000". Se guarda como
-// número o el total de la tabla no podría sumarse.
-function aNumero(v) {
-  if (typeof v === 'number') return isFinite(v) ? v : 0;
+// Importes en pesos colombianos. Se guarda como número entero o el total de la
+// tabla no podría sumarse.
+//
+// El caso difícil es cuando el bot manda el importe SIN comillas en el JSON:
+// "valor": 99.990 no es noventa y nueve mil, es el decimal 99,99 — el punto de
+// miles se lee como coma decimal y el valor queda dividido por mil. Pasó de
+// verdad: 43 de las primeras 109 ventas entraron así.
+//
+// Como texto no hay ambigüedad ("99.990" se limpia y da 99990), así que lo ideal
+// es que el bot lo mande entre comillas. Pero no se puede depender de eso, y un
+// importe mal grabado no se nota hasta que los totales no cuadran.
+//
+// La regla: un precio de venta menor a $1.000 no existe en este negocio —los
+// productos van de decenas de miles para arriba—, así que un valor por debajo de
+// ese umbral es un separador de miles mal interpretado y se reconstruye.
+// Si alguna vez se vende algo de menos de $1.000, este umbral hay que revisarlo.
+const VALOR_MINIMO_REAL = 1000;
+
+// Entero pelado, sin nada de lo anterior. Es para CANTIDADES, que no llevan
+// separador de miles y donde 2 significa 2: pasarlas por aNumero las convertía
+// en 2000. Se separan a propósito — la corrección de miles solo tiene sentido
+// en importes.
+function aEntero(v) {
+  if (typeof v === 'number') return isFinite(v) ? Math.round(v) : 0;
   const n = parseInt(String(v == null ? '' : v).replace(/[^\d]/g, ''), 10);
   return isFinite(n) ? n : 0;
 }
 
+function aNumero(v) {
+  // Texto: se queda con los dígitos. "99.990", "$ 99.990" y "99990" dan lo mismo.
+  if (typeof v !== 'number') {
+    const n = parseInt(String(v == null ? '' : v).replace(/[^\d]/g, ''), 10);
+    return isFinite(n) ? n : 0;
+  }
+  if (!isFinite(v) || v <= 0) return 0;
+  // Número: si quedó por debajo del mínimo, el punto era de miles.
+  //   99.99 -> 99990 · 69.9 -> 69900 · 117 -> 117000
+  if (v < VALOR_MINIMO_REAL) return Math.round(v * 1000);
+  // Por encima del umbral se respeta lo que llegó; los centavos se redondean
+  // porque el resto de la app trabaja con enteros.
+  return Math.round(v);
+}
+
 module.exports = {
   db, cors, body, autenticar, fbKey,
-  normTelefono, normFecha, claveVenta, mesDe, aNumero
+  normTelefono, normFecha, claveVenta, mesDe, aNumero, aEntero
 };

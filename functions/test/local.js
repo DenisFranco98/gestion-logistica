@@ -59,6 +59,22 @@ eq(L.aNumero('178,000'), 178000, 'con comas');
 eq(L.aNumero(''), 0, 'vacío');
 eq(L.aNumero('abc'), 0, 'no numérico');
 
+console.log('\nVALOR — el punto de miles que JSON lee como decimal');
+// Casos reales: el bot manda el importe sin comillas y "99.990" llega como 99,99.
+eq(L.aNumero(99.99), 99990, 'el bot mandó 99.990 sin comillas');
+eq(L.aNumero(69.9), 69900, 'el bot mandó 69.900 sin comillas');
+eq(L.aNumero(111.984), 111984, 'el bot mandó 111.984 sin comillas');
+eq(L.aNumero(117), 117000, 'el bot mandó 117.000 sin comillas');
+eq(L.aNumero(157477.5), 157478, 'decimal por encima del umbral: se respeta');
+eq(L.aNumero(99990), 99990, 'sin punto ya venía bien');
+
+console.log('\nCANTIDAD — NO se le aplica la corrección de miles');
+eq(L.aEntero(2), 2, 'dos unidades siguen siendo dos');
+eq(L.aEntero(1), 1, 'una');
+eq(L.aEntero('3'), 3, 'como texto');
+eq(L.aEntero(''), 0, 'vacía');
+eq(L.aNumero(2) !== L.aEntero(2), true, 'valor y cantidad se tratan distinto a propósito');
+
 console.log('\nCLAVE DE FIREBASE — sin caracteres prohibidos');
 eq(L.fbKey('WS/3D.001'), 'WS_3D_001', 'barra y punto');
 eq(L.fbKey('a#b$c[d]e'), 'a_b_c_d_e', 'todos los prohibidos');
