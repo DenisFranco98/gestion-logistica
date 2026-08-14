@@ -4673,10 +4673,9 @@ function generarPDF(){
   const secStats=ESTADOS.filter(est=>est.key!=='pendiente_sin_guia'&&est.key!=='pendiente'&&!estadosDesactivados.has(est.key)).map(est=>{
     const gr=pedidos.filter(p=>p.estadoKey===est.key&&!sinAccion(p));
     const gest=gr.filter(p=>estaCompleta(p));
-    const nc=gr.filter(p=>gestiones[p.id]?.llamada==='no_contestó').length;
     const t=tiemposPorSeccion[est.key];
     const dur=t&&t.fin?(t.fin-t.inicio):t?(ahora-t.inicio):null;
-    return{est,total:gr.length,gestionados:gest.length,nc,dur};
+    return{est,total:gr.length,gestionados:gest.length,dur};
   }).filter(s=>s.total>0);
 
   document.getElementById('pdf-sub').textContent=hoy+' · '+horaInicio+' a '+horaFin+' ('+fmtMin(durTotal)+')';
@@ -4714,13 +4713,12 @@ function generarPDF(){
     </div>
     <div class="pdf-section"><h3>Resultados por estado</h3>
       <table class="pdf-table">
-        <thead><tr><th>Estado</th><th>Pedidos</th><th>Gestionados</th><th>% Completado</th><th>No contestó</th><th>Tiempo</th></tr></thead>
+        <thead><tr><th>Estado</th><th>Pedidos</th><th>Gestionados</th><th>% Completado</th><th>Tiempo</th></tr></thead>
         <tbody>${secStats.map(s=>`<tr>
           <td>${s.est.icon} ${s.est.label}</td>
           <td>${s.total}</td>
           <td>${s.gestionados}</td>
           <td><strong style="color:${s.total&&s.gestionados/s.total>=.8?'#15803d':s.total&&s.gestionados/s.total>=.5?'#92400e':'#b91c1c'}">${s.total?Math.round(s.gestionados/s.total*100):0}%</strong></td>
-          <td>${s.nc}</td>
           <td>${fmtMin(s.dur)}</td>
         </tr>`).join('')}</tbody>
       </table>
