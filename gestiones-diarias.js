@@ -2357,7 +2357,9 @@ function _vbInit(conservarFiltros){
       const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
     }
     _vbUltima=Date.now();
-    _vbRender();
+    // La inversión en pauta se lee junto con las ventas: la analítica la necesita
+    // para el CPA y no vale la pena una segunda vuelta al abrir esa vista.
+    _vbAdsCargar().then(_vbRender);
   }).catch(e=>{
     // El caso más probable es que la tienda todavía no esté conectada al bot:
     // se explica en vez de mostrar un error crudo.
@@ -2617,13 +2619,72 @@ function _vbAgrupar(filas, campoFn, vacio){
   return [...m.values()];
 }
 
-function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral){
+// Inversión en pauta por producto, cargada a mano. Vive en su propio nodo y no
+// dentro de la venta porque es un dato del MES y del producto, no de cada venta:
+// meterlo en cada registro obligaría a repetirlo y a mantenerlo sincronizado.
+//
+//   ventas_bot_ads/{empresaId}/{mes}/{claveProducto} = número
+//
+// La clave se normaliza con _gdKey, igual que el catálogo de productos: sin eso
+// "CEPILLO BAMBU" y "Cepillo Bambu" serían dos entradas y el CPA saldría mal.
+let _vbAds={}, _vbAdsTimer={};
+
+function _vbAdsKey(producto){ return _gdKey(String(producto||'').trim().replace(/\s+/g,' ')); }
+
+function _vbAdsCargar(){
+  if(typeof _db==='undefined') return Promise.resolve();
+  return _db.ref('ventas_bot_ads/'+_gdTK()+'/'+_gdMes).once('value')
+    .then(s=>{ _vbAds=s.val()||{}; })
+    .catch(()=>{ _vbAds={}; });   // sin permiso o sin datos: se sigue mostrando la tabla
+}
+
+// Se guarda con un respiro para no escribir en cada tecla, igual que _antCambio.
+function _vbAdsSet(producto, valor, inp){
+  if(!_gdEsDueno()){ _mAlert('Solo el dueño de la tienda','Tu perfil de asesor no puede cargar la inversión en pauta.'); return; }
+  const k=_vbAdsKey(producto);
+  const n=parseInt(String(valor).replace(/[^\d]/g,''),10)||0;
+  _vbAds[k]=n;
+  if(inp){ inp.value = n ? n.toLocaleString('es-CO') : ''; }
+  _vbRender();
+  if(_vbAdsTimer[k]) clearTimeout(_vbAdsTimer[k]);
+  _vbAdsTimer[k]=setTimeout(()=>{
+    if(typeof _db==='undefined') return;
+    _db.ref('ventas_bot_ads/'+_gdTK()+'/'+_gdMes+'/'+k).set(n)
+      .catch(e=>_mAlert('No se pudo guardar la inversión',
+        /permission|denied/i.test(e.message||'')
+          ? 'Firebase rechazó la escritura. Falta agregar el nodo ventas_bot_ads a las reglas, o la cuenta no figura como dueña de esta tienda.'
+          : e.message));
+  }, 700);
+}
+
+// `conAds` agrega las dos columnas de pauta: la inversión, que se carga a mano,
+// y el CPA, que sale de dividirla por las ventas. Solo la tabla de productos las
+// lleva — por anuncio no tendría de dónde sacar la inversión de cada uno.
+function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral, conAds){
   // El orden lo decide para qué sirve cada tabla: productos por facturación
   // (cuánto aporta cada uno) y anuncios por cantidad de ventas (cuál trae más).
   grupos.sort((a,b)=> b[ordenarPor]-a[ordenarPor] || b.facturacion-a.facturacion);
   const maxFact = grupos.reduce((m,g)=>Math.max(m,g.facturacion),0) || 1;
+  const editable = _gdEsDueno() && !(typeof _esAuditoria==='function' && _esAuditoria());
+  let totalAds = 0;
+
   const filas = grupos.map(g=>{
     const pct = totalGeneral ? (g.facturacion/totalGeneral*100) : 0;
+    let colsAds = '';
+    if(conAds){
+      const ads = parseInt(_vbAds[_vbAdsKey(g.clave)],10) || 0;
+      totalAds += ads;
+      // CPA = inversión ÷ ventas. Sin inversión cargada no se muestra 0: se deja
+      // el guion, porque un CPA de cero diría que no costó nada conseguir esas
+      // ventas, que es lo contrario de "todavía no sé cuánto costó".
+      const cpa = (ads && g.ventas) ? Math.round(ads/g.ventas) : 0;
+      colsAds = `
+      <td style="text-align:right;">${editable
+        ? `<input class="vb-ads-inp" value="${ads?ads.toLocaleString('es-CO'):''}" placeholder="0" inputmode="numeric"
+                  onchange="_vbAdsSet('${esc(g.clave).replace(/'/g,'&#39;')}',this.value,this)">`
+        : `<span class="vb-ads-ro">${ads?_vbMonto(ads):'—'}</span>`}</td>
+      <td style="text-align:right;font-family:var(--f-mono);${cpa?'':'color:var(--text-3);'}">${cpa?_vbMonto(cpa):'—'}</td>`;
+    }
     return `<tr>
       <td>${esc(g.clave)}</td>
       <td style="text-align:center;font-family:var(--f-mono);">${g.ventas}</td>
@@ -2632,15 +2693,30 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral)
       <td class="vb-ana-barra">
         <div class="vb-ana-track"><div class="vb-ana-fill" style="width:${(g.facturacion/maxFact*100).toFixed(1)}%"></div></div>
         <span>${pct.toFixed(1)}%</span>
-      </td>
+      </td>${colsAds}
     </tr>`;
   }).join('');
+
+  const totalVentas = grupos.reduce((s,g)=>s+g.ventas,0);
+  const cpaGlobal = (totalAds && totalVentas) ? Math.round(totalAds/totalVentas) : 0;
+  const pie = conAds ? `<tfoot><tr class="ant-total-row">
+      <td colspan="3" style="text-align:right;font-weight:800;">TOTAL</td>
+      <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${_vbMonto(totalGeneral)}</td>
+      <td></td>
+      <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${totalAds?_vbMonto(totalAds):'—'}</td>
+      <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${cpaGlobal?_vbMonto(cpaGlobal):'—'}</td>
+    </tr></tfoot>` : '';
+
+  const cols = conAds ? 7 : 5;
   return `<div class="vb-ana-bloque">
     <div class="vb-ana-titulo">${titulo} <span>${grupos.length}</span></div>
     <table class="ant-tbl vb-tbl vb-ana-tbl">
-      <thead><tr><th>${encabezado}</th><th>VENTAS</th><th>UNID.</th><th>FACTURACIÓN</th><th>% DEL TOTAL</th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Sin datos</td></tr>'}</tbody>
+      <thead><tr><th>${encabezado}</th><th>VENTAS</th><th>UNID.</th><th>FACTURACIÓN</th><th>% DEL TOTAL</th>${
+        conAds?'<th title="Inversión en pauta del mes para este producto">INVERSIÓN ADS</th><th title="Inversión ÷ ventas">CPA</th>':''}</tr></thead>
+      <tbody>${filas || `<tr><td colspan="${cols}" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Sin datos</td></tr>`}</tbody>
+      ${pie}
     </table>
+    ${conAds?'<div class="vb-ana-nota">La inversión se carga a mano y es del mes completo, así que el CPA no cambia al filtrar por día.</div>':''}
   </div>`;
 }
 
@@ -2655,7 +2731,7 @@ function _vbRenderAnalitica(filas, totalGeneral){
   // muchas, eso mismo es el dato (ventas que no se están pudiendo atribuir).
   cont.innerHTML =
     _vbTablaAnalitica('Por producto', 'PRODUCTO',
-      _vbAgrupar(filas, v=>v.producto, '(sin producto)'), 'facturacion', totalGeneral) +
+      _vbAgrupar(filas, v=>v.producto, '(sin producto)'), 'facturacion', totalGeneral, true) +
     _vbTablaAnalitica('Por anuncio', 'ID DEL ANUNCIO',
       _vbAgrupar(filas, v=>v.id_anuncio, '(sin anuncio)'), 'ventas', totalGeneral);
 }
