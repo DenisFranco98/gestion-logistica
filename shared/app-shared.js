@@ -8852,6 +8852,92 @@ function _roCerrarPorExcel(){
   }).catch(e=>console.warn('[R.O. entregados]',e));
 }
 
+// ── ANTICIPOS: actualizar el estado desde el Excel ───────────────────────
+// Las dos tablas de Anticipos (con y sin) se cruzan con el Excel del Gestor
+// Logístico POR TELÉFONO, que es el único dato que comparten: esas tablas no
+// registran la guía.
+//
+// Solo ACTUALIZA. Nunca da de alta: un anticipo lo decide una persona, y crear
+// filas por cada teléfono del Excel llenaría la tabla con clientes que nunca
+// pidieron uno.
+//
+// Vive acá y no en gestiones-diarias.js porque quien dispara esto es el Gestor
+// Logístico, que es otra página; app-shared.js lo cargan las cuatro.
+const _ANT_PRIO={'ENTREGADO':4,'DEVUELTO':3,'EN PROCESO':2,'SIN ENVIAR':1};
+
+// Últimos 10 dígitos: en las tablas los teléfonos se escriben a mano y llegan
+// con espacios, guiones o el +57 adelante, así que "+57 300 111 2233" y
+// "3001112233" tienen que cruzar. Mismo criterio que usa el bot de ventas.
+function _antNormTel(v){
+  const d=String(v==null?'':v).replace(/\D/g,'');
+  return d.length>=10 ? d.slice(-10) : (d||'');
+}
+
+// De los estados de la transportadora a los cuatro de Anticipos:
+//   · entregado                    → ENTREGADO
+//   · cualquier devolución         → DEVUELTO
+//   · pendiente/cancelado/anulado  → SIN ENVIAR   (nunca salió)
+//   · el resto, que es lo que está en la calle con guía → EN PROCESO
+//
+// "entregado" se exige al PRINCIPIO para que un "NO ENTREGADO" no cuente como
+// entregado, y "entregada a conexiones" —que es tránsito— tampoco entre. En
+// devolución basta con que aparezca: sus variantes ("en proceso de devolución",
+// "tránsito a devolución proveedor") significan todas lo mismo acá.
+function _antEstadoDeExcel(estNorm){
+  const n=String(estNorm||'');
+  if(!n) return null;
+  if(n.startsWith('entregado')) return 'ENTREGADO';
+  if(n.includes('devolucion')||n.includes('devuelt')) return 'DEVUELTO';
+  if(n.includes('pendiente')||n.includes('cancelad')||n.includes('rechazad')||n.includes('anulad')) return 'SIN ENVIAR';
+  return 'EN PROCESO';
+}
+
+// Se revisan el mes actual y el anterior, igual que R.O.: un anticipo de fin de
+// julio que se entrega en agosto vive en la tabla de julio, y mirando solo el
+// mes en curso no se actualizaría nunca.
+function _antSyncPorExcel(){
+  const mapa=window._telEstadoExcel;
+  if(!mapa||!mapa.size) return Promise.resolve();
+  if(typeof _db==='undefined') return Promise.resolve();
+  if(typeof _esAuditoria==='function'&&_esAuditoria()) return Promise.resolve();
+  if(!_tiendaLista('sincronización de anticipos')) return Promise.resolve();
+  const mesHoy=_hoyLocal().slice(0,7);
+  const [y,m]=mesHoy.split('-').map(Number);
+  const prev=new Date(y,m-2,1);   // m-2: getMonth es 0-based y se busca el anterior
+  const meses=[...new Set([mesHoy, prev.getFullYear()+'-'+String(prev.getMonth()+1).padStart(2,'0')])];
+  const tk=_gdTK();
+  const tareas=[];
+  meses.forEach(mes=>['con','sin'].forEach(tipo=>{
+    const base='anticipos/'+tk+'/'+mes+'/'+tipo;
+    // Se lee con _leerTienda y no con _db.ref directo: las tiendas que todavía
+    // guardan bajo la clave vieja se migran al leer, y sin eso acá no se
+    // encontraría nada y la sincronización pasaría en silencio. La auditoría ya
+    // quedó descartada arriba, así que lo que devuelve es siempre la clave
+    // nueva y las claves de los registros coinciden con `base`.
+    tareas.push(_leerTienda(tk2=>'anticipos/'+tk2+'/'+mes+'/'+tipo).then(snap=>{
+      const updates={}; let n=0;
+      Object.entries(snap.val()||{}).forEach(([k,r])=>{
+        if(!r||!r.telefono) return;
+        const destino=mapa.get(_antNormTel(r.telefono));
+        if(!destino) return;                 // ese cliente no está en el Excel
+        if((r.estado||'')===destino) return; // ya estaba así
+        updates[k+'/estado']=destino; n++;
+      });
+      if(!n) return 0;
+      return _db.ref(base).update(updates).then(()=>n);
+    }).catch(e=>{ console.warn('[ANTICIPOS] '+base, e); return 0; }));
+  }));
+  return Promise.all(tareas).then(res=>{
+    const total=res.reduce((a,b)=>a+(b||0),0);
+    if(!total) return;
+    console.log('[ANTICIPOS] '+total+' guía(s) actualizadas según el Excel');
+    if(typeof toast==='function') toast('📦 Anticipos: '+total+' guía'+(total!==1?'s':'')+' con estado actualizado',4000);
+    // Repintar si la pestaña está abierta en Gestiones Diarias.
+    const tab=document.getElementById('gd-tab-anticipos');
+    if(tab&&tab.style.display!=='none'&&typeof _antInit==='function') _antInit();
+  });
+}
+
 function _roSyncFromGestion(id, soloCrear){
   try{
     if(typeof _db==='undefined'||!window._currentUsername)return;

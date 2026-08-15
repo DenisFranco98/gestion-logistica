@@ -973,7 +973,15 @@ function parsear(data){
   // recoger, que es lo que R.O. necesita saber.
   const _idsPendConf=new Set();
   const _guiasEntregadas=new Set(), _guiasDevueltas=new Set();
-  const mapa=new Map();let _idx=0;
+  // Teléfono → estado, para actualizar las dos tablas de Anticipos. Va por
+  // teléfono y no por guía porque esas tablas no registran la guía.
+  //
+  // Un mismo cliente aparece varias veces: por los productos de un pedido (misma
+  // fila repetida, mismo estado) y por pedidos distintos, que es el caso que
+  // importa. Ahí gana el estado MÁS AVANZADO (_ANT_PRIO): lo que se quiere saber
+  // es qué pasó con lo que se despachó, y un pedido cancelado o pendiente de
+  // confirmación al lado de uno entregado no dice nada del anticipo.
+  const _telEstado=new Map();
   rows.forEach(r=>{
     const id=String(r[cID]||'').trim();if(!id)return;
     const guia=String(r[cG]||'').trim();
@@ -983,6 +991,12 @@ function parsear(data){
     if(guia){
       if(_estNorm.startsWith('entregado')) _guiasEntregadas.add(guia);
       else if(_estNorm.includes('devolucion')||_estNorm.includes('devuelt')) _guiasDevueltas.add(guia);
+    }
+    const _tel=_antNormTel(r[cT]);
+    const _estAnt=_estNorm?_antEstadoDeExcel(_estNorm):null;
+    if(_tel&&_estAnt){
+      const _prev=_telEstado.get(_tel);
+      if(!_prev||_ANT_PRIO[_estAnt]>_ANT_PRIO[_prev]) _telEstado.set(_tel,_estAnt);
     }
     const _estadoRaw=mapEstado(r[cE],transportadora);
     if(!_estadoRaw)return;
@@ -1065,6 +1079,12 @@ function parsear(data){
   // sincronización de R.O., ya sin acceso a las filas del Excel.
   window._guiasEntregadas = _guiasEntregadas;
   window._guiasDevueltas  = _guiasDevueltas;
+  // Anticipos se actualiza acá mismo y no al abrir su pestaña —como sí hace
+  // R.O.—: el Excel lo sube el Gestor Logístico y las tablas las mira otra
+  // persona, que si no encontraría los estados viejos hasta que alguien más
+  // pasara por ahí.
+  window._telEstadoExcel = _telEstado;
+  if(typeof _antSyncPorExcel==='function') _antSyncPorExcel();
   return result;
 }
 
