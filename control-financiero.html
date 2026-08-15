@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="shared/shared.css?v=20260814f">
+<link rel="stylesheet" href="shared/shared.css?v=20260815a">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1016,24 +1016,20 @@ window._sbEstadosToggle=function(){
         <div class="tab-sb" style="border-radius:0;">
           <div class="tab-sb-row">
             <div class="tab-sb-wrap"><span class="tab-sb-ico">🔍</span>
-              <input class="tab-sb-inp" id="ant-sin-q" placeholder="Buscar cliente, teléfono, motivo o producto..." oninput="_antSearch('sin',this.value)">
+              <input class="tab-sb-inp" id="ant-sin-q" placeholder="Buscar teléfono, motivo o producto..." oninput="_antSearch('sin',this.value)">
             </div>
             <span class="tab-sb-count" id="ant-sin-count"></span>
           </div>
-          <div class="tab-chips" id="ant-sin-tr-chips">
-            <span class="tab-chip-lbl">Transportadora:</span>
-            <button class="tab-chip on" onclick="_antTransChip('sin','',this)">Todas</button>
-            <button class="tab-chip" onclick="_antTransChip('sin','COORDINADORA',this)">COORDINADORA</button>
-            <button class="tab-chip" onclick="_antTransChip('sin','INTERRAPIDÍSIMO',this)">INTERRAPIDÍSIMO</button>
-            <button class="tab-chip" onclick="_antTransChip('sin','ENVÍA',this)">ENVÍA</button>
-            <button class="tab-chip" onclick="_antTransChip('sin','TCC',this)">TCC</button>
-            <button class="tab-chip" onclick="_antTransChip('sin','SERVIENTREGA',this)">SERVIENTREGA</button>
-          </div>
-          <div class="tab-chips" id="ant-sin-ent-chips">
-            <span class="tab-chip-lbl">Entrega:</span>
-            <button class="tab-chip on" onclick="_antEntChip('sin','',this)">Todas</button>
-            <button class="tab-chip" onclick="_antEntChip('sin','si',this)" style="border-color:var(--success);color:var(--success);">✅ Entregadas</button>
-            <button class="tab-chip" onclick="_antEntChip('sin','no',this)" style="border-color:var(--warning);color:var(--warning);">⏳ Pendientes</button>
+          <!-- Filtra por ESTADO, igual que la tabla de arriba. Antes filtraba por
+               transportadora y por la casilla de entrega: las dos columnas ya no
+               están, y un filtro por algo que no se ve no se puede leer. -->
+          <div class="tab-chips" id="ant-sin-est-chips">
+            <span class="tab-chip-lbl">Estado:</span>
+            <button class="tab-chip on" onclick="_antEstChip('sin','',this)">Todos</button>
+            <button class="tab-chip" onclick="_antEstChip('sin','EN PROCESO',this)">EN PROCESO</button>
+            <button class="tab-chip" onclick="_antEstChip('sin','ENTREGADO',this)">ENTREGADO</button>
+            <button class="tab-chip" onclick="_antEstChip('sin','DEVUELTO',this)">DEVUELTO</button>
+            <button class="tab-chip" onclick="_antEstChip('sin','SIN ENVIAR',this)">SIN ENVIAR</button>
           </div>
         </div>
         <div style="overflow-x:auto;"><div id="ant-sin-wrap"></div></div>
@@ -1425,8 +1421,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="shared/app-shared.js?v=20260814f"></script>
-<script src="control-financiero.js?v=20260814f"></script>
+<script src="shared/app-shared.js?v=20260815a"></script>
+<script src="control-financiero.js?v=20260815a"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo
 // (mode-select-screen, que no se usa aquí), entra directo a Control Financiero
