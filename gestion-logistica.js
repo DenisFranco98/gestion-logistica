@@ -982,6 +982,7 @@ function parsear(data){
   // es qué pasó con lo que se despachó, y un pedido cancelado o pendiente de
   // confirmación al lado de uno entregado no dice nada del anticipo.
   const _telEstado=new Map();
+  const mapa=new Map();let _idx=0;
   rows.forEach(r=>{
     const id=String(r[cID]||'').trim();if(!id)return;
     const guia=String(r[cG]||'').trim();
