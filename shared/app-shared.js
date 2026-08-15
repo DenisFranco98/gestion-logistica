@@ -8967,23 +8967,34 @@ function _roSyncFromGestion(id, soloCrear){
       }
       if(existente){
         if(soloCrear) return;   // ya está: la carga del Excel no lo toca
-        // Gestionado desde el tablero: solo estos dos campos.
+        // Gestionado desde el tablero: solo la nota y la fecha de estado.
         const upd={fechaEstado:hoy};
-        const notaSeg=notas.length?notas[notas.length-1].texto:'';
-        if(notaSeg) upd.notaSeguimiento=notaSeg;
+        const reg=existente[1]||{};
+        const notaUlt=notas.length?notas[notas.length-1].texto:'';
+        // A DÓNDE VA LA NOTA. La primera gestión de una guía es el primer
+        // contacto con el cliente, así que su nota es la NOTA DEL CLIENTE; solo
+        // cuando esa columna ya tiene algo, lo que se escriba después es
+        // seguimiento. Antes todo caía en seguimiento y la columna de primer
+        // contacto quedaba vacía para siempre, incluso en registros que nacieron
+        // de la carga del Excel sin ninguna nota todavía.
+        if(notaUlt){
+          if(!(reg.notaCliente||'').trim()) upd.notaCliente=notaUlt;
+          else upd.notaSeguimiento=notaUlt;
+        }
         // Si se adoptó por teléfono, se completan los huecos que el asesor no
         // llenó. No pisa nada —solo escribe donde estaba vacío— y evita que la
         // próxima carga vuelva a no reconocer la fila.
-        const reg=existente[1]||{};
         if(!(reg.guia||'').trim() && p.guia) upd.guia=p.guia;
         if(!(reg.cliente||'').trim() && p.nombre) upd.cliente=p.nombre;
         return _db.ref(base+'/'+existente[0]).update(upd);
       }
-      // Alta: nace PENDIENTE y con la primera nota como nota de cliente.
+      // Alta: nace PENDIENTE y con la primera nota como nota de cliente. El
+      // seguimiento solo se llena si YA hay más de una nota: con una sola, la
+      // misma frase aparecía repetida en las dos columnas.
       return _db.ref(base+'/'+rKey).set({
         guia:p.guia, cliente:p.nombre||'', telefono:tel,
         notaCliente:notas.length?notas[0].texto:'',
-        notaSeguimiento:notas.length?notas[notas.length-1].texto:'',
+        notaSeguimiento:notas.length>1?notas[notas.length-1].texto:'',
         estado:'PENDIENTE', fechaContacto:hoy, fechaEstado:'',
         ts:Date.now(), _fromLogistica:true
       });
