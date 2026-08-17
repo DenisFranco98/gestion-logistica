@@ -5,6 +5,32 @@
 // <script src>, para no duplicar fixes (ver plan de split en 3 páginas).
 // ══════════════════════════════════════════════════════════════════════
 
+// ── UN SOLO ORIGEN: www.dominio → dominio ──────────────────────────────
+// Para el navegador, www.redking-tulogistica.com y redking-tulogistica.com son
+// ORÍGENES DISTINTOS, o sea que cada uno tiene su propio localStorage. Quien
+// entrara por www se encontraba sin sesión, sin tienda elegida y sin tema, y
+// volvía a loguearse sin entender por qué. Antes daba casi igual porque www lo
+// servía GitHub Pages; desde el 2026-08-17 los dos apuntan al mismo sitio de
+// Firebase Hosting, así que sirven la misma app con dos memorias separadas.
+//
+// Esto va lo más arriba posible del archivo a propósito: corre antes de
+// initializeApp() y antes de _initLogin(), así que no se llega a leer ni a
+// escribir la sesión del origen equivocado. Lo único que se ejecuta antes es el
+// <script> inline del tema, que es cosmético y se vuelve a aplicar al llegar.
+//
+// No puede entrar en bucle: el destino nunca empieza por "www.". Y no hace falta
+// limitarlo al dominio de producción, porque ni localhost ni el .web.app empiezan
+// por "www.". Se conservan path, query y hash — el hash va a importar cuando el
+// Centro de Operaciones tenga su router.
+(function(){
+  try{
+    var h = location.hostname;
+    if(h.indexOf('www.') === 0){
+      location.replace(location.protocol + '//' + h.slice(4) + location.pathname + location.search + location.hash);
+    }
+  }catch(_){}
+})();
+
 // ── HELPERS ────────────────────────────────────────────────────────────
 function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
 function toast(msg,dur=2200){const t=document.getElementById('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
