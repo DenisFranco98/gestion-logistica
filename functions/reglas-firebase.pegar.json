@@ -36,12 +36,16 @@
       ".write": "auth != null"
     },
     "session_hist": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$uid": {
+        ".read": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)",
+        ".write": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)"
+      }
     },
     "session_reports": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$uid": {
+        ".read": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)",
+        ".write": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)"
+      }
     },
     "user_fotos": {
       ".read": "auth != null",

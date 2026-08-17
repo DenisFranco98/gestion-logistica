@@ -120,8 +120,31 @@
     // porque al sacar el permiso de la raíz hay que dárselo a cada uno.
     "historial_diario":   { ".read": "auth != null", ".write": "auth != null" },
     "evt_hist":           { ".read": "auth != null", ".write": "auth != null" },
-    "session_hist":       { ".read": "auth != null", ".write": "auth != null" },
-    "session_reports":    { ".read": "auth != null", ".write": "auth != null" },
+    // session_hist y session_reports van indexados por UID —no por tienda—, así
+    // que se pueden cerrar sin el problema de las claves viejas que tienen los
+    // nodos por tienda: cada quien lo suyo, y los admins todo.
+    //
+    // Quién escribe: _registrarPresencia (2546) y el update de salida (2586) y
+    // _fbGuardarInformeSesion (4130), siempre sobre el uid propio. Quién lee de
+    // otros: _malCargarSesiones (7346) y _malVerInforme (7419), que son el modal
+    // de asesor del Panel Admin, y _migrarCuentaVieja (1418), herramienta de
+    // consola. Todo eso cae en la rama de admins.
+    //
+    // El ".read" va en $uid y no en el nodo: _malCargarSesiones consulta con
+    // orderByChild('start') sobre session_hist/{uid}, y una consulta necesita el
+    // permiso en el nodo que se consulta, que es justamente $uid.
+    "session_hist": {
+      "$uid": {
+        ".read":  "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)",
+        ".write": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)"
+      }
+    },
+    "session_reports": {
+      "$uid": {
+        ".read":  "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)",
+        ".write": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)"
+      }
+    },
     "user_fotos":         { ".read": "auth != null", ".write": "auth != null" },
     "empresa_asesores":   { ".read": "auth != null", ".write": "auth != null" },
     "gestiones_sync":     { ".read": "auth != null", ".write": "auth != null" },
