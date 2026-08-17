@@ -8702,6 +8702,18 @@ function _leerTienda(rutaFn, q){
         .then(()=>ref(nueva).once('value'))
         .catch(e=>{ console.warn('[TIENDA] no se pudo migrar '+vieja+' → '+nueva, e); return sv; });
     });
+  }).catch(e=>{
+    // La clave vieja es el slug del nombre de la tienda, y no figura en
+    // user_tiendas ni en admin_empresas —esos van por empresaId—, así que en
+    // cuanto un nodo se cierra por tienda esta lectura devuelve
+    // permission_denied. Pasa en el caso más normal que hay: un mes todavía sin
+    // datos, donde el nodo nuevo no existe y se va a mirar el viejo.
+    //
+    // Sin este catch la promesa quedaba rechazada y sin nadie que la atendiera:
+    // la pantalla se quedaba en "Cargando..." para siempre. Se sigue con el
+    // snapshot nuevo (vacío), que es exactamente lo que hay que mostrar.
+    if(String(e&&e.code||e).indexOf('PERMISSION_DENIED')<0) console.warn('[TIENDA] falló la lectura de '+vieja, e);
+    return _db.ref(nueva).once('value');
   });
 }
 // Igual que _leerTienda pero para nodos que además cuelgan del asesor, o sea

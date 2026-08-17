@@ -175,7 +175,26 @@
     "gestiones_diarias":  { ".read": "auth != null", ".write": "auth != null" },
     "user_tiendas":       { ".read": "auth != null", ".write": "auth != null" },
     "logistica_guias":    { ".read": "auth != null", ".write": "auth != null" },
-    "logistica_live":     { ".read": "auth != null", ".write": "auth != null" },
+    // ── CUATRO NODOS POR TIENDA ──────────────────────────────────────────
+    // Mismo criterio que ventas_bot: se entra si esa tienda es tuya (user_tiendas)
+    // o si sos admin de ella (admin_empresas). Antes cualquier cuenta logueada
+    // leía y escribía los de TODAS las tiendas — control_financiero incluido, que
+    // es la plata.
+    //
+    // Se comprobó antes de cerrarlos que las claves de primer nivel son todas
+    // empresaId de verdad (13, 10, 10 y 12 claves, cero con nombre de tienda). Eso
+    // importa porque _gdTK() cae al slug del nombre cuando no hay empresaId, y esos
+    // datos habrían quedado inaccesibles: el slug no está en ningún índice.
+    //
+    // Relacionado: _leerTienda() mira la clave vieja cuando la nueva no existe, y
+    // esa lectura ahora da permission_denied. Lleva un catch para que no deje la
+    // pantalla colgada — ver el comentario ahí.
+    "logistica_live": {
+      "$empresaId": {
+        ".read":  "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
+    },
     // config/superAdminUid ES la definición de quién manda en todo el sistema:
     // el login compara el uid contra este valor para conceder el rol
     // (app-shared.js:2797 y 2890). Estaba con ".write": "auth != null", o sea
@@ -222,13 +241,35 @@
       }
     },
     "admin_empresas":     { ".read": "auth != null", ".write": "auth != null" },
-    "reportes":           { ".read": "auth != null", ".write": "auth != null" },
-    "reportes_img":       { ".read": "auth != null", ".write": "auth != null" },
+    "reportes": {
+      "$empresaId": {
+        ".read":  "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
+    },
+    // Las capturas viven aparte de los reportes a propósito: metidas dentro, leer
+    // el mes entero arrastraría todas las imágenes aunque no se muestren. Mismo
+    // permiso que el nodo del que cuelgan.
+    "reportes_img": {
+      "$empresaId": {
+        ".read":  "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
+    },
     "login_audit":        { ".read": "auth != null", ".write": "auth != null" },
     "novedades":          { ".read": "auth != null", ".write": "auth != null" },
     "nov_img":            { ".read": "auth != null", ".write": "auth != null" },
     "presence":           { ".read": "auth != null", ".write": "auth != null" },
-    "control_financiero": { ".read": "auth != null", ".write": "auth != null" },
+    // La plata de cada tienda: control_financiero/{empresaId}/{mes} y /config
+    // (ver _cfBase en control-financiero.js). Hasta ahora cualquier asesora de
+    // cualquier tienda podía leer y escribir las finanzas de todas las demás.
+    // El módulo entra siempre por ruta directa, sin el fallback de _leerTienda.
+    "control_financiero": {
+      "$empresaId": {
+        ".read":  "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
+    },
     "catalogo_productos": { ".read": "auth != null", ".write": "auth != null" },
     "notes":              { ".read": "auth != null", ".write": "auth != null" },
     "ro":                 { ".read": "auth != null", ".write": "auth != null" },

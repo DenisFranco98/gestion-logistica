@@ -78,8 +78,10 @@
       ".write": "auth != null"
     },
     "logistica_live": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
     },
     "config": {
       ".read": "auth != null",
@@ -109,12 +111,16 @@
       ".write": "auth != null"
     },
     "reportes": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
     },
     "reportes_img": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
     },
     "login_audit": {
       ".read": "auth != null",
@@ -133,8 +139,10 @@
       ".write": "auth != null"
     },
     "control_financiero": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())"
+      }
     },
     "catalogo_productos": {
       ".read": "auth != null",
