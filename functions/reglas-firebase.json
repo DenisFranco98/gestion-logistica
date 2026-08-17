@@ -1,5 +1,14 @@
-// ARCHIVO COMPLETO DE REGLAS. Se pega tal cual, reemplazando todo lo que haya
-// hoy en: Consola de Firebase -> Realtime Database -> Reglas -> Publicar.
+// ESTE ARCHIVO NO SE PEGA EN LA CONSOLA — es la versión comentada, para leer y
+// entender por qué cada regla es como es. El editor de reglas de Firebase se
+// atraganta con estos comentarios ("missing ; before statement", probado el
+// 2026-08-17).
+//
+// PARA PEGAR usá el de al lado, que es JSON estricto y sin comentarios:
+//     functions/reglas-firebase.pegar.json
+//
+// Al tocar ESTE archivo hay que regenerar el otro, o quedan distintos:
+//     node functions/limpiar-reglas.js \
+//          functions/reglas-firebase.json functions/reglas-firebase.pegar.json
 //
 // QUÉ CAMBIA respecto de las reglas actuales
 // ------------------------------------------
