@@ -2455,10 +2455,13 @@ function _initLogin(){
   // guardado bajo la carpeta vieja (ver _gdAKPrevio).
   const ASESOR_PREV_KEY = 'lgs_asesor_prev';
   const USER_KEY = 'lgs_user';
-  const ADMIN_USER = 'admin';
-  const ADMIN_PASS = 'admin';
-  const FALLBACK_USER = '3D Company';
-  const FALLBACK_PASS = '3dcompany';
+  // Acá vivían ADMIN_USER/ADMIN_PASS ('admin'/'admin') y FALLBACK_USER/
+  // FALLBACK_PASS ('3D Company'/'3dcompany'). Se borraron el 2026-08-17: este
+  // archivo lo descarga cualquiera que abra el sitio, así que eran credenciales
+  // públicas — con 'admin'/'admin' se entraba como SUPER ADMIN. El acceso de
+  // super admin ahora es solo por cuenta de Google contra config/superAdminUid
+  // (ver _leerRoles). Las dos FALLBACK ya no se usaban en ninguna parte: eran
+  // residuo del Facilitador viejo. No volver a poner credenciales acá.
 
   let _heartbeatInterval = null;
   let _currentUsername = null;
@@ -2854,17 +2857,14 @@ function _initLogin(){
     document.getElementById('login-error-campos').classList.remove('show');
     if(!email||!p){ document.getElementById('login-error-campos').classList.add('show'); setTimeout(()=>document.getElementById('login-error-campos').classList.remove('show'),3000); return; }
 
-    // Acceso de emergencia hardcodeado (solo para Super Admin sin cuenta Gmail aún)
-    if(email === ADMIN_USER && p === ADMIN_PASS){
-      // Este camino no dejaba ningún rastro: el acceso más privilegiado del
-      // sistema era justo el único que no aparecía en la auditoría.
-      _auditLogin(email,'exito');
-      firebase.auth().signInAnonymously().then(()=>{
-        localStorage.setItem(LOGIN_KEY,'superadmin');
-        _showSuperAdmin(); _superAdmCargar();
-      });
-      return;
-    }
+    // Acá estaba el "acceso de emergencia": si el usuario escribía 'admin' y la
+    // contraseña 'admin', entraba como SUPER ADMIN. Se eliminó el 2026-08-17.
+    // No era una puerta oculta: las dos constantes estaban en este mismo archivo,
+    // que se descarga con solo abrir el sitio. Además entraba con
+    // signInAnonymously(), así que la sesión más privilegiada del sistema quedaba
+    // atada a un uid anónimo distinto en cada visita — sin relación con ninguna
+    // cuenta real. El super admin ahora entra por Google como todo el mundo, y el
+    // rol se resuelve en _leerRoles() contra config/superAdminUid.
 
     const btn = document.querySelector('.login-btn');
     if(btn){ btn.disabled=true; btn.textContent='Verificando...'; }
@@ -3891,51 +3891,28 @@ function _showAdminGlobal(){
 }
 
 // ===== MIGRACIÓN INICIAL =====
-function _migracionInicial(){
-  // Asegurar que el admin 3DCompanyadmin existe
-  _db.ref('admins').orderByChild('username').equalTo('3DCompanyadmin').once('value', snapAdm=>{
-    const _asignarUsuarios = (empresaId)=>{
-      // Siempre re-sincronizar todos los usuarios existentes a 3D Company
-      _db.ref('users').once('value', snapUsers=>{
-        const batch = {};
-        Object.keys(snapUsers.val()||{}).forEach(uid=>{
-          batch[uid] = true;
-        });
-        if(Object.keys(batch).length) _db.ref('empresa_asesores/'+empresaId).update(batch);
-      });
-    };
+// Acá estaba _migracionInicial(), borrada el 2026-08-17 junto con su llamada
+// automática. Era de cuando la app tenía una sola empresa ("3D Company") y
+// corría SOLA en cada carga de página, para cualquier usuario y antes del login.
+// Hacía tres cosas y hoy ninguna era deseable:
+//
+//  1. Si no encontraba el admin '3DCompanyadmin', lo creaba con
+//     {username:'3DCompanyadmin', password:'3DCompanyadmin'} — una contraseña en
+//     texto plano, igual al usuario, dentro de /admins.
+//  2. Creaba la empresa "3D Company" si ese admin no tenía ninguna.
+//  3. Leía /users ENTERO y metía a todos los uid en empresa_asesores/{3D Company}
+//     en cada carga. Eso no era una migración: era una contaminación continua.
+//     Es exactamente lo que documenta _auditMembresias() más arriba — "3D Company
+//     tenía 22 asesores asignados habiendo 17 usuarios en total", y repararlo a
+//     ciegas "habría dado acceso a esa tienda a media empresa".
+//
+// Borrarla no rompe nada: el admin y la empresa ya existen (no se recrean), el
+// alta de asesores escribe los dos índices por su cuenta desde hace tiempo, y
+// nadie más la llamaba. Lo que ya quedó de más en empresa_asesores sigue ahí;
+// para revisarlo está _auditMembresias(). Si alguna vez hace falta consultarla,
+// está en el historial de git.
 
-    const _asegurarEmpresa = (adminId)=>{
-      _db.ref('admin_empresas/'+adminId).once('value', snapAE=>{
-        const misEmpresas = Object.keys(snapAE.val()||{});
-        if(misEmpresas.length){
-          // Empresa ya existe — solo sincronizar asesores
-          _asignarUsuarios(misEmpresas[0]);
-        } else {
-          // Crear empresa 3D Company
-          const empRef = _db.ref('empresas').push();
-          empRef.set({nombre:'3D Company', creadoPor:adminId, createdAt:Date.now()}).then(()=>{
-            _db.ref('admin_empresas/'+adminId+'/'+empRef.key).set(true);
-            _asignarUsuarios(empRef.key);
-          });
-        }
-      });
-    };
-
-    if(snapAdm.exists()){
-      let adminId;
-      snapAdm.forEach(c=>{ adminId=c.key; });
-      _asegurarEmpresa(adminId);
-    } else {
-      const admRef = _db.ref('admins').push();
-      admRef.set({username:'3DCompanyadmin', password:'3DCompanyadmin', createdAt:Date.now()}).then(()=>{
-        _asegurarEmpresa(admRef.key);
-      });
-    }
-  });
-}
-
-_initLogin(); _migracionInicial();
+_initLogin();
 
 // ===== FIREBASE SYNC GESTIONES =====
 function _fbKey(k){ return String(k).replace(/[.#$\[\]\/]/g,'_'); }

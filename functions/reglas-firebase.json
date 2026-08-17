@@ -85,15 +85,79 @@
     "user_fotos":         { ".read": "auth != null", ".write": "auth != null" },
     "empresa_asesores":   { ".read": "auth != null", ".write": "auth != null" },
     "gestiones_sync":     { ".read": "auth != null", ".write": "auth != null" },
-    "users":              { ".read": "auth != null", ".write": "auth != null" },
+    // /users — la escritura pasa de "cualquier cuenta logueada" a "tu propio
+    // nodo, o un admin, o el super admin".
+    //
+    // El ".write" NO se puede poner en "users" a secas: _perfilGuardar() deja
+    // que cualquier asesor edite su propio nombre (app-shared.js:2310), así que
+    // una regla de solo-admins le rompería el perfil a todo el mundo. Por eso va
+    // por $uid con "$uid === auth.uid": verificado que lgs_user guarda el uid de
+    // Firebase Auth y no el correo (todas las llamadas a _entrarApp pasan uid),
+    // así que users/{lgs_user} es users/{auth.uid} y la comparación se cumple.
+    //
+    // Las otras cinco vías de escritura son del panel admin —_admGuardarUsuario,
+    // _admGuardarEdicion, _admEliminarUsuario, _mgaAgregarAsesor y _migUsuario—
+    // y quedan cubiertas por la rama de admins.
+    //
+    // La LECTURA queda como está a propósito: media app lee /users entero para
+    // resolver nombres (el panel de equipo, el consolidado, _leerRoles). Cerrarla
+    // es otro trabajo; lo que se cierra acá es la escritura, que es por donde se
+    // escalaban privilegios.
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)"
+      }
+    },
     "gestiones_diarias":  { ".read": "auth != null", ".write": "auth != null" },
     "user_tiendas":       { ".read": "auth != null", ".write": "auth != null" },
     "logistica_guias":    { ".read": "auth != null", ".write": "auth != null" },
     "logistica_live":     { ".read": "auth != null", ".write": "auth != null" },
-    "config":             { ".read": "auth != null", ".write": "auth != null" },
+    // config/superAdminUid ES la definición de quién manda en todo el sistema:
+    // el login compara el uid contra este valor para conceder el rol
+    // (app-shared.js:2797 y 2890). Estaba con ".write": "auth != null", o sea
+    // que CUALQUIER cuenta logueada podía escribir su propio uid acá desde la
+    // consola del navegador y quedar como super admin. Era la escalada de
+    // privilegios más corta de la base: un solo paso, sin pasar por /admins.
+    //
+    // Ahora solo el super admin actual puede reescribirlo. El resto de config
+    // queda EXACTAMENTE como estaba —no se toca lo que no hace falta tocar—;
+    // hoy no hay ninguna otra clave en el código, pero si la base tiene alguna
+    // de antes, sigue funcionando igual.
+    //
+    // OJO — las dos formas en que esta regla puede dejar el nodo inaccesible:
+    //  1. Si superAdminUid está VACÍO hoy, nadie puede designarlo desde la app
+    //     (data.val() no coincide con nadie).
+    //  2. _saQuitarSuperAdmin() lo borra, y después cae en el caso 1.
+    // En ambos se arregla escribiendo el uid a mano en la consola de Firebase,
+    // que usa el Admin SDK y no pasa por estas reglas. Se prefirió esto antes
+    // que un "|| !data.exists()", que dejaría la puerta abierta a que el primero
+    // que llegue se apropie del sistema si el nodo alguna vez queda vacío.
+    "config": {
+      ".read": "auth != null",
+      "superAdminUid": { ".write": "auth != null && data.val() === auth.uid" },
+      "$otraClave":    { ".write": "auth != null" }
+    },
     "anticipos":          { ".read": "auth != null", ".write": "auth != null" },
     "empresas":           { ".read": "auth != null", ".write": "auth != null" },
-    "admins":             { ".read": "auth != null", ".write": "auth != null" },
+    // /admins — mismo criterio que /users: cada quien su nodo, más admins y
+    // super admin. Antes cualquier cuenta logueada podía escribir acá, o sea
+    // agregarse a sí misma a /admins y con eso abrirse además bot_workspaces,
+    // que se protege justamente con root.child('admins').child(auth.uid).
+    //
+    // OJO — "$uid === auth.uid" mantiene A PROPÓSITO el auto-registro: el modal
+    // de registro (_registrarAdmin, app-shared.js:3298) es público, crea la
+    // cuenta con createUserWithEmailAndPassword y acto seguido escribe
+    // admins/{su propio uid}. O sea que hoy cualquiera que llegue al login puede
+    // registrarse como admin de negocios. Eso NO se cambió acá porque es el flujo
+    // de alta de clientes, no un bug: cerrarlo es una decisión de producto.
+    // Lo que sí queda cerrado es escribir en el nodo de OTRO admin.
+    "admins": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && ($uid === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('config').child('superAdminUid').val() === auth.uid)"
+      }
+    },
     "admin_empresas":     { ".read": "auth != null", ".write": "auth != null" },
     "reportes":           { ".read": "auth != null", ".write": "auth != null" },
     "reportes_img":       { ".read": "auth != null", ".write": "auth != null" },
