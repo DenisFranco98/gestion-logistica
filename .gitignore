@@ -1,3 +1,7 @@
 # Los .zip son artefactos: se regeneran empaquetando la carpeta de cada
 # extensión, así que se versiona el código fuente y no el paquete.
 *.zip
+
+# Lo deja el CLI de Firebase cuando un deploy falla. Es útil para diagnosticar
+# en el momento —de ahí salió el EISDIR de OneDrive— pero no se versiona.
+firebase-debug.log

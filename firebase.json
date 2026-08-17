@@ -10,5 +10,26 @@
         "test"
       ]
     }
-  ]
+  ],
+  "hosting": {
+    "public": ".",
+    "cleanUrls": true,
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "**/.*",
+      "**/.*/**",
+      "**/node_modules/**",
+      "functions",
+      "functions/**",
+      "publicar.js",
+      "CNAME",
+      "README.md",
+      "*.zip",
+      "*.log"
+    ],
+    "rewrites": [
+      { "source": "**", "destination": "/index.html" }
+    ]
+  }
 }
