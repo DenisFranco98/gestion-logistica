@@ -6741,14 +6741,29 @@ async function _botwCargar(){
   cont.innerHTML = '<div class="adm-empty">Cargando...</div>';
   const adminId = localStorage.getItem('lgs_admin_id');
   try{
-    const [snapWs, snapAE, snapEmp] = await Promise.all([
-      _db.ref('bot_workspaces').once('value'),
+    const [snapAE, snapEmp] = await Promise.all([
       _db.ref('admin_empresas/'+adminId).once('value'),
       _db.ref('empresas').once('value')
     ]);
-    _botwData = snapWs.val() || {};
     const misIds = Object.keys(snapAE.val()||{});
     const empresas = snapEmp.val()||{};
+    // UNA CONSULTA POR EMPRESA, en vez del nodo entero. Antes esto era
+    // _db.ref('bot_workspaces').once('value'): se descargaban los workspaces de
+    // TODAS las tiendas y recién después _botwRender filtraba por misIds. O sea
+    // que el filtro era visual — cualquier admin podía escribir _botwData en la
+    // consola del navegador y leer las API keys de las demás tiendas, y con una
+    // de esas keys se pueden inyectar ventas falsas en la tienda ajena.
+    //
+    // Las reglas ahora solo aceptan la lectura si viene filtrada por una empresa
+    // propia (ver "bot_workspaces" en functions/reglas-firebase.json), así que
+    // las claves ajenas ya no llegan al navegador. Es también la razón por la que
+    // no se puede volver a leer el nodo de una sola vez: esa lectura da
+    // permission_denied a propósito.
+    const porEmpresa = await Promise.all(misIds.map(id =>
+      _db.ref('bot_workspaces').orderByChild('empresaId').equalTo(id).once('value')
+    ));
+    _botwData = {};
+    porEmpresa.forEach(s => Object.assign(_botwData, s.val()||{}));
     // El selector de tienda solo ofrece las del admin: un workspace apuntando a
     // una empresa ajena dejaría entrar ventas donde no corresponde.
     const sel = document.getElementById('botw-empresa');

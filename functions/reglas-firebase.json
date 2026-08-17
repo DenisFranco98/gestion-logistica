@@ -30,9 +30,28 @@
     // falsas en esa tienda. Es el único nodo secreto de la app, por eso lo ven
     // solo los admins — un asesor no debe verlo ni el de su propia tienda.
     // Las Cloud Functions lo leen con el Admin SDK, que se saltea estas reglas.
+    // Acotado POR EMPRESA el 2026-08-17. Antes decía "cualquier admin", y como
+    // el alta de admins es pública (el modal "¿Eres administrador? Crear cuenta"
+    // es el alta de clientes del SaaS, y así se queda), cualquiera podía
+    // registrarse y leer las API keys de TODAS las tiendas — con una key ajena se
+    // inyectan ventas falsas en esa tienda.
+    //
+    // La lectura solo se concede a una CONSULTA FILTRADA por una empresa propia.
+    // Leer el nodo entero queda denegado a propósito: en Realtime Database un
+    // permiso en el padre alcanza a todo el subárbol, así que mientras se pudiera
+    // leer "bot_workspaces" de una sola vez no había forma de esconder las claves
+    // ajenas. Por eso _botwCargar() hace una consulta por cada empresa del admin
+    // en vez de una lectura sola — las dos cosas van juntas, cambiar una sin la
+    // otra rompe el panel del bot.
+    //
+    // Las Cloud Functions leen esto con el Admin SDK y no pasan por estas reglas,
+    // así que los endpoints del bot no se ven afectados.
     "bot_workspaces": {
-      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
-      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      ".indexOn": "empresaId",
+      ".read": "auth != null && query.orderByChild === 'empresaId' && root.child('admin_empresas').child(auth.uid).child(query.equalTo).exists()",
+      "$code": {
+        ".write": "auth != null && ((newData.exists() && root.child('admin_empresas').child(auth.uid).child(newData.child('empresaId').val()).exists()) || (data.exists() && root.child('admin_empresas').child(auth.uid).child(data.child('empresaId').val()).exists()) || root.child('config').child('superAdminUid').val() === auth.uid)"
+      }
     },
 
     // Las ventas del bot. Las CREA solo la Cloud Function, que usa el Admin SDK
