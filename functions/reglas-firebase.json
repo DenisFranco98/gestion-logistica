@@ -9,27 +9,39 @@
 // quitan—, así que para proteger un solo nodo hay que bajar ese permiso a cada
 // nodo por separado.
 //
-// Eso es todo lo que hace este archivo: los 28 nodos que ya existían quedan
-// EXACTAMENTE igual que hoy ("auth != null"), y solo cambian los tres del bot de
-// ventas.
+// QUÉ NODOS ESTÁN CERRADOS HOY (2026-08-17) — los otros 25 siguen abiertos:
+//
+//   bot_workspaces      lectura solo por consulta filtrada por empresa propia;
+//                       escritura validando el empresaId contra admin_empresas
+//   ventas_bot          las crea solo la Cloud Function; borrar, solo el dueño
+//   ventas_bot_idx      ídem
+//   config              superAdminUid solo lo reescribe el super admin actual
+//   users               escritura: tu propio nodo, un admin, o el super admin
+//   admins              ídem (el auto-registro de clientes sigue funcionando)
+//
+// ORDEN DE PUBLICACIÓN: primero el código, después estas reglas. Ya se hizo así
+// (commits c09b138 y 3438058, publicados). Al revés, el código viejo choca:
+// _migracionInicial escribía en /admins en cada carga y _botwCargar leía
+// bot_workspaces entero — las dos cosas darían permission_denied.
 //
 // OJO: al sacar el permiso de la raíz, un nodo NUEVO que no esté listado acá
 // queda bloqueado. Si más adelante se agrega algo que escriba en un nodo nuevo,
 // hay que sumarlo a esta lista o va a fallar con permission_denied.
 //
-// ESTO NO ES UN BLINDAJE DE LA BASE. Los 28 nodos siguen abiertos a cualquier
-// cuenta logueada: un asesor puede leer y escribir los datos de otras tiendas, y
-// /users y /admins siguen accesibles. Es solo el primer paso, el que cierra lo
-// del bot. Cerrar el resto es un trabajo aparte, nodo por nodo, verificando que
-// cada módulo siga funcionando.
+// ESTO TODAVÍA NO ES UN BLINDAJE DE LA BASE. Los 25 nodos de abajo siguen
+// abiertos a cualquier cuenta logueada: un asesor puede leer y escribir el
+// control financiero, los pedidos y los anticipos de otras tiendas. Cerrarlos es
+// un trabajo aparte, nodo por nodo. Y en cada uno hay que revisar primero si la
+// app lee el nodo entero y filtra en el cliente —como hacía el panel del bot—,
+// porque ahí el cierre parece funcionar y no funciona.
 {
   "rules": {
 
     // ── BOT DE VENTAS ────────────────────────────────────────────────────
     // Acá vive la API key de cada tienda: quien la lea puede registrar ventas
-    // falsas en esa tienda. Es el único nodo secreto de la app, por eso lo ven
-    // solo los admins — un asesor no debe verlo ni el de su propia tienda.
-    // Las Cloud Functions lo leen con el Admin SDK, que se saltea estas reglas.
+    // falsas en esa tienda. Es el único nodo secreto de la app — un asesor no
+    // debe verlo ni el de su propia tienda.
+    //
     // Acotado POR EMPRESA el 2026-08-17. Antes decía "cualquier admin", y como
     // el alta de admins es pública (el modal "¿Eres administrador? Crear cuenta"
     // es el alta de clientes del SaaS, y así se queda), cualquiera podía
