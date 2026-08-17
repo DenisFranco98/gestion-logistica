@@ -52,4 +52,8 @@ fs.writeFileSync('version.json', JSON.stringify({v:nueva}, null, 2)+'\n');
 console.log(vieja+' → '+nueva);
 console.log('  HTML actualizados: '+tocados);
 console.log('  version.json escrito');
-console.log('\nFalta: git add -A && git commit && git push');
+// El sitio lo sirve Firebase Hosting desde el 2026-08-17, así que un push ya no
+// publica nada: solo versiona y mantiene al día el respaldo de GitHub Pages.
+console.log('\nFalta:');
+console.log('  git add -A && git commit && git push      (versiona)');
+console.log('  node desplegar-firebase.js                (PUBLICA)');

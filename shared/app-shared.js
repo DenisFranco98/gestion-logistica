@@ -73,7 +73,10 @@ async function _chequearVersion(){
   try{
     const actual = _versionCargada();
     if(!actual) return;
-    const r = await fetch('version.json?cb='+Date.now(), {cache:'no-store'});
+    // Absoluta a propósito: desde /admin/equipo, "version.json" a secas pediría
+    // /admin/version.json, el rewrite devolvería index.html y el JSON.parse
+    // reventaría. Mismo motivo por el que los <script src> son absolutos.
+    const r = await fetch('/version.json?cb='+Date.now(), {cache:'no-store'});
     if(!r.ok) return;
     const pub = (await r.json()||{}).v;
     if(!pub || pub===actual){
@@ -2501,9 +2504,18 @@ function _initLogin(){
     document.getElementById('tienda-select-screen').style.display='none';
     const sp = document.getElementById('super-admin-panel');
     if(sp) sp.style.display='none';
+    _admRutaLimpiar();
   }
   function _loginHide(){ document.getElementById('login-screen').classList.add('hidden'); document.getElementById('login-screen').classList.remove('visible'); }
-  function _showAdmin(){ _hideSplash(); document.getElementById('admin-panel').classList.add('visible'); _loginHide(); }
+  function _showAdmin(){
+    _hideSplash(); document.getElementById('admin-panel').classList.add('visible'); _loginHide();
+    // En diferido a propósito. Los tres sitios que abren el panel hacen
+    // "_showAdmin(); _admCargarDashboard();", y si la URL pide una sección que no
+    // es En Vivo, su carga (_cargarEquipoGlobal y compañía) tiene que salir
+    // DESPUÉS del dashboard, igual que cuando se llega ahí haciendo clic. Con la
+    // llamada directa se adelantaría a él.
+    setTimeout(_admRutaAplicar, 0);
+  }
   function _showSuperAdmin(){ _hideSplash(); document.getElementById('super-admin-panel').style.display='block'; _loginHide(); }
 
   // ── Presencia en Firebase ──
@@ -4220,13 +4232,82 @@ let _admPresenceTick = null;
 // _admCargarDashboard, mucho antes de donde se usa.
 let _bordEmpresas = {};
 
-function _admTab(tab){
-  ['enlive','ranking','equipo','analitica','empresas','botventas','buscar','gdconsolid','auditoria','reportes','negocio'].forEach(t=>{
+// ── RUTAS DEL CENTRO DE OPERACIONES ──────────────────────────────────────
+// El panel era 11 divs que se mostraban y se ocultaban, así que la URL se
+// quedaba en "/" estuvieras donde estuvieras: no se podía mandar el enlace de
+// una sección, F5 te devolvía siempre a En Vivo, y el botón atrás te sacaba de
+// la app en vez de volver al tab anterior. Ahora cada sección tiene su URL real,
+// /admin/equipo y compañía, sin "#".
+//
+// Sin "#" solo es posible porque el hosting devuelve index.html para cualquier
+// ruta sin archivo (el rewrite de firebase.json). En GitHub Pages esto daba 404
+// al recargar — fue el motivo de migrar. Si algún día se vuelve a un hosting sin
+// rewrite, esto hay que pasarlo a location.hash.
+//
+// El router entra por UN SOLO punto: _admTab, que es la única función que cambia
+// de sección y a la que apuntan los 44 onclick del HTML. No hace falta tocar
+// ninguno de ellos.
+const _ADM_TABS = ['enlive','ranking','equipo','analitica','empresas','botventas','buscar','gdconsolid','auditoria','reportes','negocio'];
+const _ADM_TAB_INICIAL = 'enlive';   // el que el HTML ya trae marcado como activo
+
+// Solo en la landing: el Centro de Operaciones vive en index.html. Las 3 páginas
+// de módulo declaran _PAGINA_MODULO y tienen una copia muerta del panel, así que
+// ahí el router no debe tocar la URL ni por casualidad.
+function _admRouterActivo(){
+  return !window._PAGINA_MODULO && typeof history !== 'undefined' && !!history.pushState;
+}
+
+// Devuelve el tab de la URL, o null. Se valida contra _ADM_TABS: una ruta
+// inventada (/admin/loquesea) no puede hacer que se muestre nada raro.
+function _admRutaLeer(){
+  const m = String(location.pathname || '').match(/^\/admin\/([a-z]+)\/?$/);
+  return (m && _ADM_TABS.indexOf(m[1]) >= 0) ? m[1] : null;
+}
+
+function _admRutaEscribir(tab, reemplazar){
+  if(!_admRouterActivo()) return;
+  const url = '/admin/' + tab;
+  if(location.pathname === url) return;   // sin esto, recargar duplicaría historial
+  history[reemplazar ? 'replaceState' : 'pushState']({admTab:tab}, '', url);
+}
+
+// Al abrir el panel: si la URL ya pedía una sección, se respeta. Si no, se
+// normaliza a /admin/enlive con replaceState —no pushState— para no dejar una
+// entrada de historial de más nada más entrar.
+function _admRutaAplicar(){
+  if(!_admRouterActivo()) return;
+  const tab = _admRutaLeer();
+  if(tab && tab !== _ADM_TAB_INICIAL) _admTab(tab, true);
+  else _admRutaEscribir(_ADM_TAB_INICIAL, true);
+}
+
+// Al volver al login la URL no puede quedarse en /admin/algo: el siguiente que
+// abra el navegador vería esa ruta sin tener sesión.
+function _admRutaLimpiar(){
+  if(!_admRouterActivo()) return;
+  if(_admRutaLeer()) history.replaceState({}, '', '/');
+}
+
+// Atrás y adelante del navegador. Se exige que el panel esté visible: si el
+// usuario ya salió al login, un popstate no debe repintar secciones de admin.
+window.addEventListener('popstate', function(){
+  if(!_admRouterActivo()) return;
+  const panel = document.getElementById('admin-panel');
+  if(!panel || !panel.classList.contains('visible')) return;
+  _admTab(_admRutaLeer() || _ADM_TAB_INICIAL, true);
+});
+
+// _desdeLaRuta lo pasan _admRutaAplicar y el popstate: en esos dos casos la URL
+// YA es la correcta y volver a escribirla duplicaría el historial. Los onclick
+// del HTML llaman con un solo argumento, así que siguen escribiendo la URL.
+function _admTab(tab, _desdeLaRuta){
+  _ADM_TABS.forEach(t=>{
     const el = document.getElementById('adm-tab-'+t);
     if(el) el.style.display = t===tab ? 'block' : 'none';
     const btn = document.getElementById('tab-btn-'+t);
     if(btn) btn.classList.toggle('active', t===tab);
   });
+  if(!_desdeLaRuta) _admRutaEscribir(tab);
   // Al volver a En Vivo se refresca en el acto: mientras estuvo oculto los ticks
   // no corrieron, así que sin esto se vería el pulso de cuando se salió del tab.
   if(tab==='enlive'){ _admRepintarPresencia(); if(_admTarjetasIds.length) _admCargarTarjetas(_admTarjetasIds); }
