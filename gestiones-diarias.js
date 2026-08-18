@@ -1,7 +1,50 @@
 // ===== GESTIONES DIARIAS =====
 let _gdMes='', _gdData={}, _gdSaveTimer=null, _gdActiveTab='gestion', _gdNotas={}, _gdNotaEditando=null;
 
+// Todo lo que este módulo guarda en memoria y PERTENECE A UNA TIENDA. Se vacía al
+// entrar, porque cambiar de tienda NO recarga la página: _cambiarTienda llama a
+// _entrarApp, que solo reescribe localStorage y vuelve al selector de módulo. El
+// JS sigue siendo el mismo y estas variables sobrevivían al salto.
+//
+// Lo primero son los TIMERS, y son lo más grave: los guardados con debounce arman
+// la ruta DENTRO del setTimeout (_gdBasePath, _roPath, _antPath), o sea que leen
+// la tienda del momento en que disparan. Editar un campo y cambiar de tienda antes
+// de esos 700–900 ms escribía el dato en la tienda nueva. Cancelarlos es la parte
+// que evita corromper datos; el resto solo evita mostrar los de otra tienda.
+//
+// Se ejecuta siempre desde _gdInit, que lo llama el bootstrap del HTML —después
+// del <script src>—, así que para entonces todas estas variables ya existen
+// aunque se declaren más abajo en el archivo.
+//
+// Al agregar cualquier estado de módulo que dependa de la tienda, sumarlo acá.
+function _gdResetEstado(){
+  // Timers pendientes: cancelar, no soltar.
+  if(_gdSaveTimer){ clearTimeout(_gdSaveTimer); _gdSaveTimer=null; }
+  if(_gdResumenTimer){ clearTimeout(_gdResumenTimer); _gdResumenTimer=null; }
+  if(_consoSaveTimer){ clearTimeout(_consoSaveTimer); _consoSaveTimer=null; }
+  [_roST,_antST].forEach(o=>{ Object.keys(o||{}).forEach(k=>clearTimeout(o[k])); });
+  _roST={}; _antST={};
+  [_roSearchTimer,_antSearchTimer,_novSearchTimer,_vbSearchTimer].forEach(t=>{ if(t) clearTimeout(t); });
+  _roSearchTimer=null; _antSearchTimer=null; _novSearchTimer=null; _vbSearchTimer=null;
+
+  // Datos de la tienda anterior.
+  _gdData={}; _gdNotas={}; _gdNotaEditando=null;
+  _consoData={}; _consoTotales={}; _consoPend={}; _consoDia=0;
+  _novData={}; _repData={}; _roData={}; _antData={con:{},sin:{}};
+  _catProductos={};
+  _vbData={}; _vbAds={}; _vbDiasConVenta=new Set(); _vbUltima=0;
+
+  // Filtros: un producto o un estado de otra tienda no significan nada acá, y
+  // dejarlos puestos esconde filas sin que se entienda por qué.
+  _roFilter={q:'',estado:''};
+  _novFilter={q:'',sol:''};
+  _antFilter={con:{q:'',transport:'',entrega:'',estado:''},sin:{q:'',transport:'',entrega:'',estado:''}};
+  _vbFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
+  _vbPag.pagina=1;
+}
+
 function _gdInit(){
+  _gdResetEstado();
   const now=new Date();
   _gdMes=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   const nombre=(window.getLoginAsesor?window.getLoginAsesor():'')||window._currentUsername||'—';

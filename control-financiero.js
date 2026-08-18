@@ -7,6 +7,11 @@ const _CF_DEF={
   moneda:{codigo:'COP',simbolo:'$'}
 };
 let _cfMes='',_cfCfg={},_cfMD={},_cfPrevMD={},_cfSaveT={},_cfOrdRows=[],_cfCurTab='dash';
+// Los Excel cargados y su análisis. Se declaran ACÁ, con el resto del estado del
+// módulo, y no allá abajo junto a las funciones de Órdenes: _cfResetEstado las
+// limpia y un let no se hoistea, así que declaradas después reventarían con
+// "before initialization" si el reset llegara a correr primero.
+let _cfXlsOrdenes=null, _cfXlsProductos=null, _cfExtracted=null;
 
 // _gdKey/_gdKeyFallback/toast/esc/norm/_fselHtml viven en shared/app-shared.js
 // _cfTK() es la clave de ESCRITURA (empresaId único). _cfBase/_cfCfgBase aceptan
@@ -32,7 +37,34 @@ function _cfNum(s){if(typeof s==='number')return s;const t=String(s||'0').replac
 // _cfMesLabel vive en shared/app-shared.js (la usa también Gestiones Diarias)
 function _cfDiasEnMes(m){if(!m)return 30;const [y,mo]=m.split('-');return new Date(+y,+mo,0).getDate();}
 
+// Todo lo que este módulo guarda en memoria y PERTENECE A UNA TIENDA. Se vacía al
+// entrar, porque cambiar de tienda NO recarga la página: _cambiarTienda llama a
+// _entrarApp, que solo reescribe localStorage y vuelve al selector de módulo. El
+// JS sigue siendo el mismo y estas variables sobrevivían al salto.
+//
+// Lo que provocó: cargar los Excel en una tienda, cambiar a otra, y encontrarse el
+// informe de la primera —el dashboard, el Estado ER y el PDF usan
+// "_cfMD.ultimoAnalisis || _cfExtracted", así que al no haber análisis guardado en
+// la tienda nueva caían en el que había quedado en memoria—. Y peor: _cfAplicarTodo
+// escribe a partir de _cfExtracted, o sea que "Aplicar" habría metido los números
+// de una tienda dentro de la otra.
+//
+// Al agregar cualquier variable de módulo que dependa de la tienda, sumarla acá.
+function _cfResetEstado(){
+  _cfCfg={}; _cfMD={}; _cfPrevMD={};
+  _cfOrdRows=[];
+  _cfXlsOrdenes=null; _cfXlsProductos=null; _cfExtracted=null;
+  // Los guardados pendientes se CANCELAN, no se sueltan: _cfSave arma la ruta
+  // dentro del setTimeout con _cfBasePath(), que lee la tienda del momento en que
+  // el timer dispara. Un campo editado en una tienda y un cambio de tienda antes
+  // de los 800 ms de debounce terminaban escribiendo ese valor en la tienda nueva.
+  // Vaciar el objeto a secas solo perdía la referencia: el timer seguía vivo.
+  Object.keys(_cfSaveT).forEach(k=>clearTimeout(_cfSaveT[k]));
+  _cfSaveT={};
+}
+
 function _cfInit(){
+  _cfResetEstado();
   const nd=new Date();
   _cfMes=nd.getFullYear()+'-'+_cfPad(nd.getMonth()+1);
   const pm=new Date(nd.getFullYear(),nd.getMonth()-1,1);
@@ -1751,8 +1783,9 @@ function _cfSetMoneda(k,v){
 }
 
 // ── ÓRDENES ──────────────────────────────────────────────────────────
-// Estado de archivos cargados
-let _cfXlsOrdenes=null, _cfXlsProductos=null, _cfExtracted=null;
+// El estado de los archivos cargados (_cfXlsOrdenes, _cfXlsProductos y
+// _cfExtracted) se declara arriba, con el resto del estado del módulo, para que
+// _cfResetEstado pueda limpiarlo al cambiar de tienda.
 
 function _cfRenderOrdenes(){
   const el=document.getElementById('cf-tab-ordenes');
