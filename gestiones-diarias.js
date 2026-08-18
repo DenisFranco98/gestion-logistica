@@ -2642,6 +2642,18 @@ function _vbFecha(v){
 }
 function _vbMonto(n){ const v=parseInt(n,10)||0; return v?'$ '+v.toLocaleString('es-CO'):'—'; }
 
+// ¿Esta venta cae dentro del rango de días elegido? Está aparte porque lo usan
+// dos sitios —la tabla y la lista de productos— y si se les fuera la mano por
+// separado el <select> ofrecería productos que la tabla no muestra.
+// La fecha viene como YYYYMMDD (texto): se cortan los dos últimos dígitos en vez
+// de construir un Date, que en UTC correría el día.
+function _vbEnRangoDias(v){
+  if(!_vbFiltro.d1) return true;
+  const d=parseInt(String(v.fecha_compra||'').slice(6,8),10)||0;
+  // Sin d2 todavía (se eligió un solo extremo) el rango es ese día suelto.
+  return !!d && d>=_vbFiltro.d1 && d<=(_vbFiltro.d2||_vbFiltro.d1);
+}
+
 function _vbRender(){
   const wrap=document.getElementById('vb-table-wrap');
   if(!wrap) return;
@@ -2653,16 +2665,27 @@ function _vbRender(){
   _vbCalLabel();
   if(document.getElementById('vb-cal')?.style.display==='block') _vbCalRender();
 
-  // Los productos que REALMENTE hay este mes. Se repueblan solo si cambió el
-  // conjunto: rearmar el <select> en cada repintado perdería la opción elegida.
-  const prods=[...new Set(todas.map(([,v])=>String(v.producto||'').trim()).filter(Boolean))].sort();
+  // Los productos que hay EN LOS DÍAS ELEGIDOS, no en todo el mes: con un rango de
+  // tres días, ofrecer los 200 productos del mes es ofrecer 190 que no van a
+  // devolver nada. Sin filtro de días esto es el mes entero, como antes.
+  const enRango=todas.filter(([,v])=>_vbEnRangoDias(v));
+  const prods=[...new Set(enRango.map(([,v])=>String(v.producto||'').trim()).filter(Boolean))].sort();
+
+  // Si el producto que estaba elegido no existe en los días nuevos, se suelta el
+  // filtro. Dejarlo puesto sería peor que inútil: el <select> mostraría "Todos
+  // los productos" —porque esa opción ya no está en la lista— mientras la tabla
+  // sigue filtrada por él, o sea cero resultados sin nada que lo explique.
+  if(_vbFiltro.producto && prods.indexOf(_vbFiltro.producto)<0) _vbFiltro.producto='';
+
   const selP=document.getElementById('vb-producto');
   if(selP && selP.dataset.vals!==prods.join('|')){
     selP.dataset.vals=prods.join('|');
     selP.innerHTML='<option value="">Todos los productos</option>'+
       prods.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
-    selP.value=_vbFiltro.producto||'';
   }
+  // Fuera del if: el <select> tiene que reflejar el filtro aunque la lista no haya
+  // cambiado, que es lo que pasa al soltar el producto por lo de arriba.
+  if(selP) selP.value=_vbFiltro.producto||'';
 
   // Los chips de estado se arman con los estados que REALMENTE llegaron: los
   // define el bot, no esta app, así que una lista fija quedaría desactualizada
@@ -2678,11 +2701,7 @@ function _vbRender(){
   const q=(_vbFiltro.q||'').toLowerCase();
   const filas=todas.filter(([,v])=>{
     if(_vbFiltro.estado && String(v.estado_orden||'')!==_vbFiltro.estado) return false;
-    if(_vbFiltro.d1){
-      const d=parseInt(String(v.fecha_compra||'').slice(6,8),10)||0;
-      // Sin d2 todavía (se eligió un solo extremo) el rango es ese día suelto.
-      if(!d || d<_vbFiltro.d1 || d>(_vbFiltro.d2||_vbFiltro.d1)) return false;
-    }
+    if(!_vbEnRangoDias(v)) return false;
     if(_vbFiltro.producto && String(v.producto||'')!==_vbFiltro.producto) return false;
     // id_anuncio entra en la búsqueda porque es el paso natural después de ver
     // en la analítica cuál anuncio vende más: se copia y se filtra por él.
