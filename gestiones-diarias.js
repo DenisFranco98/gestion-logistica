@@ -2819,6 +2819,10 @@ function _vbRender(){
   // Esto decide si se PINTA el botón; quien de verdad autoriza es la regla de
   // Firebase, que además solo permite eliminar, no crear ni modificar.
   const puedeBorrar = _gdEsDueno() && !(typeof _esAuditoria==='function' && _esAuditoria());
+  // Cambiar el estado sí lo puede cualquier asesor de la tienda —es su trabajo—,
+  // pero nunca en auditoría, que es de solo lectura y donde además el blindaje de
+  // _db.ref bloquearía la escritura dejando el desplegable como si funcionara.
+  const puedeGestionar = !(typeof _esAuditoria==='function' && _esAuditoria());
 
   // Corte de página. `filas` ya viene filtrado y los totales se calcularon sobre
   // TODO lo filtrado, no sobre la página: paginar es una forma de mirar, no un
@@ -2837,10 +2841,7 @@ function _vbRender(){
     <td>${esc(v.producto||'—')}${v.order&&v.order!==v.producto?'<div class="vb-sub">'+esc(v.order)+'</div>':''}</td>
     <td style="text-align:center;">${parseInt(v.cantidad,10)||0}</td>
     <td style="text-align:right;font-family:var(--f-mono);">${_vbMonto(v.valor)}</td>
-    <td>${v.estado_orden?'<span class="vb-est">'+esc(v.estado_orden)+'</span>':'—'}${
-      Array.isArray(v.historial_estado)&&v.historial_estado.length
-        ? '<div class="vb-sub" title="'+esc(v.historial_estado.map(h=>h.de+' → '+h.a).join(' · '))+'">cambió '+v.historial_estado.length+'×</div>'
-        : ''}</td>
+    <td>${_vbEstadoCelda(k, v, puedeGestionar)}</td>
     <td class="vb-anuncio">${esc(v.id_anuncio||'—')}</td>
     ${puedeBorrar?`<td style="text-align:center;"><button class="ant-del-btn" title="Eliminar esta venta" onclick="_vbEliminar('${esc(k)}')">🗑️</button></td>`:''}
   </tr>`).join('');
@@ -3333,3 +3334,99 @@ function _carRender(){
     }
   }
 }
+
+// ── GESTIÓN DEL ESTADO DE UNA VENTA ──────────────────────────────────────
+// El bot registra todo en PENDIENTE y desde acá el asesor marca lo que fue
+// pasando. Los cambios del bot llegan por POST /ventasEstado; los de acá se
+// escriben directo, y las reglas solo dejan tocar estado_orden, historial_estado y
+// actualizado — nunca el importe ni el teléfono, que son la base de los totales.
+const _VB_ESTADOS = ['PENDIENTE','CONFIRMADO','CANCELADO','LLAMADO','GESTIONADO MAL HISTORIAL','GESTIONADO FLETE ALTO'];
+
+// Color por estado, para que la columna se lea de un vistazo sin leerla.
+function _vbEstadoColor(e){
+  const s=String(e||'').toUpperCase();
+  if(s==='CONFIRMADO') return 'var(--success)';
+  if(s==='CANCELADO') return 'var(--danger)';
+  if(s==='PENDIENTE') return 'var(--warning)';
+  if(s==='LLAMADO') return 'var(--info-strong)';
+  if(s.indexOf('GESTIONADO')===0) return 'var(--accent)';
+  return 'var(--text-3)';
+}
+
+function _vbEstadoCelda(clave, v, puedeGestionar){
+  const actual = String(v.estado_orden||'');
+  const hist = Array.isArray(v.historial_estado) ? v.historial_estado : [];
+  // El historial se muestra como pista: dice cuántas veces cambió y, al pasar el
+  // cursor, el recorrido completo con quién lo hizo.
+  const pista = hist.length
+    ? '<div class="vb-sub" title="'+esc(hist.map(h=>(h.de||'—')+' → '+h.a+(h.por?' ('+h.por+')':'')).join(' · '))+'">cambió '+hist.length+'×</div>'
+    : '';
+
+  if(!puedeGestionar){
+    return (actual?'<span class="vb-est" style="border-color:'+_vbEstadoColor(actual)+';color:'+_vbEstadoColor(actual)+';">'+esc(actual)+'</span>':'—')+pista;
+  }
+
+  // El estado que ya tiene se incluye aunque no esté en la lista: el bot puede
+  // mandar cualquiera, y si no estuviera como opción el <select> mostraría otro
+  // valor y el asesor creería que es ese.
+  const opciones = _VB_ESTADOS.slice();
+  if(actual && opciones.indexOf(actual)<0) opciones.unshift(actual);
+
+  return '<select class="vb-est-sel" style="border-color:'+_vbEstadoColor(actual)+';color:'+_vbEstadoColor(actual)+';"'+
+    ' onchange="_vbCambiarEstado(\''+esc(clave)+'\',this)">'+
+    (actual?'':'<option value="">—</option>')+
+    opciones.map(function(o){
+      return '<option value="'+esc(o)+'"'+(o===actual?' selected':'')+'>'+esc(o)+'</option>';
+    }).join('')+
+    '</select>'+pista;
+}
+
+// Guarda el estado nuevo. Escribe la venta y el índice, y deja el cambio en
+// historial_estado con quién lo hizo — el bot marca 'bot', acá va el nombre del
+// asesor, así el recorrido se lee sin ambigüedad.
+async function _vbCambiarEstado(clave, sel){
+  const nuevo = sel.value;
+  const v = _carSafe(_vbData[clave]);
+  if(!v) return;
+  const anterior = String(v.estado_orden||'');
+  if(nuevo === anterior) return;
+
+  if(typeof _db==='undefined'){ toast('⚠️ Sin conexión'); sel.value=anterior; return; }
+  if(typeof _tiendaLista==='function' && !_tiendaLista('el estado de la venta')){ sel.value=anterior; return; }
+
+  const quien = (window.getLoginAsesor?window.getLoginAsesor():'') || window._currentUsername || 'asesor';
+  const ahora = Date.now();
+  const hist = Array.isArray(v.historial_estado) ? v.historial_estado.slice() : [];
+  hist.push({ de: anterior, a: nuevo, ts: ahora, por: quien });
+
+  sel.disabled = true;
+  const tk = _gdTK();
+  try{
+    // Las dos escrituras van juntas en un update multi-ruta: si el índice quedara
+    // con el estado viejo, /ventasExiste le daría al bot información desactualizada.
+    const upd = {};
+    upd['ventas_bot/'+tk+'/'+_gdMes+'/'+clave+'/estado_orden'] = nuevo;
+    upd['ventas_bot/'+tk+'/'+_gdMes+'/'+clave+'/historial_estado'] = hist;
+    upd['ventas_bot/'+tk+'/'+_gdMes+'/'+clave+'/actualizado'] = ahora;
+    upd['ventas_bot_idx/'+tk+'/'+clave+'/estado'] = nuevo;
+    upd['ventas_bot_idx/'+tk+'/'+clave+'/ts_actualizado'] = ahora;
+    await _db.ref().update(upd);
+
+    // La copia en memoria se actualiza a mano en vez de releer el mes entero: el
+    // tab se lee con .once y no está suscrito, así que sin esto la tabla mostraría
+    // el estado viejo hasta el próximo ↻.
+    v.estado_orden = nuevo; v.historial_estado = hist; v.actualizado = ahora;
+    toast('✓ '+nuevo);
+    _vbRender();
+  }catch(e){
+    // Se devuelve el <select> a donde estaba: dejarlo en el valor nuevo haría creer
+    // que se guardó.
+    sel.value = anterior;
+    sel.disabled = false;
+    toast('⚠️ No se pudo cambiar el estado: '+(e&&e.message||e), 4000);
+  }
+}
+
+// Guard mínimo: _vbData puede no tener la clave si la tabla se repintó entre el
+// clic y el guardado (un ↻ o un cambio de mes justo en medio).
+function _carSafe(x){ return x && typeof x==='object' ? x : null; }

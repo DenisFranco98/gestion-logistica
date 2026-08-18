@@ -101,7 +101,30 @@
         ".write": false,
         "$mes": {
           "$ventaId": {
-            ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+            // Borrar la venta entera: solo el dueño.
+            ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()",
+
+            // GESTIÓN DEL ESTADO DESDE LA APP (2026-08-18). El permiso va por CAMPO
+            // y no en $ventaId a propósito: así un asesor puede marcar LLAMADO o
+            // GESTIONADO FLETE ALTO, pero NO puede tocar el importe, el teléfono ni
+            // el producto — que los pone el bot y son la base de los totales.
+            //
+            // "data.parent().exists()" exige que la venta YA exista: desde la app no
+            // se puede hacer nacer una venta escribiendo un estado, que dejaría una
+            // fila sin producto ni importe salido de la nada.
+            //
+            // Cualquier asesor de la tienda, no solo el dueño: gestionar el estado
+            // es justamente su trabajo, y limitarlo al dueño dejaría la función sin
+            // usar. Quién lo hizo queda en historial_estado.
+            "estado_orden": {
+              ".write": "auth != null && data.parent().exists() && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+            },
+            "historial_estado": {
+              ".write": "auth != null && data.parent().exists() && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+            },
+            "actualizado": {
+              ".write": "auth != null && data.parent().exists() && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+            }
           }
         }
       }
@@ -116,7 +139,17 @@
         ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
         ".write": false,
         "$ventaId": {
-          ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+          ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()",
+          // El asesor que cambia el estado también lo refleja acá: el índice es lo
+          // que lee /ventasExiste, y si quedara con el estado viejo el bot decidiría
+          // sobre información desactualizada. No puede tocar `mes`, que es lo que
+          // dice dónde vive la venta.
+          "estado": {
+            ".write": "auth != null && data.parent().exists() && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+          },
+          "ts_actualizado": {
+            ".write": "auth != null && data.parent().exists() && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+          }
         }
       }
     },

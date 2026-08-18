@@ -90,18 +90,21 @@ async function handlerVentas(req, res) {
     const previa = (await refVenta.once('value')).val();
 
     if (previa) {
-      const estadoAnterior = String(previa.estado_orden || '');
-      const cambia = estado && estado !== estadoAnterior;
-      if (cambia) {
-        const historial = Array.isArray(previa.historial_estado) ? previa.historial_estado.slice() : [];
-        historial.push({ de: estadoAnterior, a: estado, ts: ahora });
-        await refVenta.update({ estado_orden: estado, historial_estado: historial, actualizado: ahora });
-        await refIdx.update({ estado: estado, ts_actualizado: ahora });
-      }
+      // EL REGISTRO NO TOCA EL ESTADO DE UNA VENTA QUE YA EXISTE. Antes sí lo
+      // actualizaba, y con el flujo nuevo eso borraba trabajo: el bot registra
+      // siempre en PENDIENTE, así que cada reintento —que ChateaPro hace solo—
+      // revertía a PENDIENTE lo que un asesor acababa de marcar como LLAMADO o
+      // GESTIONADO FLETE ALTO.
+      //
+      // Para cambiar el estado hay dos caminos, y los dos son deliberados:
+      //   · POST /ventasEstado   el bot, cuando pasa algo en su flujo
+      //   · el desplegable de la tabla, el asesor
+      // Decidido con el usuario el 2026-08-18.
       return res.status(200).json({
         ok: true, duplicado: true, id: clave, mes,
-        estado_actualizado: !!cambia,
-        estado: cambia ? estado : estadoAnterior
+        estado_actualizado: false,
+        estado: String(previa.estado_orden || ''),
+        nota: 'La venta ya existía. Para cambiar el estado usá /ventasEstado.'
       });
     }
 
@@ -136,6 +139,85 @@ async function handlerVentas(req, res) {
     return res.status(200).json({ ok: true, duplicado: false, id: clave, mes });
   } catch (e) {
     console.error('[ventas]', e);
+    return res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+}
+
+// ── POST /ventasEstado ────────────────────────────────────────────────────
+// Payload corto: solo cambia el estado de una venta que ya existe.
+//
+//   { workspace, telefono, fecha_compra, estado }
+//
+// Existe porque /ventas dejó de tocar el estado de las ventas ya registradas: el
+// bot registra en PENDIENTE y después, cuando pasa algo en su flujo, avisa por
+// acá. Mandar el payload entero solo para cambiar una palabra obligaría a
+// arrastrar todos los datos del pedido en cada cambio.
+//
+// Si la venta NO existe responde 404 y no crea nada: una venta no puede empezar a
+// existir por un cambio de estado, y crearla a medias —sin producto ni importe—
+// dejaría una fila inútil en la tabla que nadie sabría de dónde salió.
+async function handlerVentasEstado(req, res) {
+  cors(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Usá POST' });
+
+  try {
+    const d = body(req);
+    const workspace = tomar(d, 'workspace', 'WORKSPACE');
+
+    const auth = await autenticar(req, workspace);
+    if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
+
+    const telefono = tomar(d, 'telefono', 'TELEFONO', 'numero_de_telefono', 'Numero de telefono');
+    const fechaCompra = tomar(d, 'fecha_compra', 'FECHA_COMPRA', 'Fecha de compra', 'fecha');
+    const clave = claveVenta(telefono, fechaCompra);
+    if (!clave) {
+      const falta = !normTelefono(telefono) ? 'telefono' : 'fecha_compra';
+      return res.status(400).json({
+        ok: false, error: 'Falta o es inválido: ' + falta,
+        ayuda: 'fecha_compra acepta 2026-08-13 o 13/08/2026'
+      });
+    }
+
+    const estado = String(tomar(d, 'estado', 'ESTADO', 'estado_orden', 'ESTADO_ORDEN', 'ESTADO DE LA ORDEN')).trim();
+    if (!estado) return res.status(400).json({ ok: false, error: 'Falta: estado' });
+
+    const empresaId = fbKey(auth.empresaId);
+    // El índice dice en qué mes vive la venta. Sin él habría que adivinar el mes a
+    // partir de la fecha de compra, que es lo mismo... pero el índice es una sola
+    // lectura y no depende de que la fecha venga bien escrita esta vez.
+    const idx = (await db().ref('ventas_bot_idx/' + empresaId + '/' + clave).once('value')).val();
+    if (!idx || !idx.mes) {
+      return res.status(404).json({
+        ok: false, error: 'Esa venta no está registrada',
+        ayuda: 'Registrala primero con POST /ventas. Este endpoint solo cambia el estado de una venta que ya existe.'
+      });
+    }
+
+    const refVenta = db().ref('ventas_bot/' + empresaId + '/' + idx.mes + '/' + clave);
+    const previa = (await refVenta.once('value')).val();
+    if (!previa) return res.status(404).json({ ok: false, error: 'Esa venta no está registrada' });
+
+    const estadoAnterior = String(previa.estado_orden || '');
+    if (estado === estadoAnterior) {
+      return res.status(200).json({ ok: true, cambiado: false, id: clave, mes: idx.mes, estado: estadoAnterior });
+    }
+
+    const ahora = Date.now();
+    const historial = Array.isArray(previa.historial_estado) ? previa.historial_estado.slice() : [];
+    // `por` queda vacío a propósito cuando el cambio viene del bot: así el
+    // historial distingue de un vistazo lo que hizo una persona de lo que hizo el
+    // flujo automático.
+    historial.push({ de: estadoAnterior, a: estado, ts: ahora, por: 'bot' });
+    await refVenta.update({ estado_orden: estado, historial_estado: historial, actualizado: ahora });
+    await db().ref('ventas_bot_idx/' + empresaId + '/' + clave).update({ estado: estado, ts_actualizado: ahora });
+
+    return res.status(200).json({
+      ok: true, cambiado: true, id: clave, mes: idx.mes,
+      de: estadoAnterior, a: estado
+    });
+  } catch (e) {
+    console.error('[ventasEstado]', e);
     return res.status(500).json({ ok: false, error: 'Error interno' });
   }
 }
@@ -193,6 +275,7 @@ const OPCIONES = { region: REGION, maxInstances: 10, memory: '256MiB', timeoutSe
 
 exports.ventas = onRequest(OPCIONES, handlerVentas);
 exports.ventasExiste = onRequest(OPCIONES, handlerExiste);
+exports.ventasEstado = onRequest(OPCIONES, handlerVentasEstado);
 exports.carritos = onRequest(OPCIONES, handlerCarritos);
 exports.carritosRecuperado = onRequest(OPCIONES, handlerCarritoRecuperado);
 exports.carritosExiste = onRequest(OPCIONES, handlerCarritoExiste);
@@ -200,6 +283,6 @@ exports.carritosExiste = onRequest(OPCIONES, handlerCarritoExiste);
 // Se exportan también los handlers para que los tests los llamen directo, sin
 // levantar el emulador.
 exports._handlers = {
-  ventas: handlerVentas, existe: handlerExiste,
+  ventas: handlerVentas, existe: handlerExiste, ventasEstado: handlerVentasEstado,
   carritos: handlerCarritos, recuperado: handlerCarritoRecuperado, carritoExiste: handlerCarritoExiste
 };

@@ -1482,7 +1482,13 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-kpi span{font-size:.6rem;color:var(--text-2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 .vb-tbl td{vertical-align:top;}
 .vb-sub{font-size:.62rem;color:var(--text-3);margin-top:2px;}
-.vb-est{display:inline-block;background:var(--info-soft);color:var(--info-strong);border-radius:20px;padding:2px 8px;font-size:.62rem;font-weight:700;white-space:nowrap;}
+.vb-est{display:inline-block;background:var(--info-soft);color:var(--info-strong);border:1.5px solid var(--info-strong);border-radius:20px;padding:2px 8px;font-size:.62rem;font-weight:700;white-space:nowrap;}
+/* El desplegable para gestionar el estado. Se pinta con el color del estado que
+   tiene puesto —igual que la píldora de al lado— para que la columna se siga
+   leyendo de un vistazo aunque ahora sea un control y no una etiqueta. */
+.vb-est-sel{max-width:100%;padding:3px 6px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg-inset);font-size:.62rem;font-weight:800;font-family:inherit;cursor:pointer;outline:none;}
+.vb-est-sel:hover:not(:disabled){filter:brightness(1.15);}
+.vb-est-sel:disabled{opacity:.55;cursor:progress;}
 .vb-anuncio{font-family:var(--f-mono);font-size:.64rem;color:var(--text-3);}
 
 /* Documentación de conexión del bot, dentro de cada tarjeta de workspace. */

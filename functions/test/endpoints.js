@@ -39,7 +39,7 @@ Module._load = function (request) {
   return orig.apply(this, arguments);
 };
 
-const { ventas: postVenta, existe: getExiste } = require('../index.js')._handlers;
+const { ventas: postVenta, existe: getExiste, ventasEstado: postEstado } = require('../index.js')._handlers;
 
 // ── Utilidades ───────────────────────────────────────────────────────────
 function llamar(handler, { method = 'POST', body = null, query = {}, headers = {} }) {
@@ -152,16 +152,44 @@ const base = {
   eq(re.json.estado_actualizado, false, 'no cambió el estado');
   eq(Object.keys(get('ventas_bot/-Oz9bT/2026-08')).length, 1, 'sigue habiendo UNA sola venta');
 
-  console.log('\nCAMBIO DE ESTADO');
+  console.log('\nEL REGISTRO NO PISA EL ESTADO DE UNA VENTA QUE YA EXISTE');
+  // Cambiado el 2026-08-18: el bot registra siempre en PENDIENTE, así que si el
+  // registro actualizara el estado, cada reintento borraría lo que el asesor
+  // acababa de gestionar. Los cambios van por /ventasEstado o por el desplegable.
   const cambio = await llamar(postVenta, { body: Object.assign({}, base, { estado_orden: 'CANCELADO', nombre: 'INTENTO DE PISAR' }), headers: H });
-  eq(cambio.json.estado_actualizado, true, 'detecta el cambio');
-  eq(cambio.json.estado, 'CANCELADO', 'devuelve el estado nuevo');
+  eq(cambio.json.estado_actualizado, false, 'no actualiza el estado');
+  eq(cambio.json.estado, 'CONFIRMADO', 'devuelve el que ya estaba');
   const v2 = get('ventas_bot/-Oz9bT/2026-08/3001112233_20260813');
-  eq(v2.estado_orden, 'CANCELADO', 'el estado se actualizó');
+  eq(v2.estado_orden, 'CONFIRMADO', 'el estado quedó intacto');
   eq(v2.nombre, 'Cliente Prueba', 'el resto de los campos NO se pisó');
-  eq(v2.historial_estado.length, 1, 'quedó el historial del cambio');
-  eq([v2.historial_estado[0].de, v2.historial_estado[0].a], ['CONFIRMADO', 'CANCELADO'], 'de → a');
-  eq(get('ventas_bot_idx/-Oz9bT/3001112233_20260813').estado, 'CANCELADO', 'el índice también se actualizó');
+  eq(v2.historial_estado, undefined, 'no inventa historial si no cambió nada');
+
+  console.log('\nCAMBIO DE ESTADO POR /ventasEstado');
+  const est1 = await llamar(postEstado, { body: { workspace: 'WS-3D-001', telefono: '3001112233', fecha_compra: '2026-08-13', estado: 'CANCELADO' }, headers: H });
+  eq(est1.json.cambiado, true, 'cambia el estado');
+  eq([est1.json.de, est1.json.a], ['CONFIRMADO', 'CANCELADO'], 'devuelve de → a');
+  const v3 = get('ventas_bot/-Oz9bT/2026-08/3001112233_20260813');
+  eq(v3.estado_orden, 'CANCELADO', 'quedó guardado');
+  eq(v3.nombre, 'Cliente Prueba', 'y no tocó ningún otro campo');
+  eq(v3.historial_estado.length, 1, 'dejó historial');
+  eq([v3.historial_estado[0].de, v3.historial_estado[0].a, v3.historial_estado[0].por], ['CONFIRMADO', 'CANCELADO', 'bot'], 'de → a, y marcado como del bot');
+  eq(get('ventas_bot_idx/-Oz9bT/3001112233_20260813').estado, 'CANCELADO', 'el índice también');
+  // Mandar el mismo estado no debe ensuciar el historial.
+  const est2 = await llamar(postEstado, { body: { workspace: 'WS-3D-001', telefono: '3001112233', fecha_compra: '2026-08-13', estado: 'CANCELADO' }, headers: H });
+  eq(est2.json.cambiado, false, 'el mismo estado dos veces no cambia nada');
+  eq(get('ventas_bot/-Oz9bT/2026-08/3001112233_20260813').historial_estado.length, 1, 'y no agrega otra entrada al historial');
+  // Encuentra la venta aunque el teléfono y la fecha vengan escritos distinto.
+  const est3 = await llamar(postEstado, { body: { workspace: 'WS-3D-001', telefono: '+57 300 111 2233', fecha_compra: '13/08/2026', estado: 'LLAMADO' }, headers: H });
+  eq(est3.json.cambiado, true, 'la encuentra con el teléfono y la fecha en otro formato');
+  // Una venta que no existe NO se crea desde acá.
+  const est4 = await llamar(postEstado, { body: { workspace: 'WS-3D-001', telefono: '3009998877', fecha_compra: '2026-08-13', estado: 'CONFIRMADO' }, headers: H });
+  eq(est4.status, 404, 'venta inexistente → 404');
+  eq(get('ventas_bot/-Oz9bT/2026-08/3009998877_20260813'), undefined, 'y no la creó a medias');
+  // Faltantes y aislamiento.
+  eq((await llamar(postEstado, { body: { workspace: 'WS-3D-001', telefono: '3001112233', fecha_compra: '2026-08-13' }, headers: H })).status, 400, 'sin estado → 400');
+  eq((await llamar(postEstado, { body: { workspace: 'WS-3D-001', telefono: '', fecha_compra: '2026-08-13', estado: 'X' }, headers: H })).status, 400, 'sin teléfono → 400');
+  eq((await llamar(postEstado, { body: { workspace: 'WS-3D-001', telefono: '3001112233', fecha_compra: '2026-08-13', estado: 'X' }, headers: {} })).status, 401, 'sin API key → 401');
+  eq((await llamar(postEstado, { body: { workspace: 'WS-OTRA', telefono: '3001112233', fecha_compra: '2026-08-13', estado: 'X' }, headers: H })).status, 401, 'no puede cambiar el estado en otra tienda');
 
   console.log('\nOTRA VENTA DEL MISMO CLIENTE, OTRO DÍA');
   const otra = await llamar(postVenta, { body: Object.assign({}, base, { fecha_compra: '2026-08-14' }), headers: H });
