@@ -1521,6 +1521,18 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-cal-d.rango{background:var(--accent-soft);color:var(--accent);}
 .vb-cal-d.punta{background:var(--accent);color:var(--accent-text);border-radius:7px;}
 .vb-cal-d.hueco{visibility:hidden;cursor:default;}
+/* Atajos de fecha del calendario de Ventas Bot. Van arriba de la grilla porque
+   son el camino corto: quien quiera un rango raro sigue teniendo los días. Se
+   envuelven en varias filas en vez de tener scroll propio — el popover es
+   angosto y una fila con scroll horizontal esconde la mitad de las opciones. */
+.vb-cal-rapidos{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;padding-bottom:9px;border-bottom:1px solid var(--border);}
+.vb-cal-rap{flex:1 1 auto;padding:5px 9px;border-radius:7px;border:1.5px solid var(--border);background:transparent;color:var(--text-2);font-size:.63rem;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;}
+.vb-cal-rap:hover:not(:disabled){color:var(--text-1);border-color:var(--border-strong);}
+.vb-cal-rap.on{background:var(--accent);border-color:var(--accent);color:var(--accent-text);}
+/* Deshabilitado y NO escondido: mirando un mes que no es el actual, "Hoy" no
+   significa nada, pero hacer desaparecer botones al mover el mes deja a la gente
+   buscando qué pasó. El title dice el motivo. */
+.vb-cal-rap:disabled{opacity:.4;cursor:not-allowed;}
 .vb-cal-pie{display:flex;gap:6px;margin-top:10px;}
 .vb-cal-pie button{flex:1;padding:6px 8px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text-2);font-size:.66rem;font-weight:700;font-family:inherit;cursor:pointer;}
 .vb-cal-pie button:hover{color:var(--text-1);border-color:var(--border-strong);}

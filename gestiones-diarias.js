@@ -2515,6 +2515,64 @@ function _vbCalCerrar(){
   document.removeEventListener('click',_vbCalFuera);
 }
 
+// ── ATAJOS DE FECHA ──────────────────────────────────────────────────────
+// Devuelven [d1,d2] en NÚMEROS DE DÍA del mes que se está viendo, nunca fechas:
+// es lo único que entiende _vbFiltro, porque el nodo se lee por mes y todo el tab
+// está armado sobre eso (ver el calendario, que tampoco cruza meses).
+//
+// De ahí salen las dos reglas de esta función:
+//  · Los atajos relativos a hoy —Hoy, Ayer, Últimos 7— solo existen si el mes que
+//    se mira ES el mes en curso. Mirando julio, "Hoy" no significa nada, así que
+//    el botón se muestra deshabilitado y con el motivo, en vez de desaparecer y
+//    dejar a la gente buscando por qué cambian los botones al mover el mes.
+//  · Las semanas SE RECORTAN al mes. Una semana que arranca el lunes 31 y sigue
+//    en septiembre se filtra desde el día 1: mostrar los del mes anterior
+//    obligaría a leer otro nodo, que es justo lo que no hace este tab.
+function _vbAtajos(){
+  const hoy=new Date();
+  const [y,m]=(_gdMes||'2000-01').split('-').map(Number);
+  const total=_gdDiasEnMes(_gdMes||'2000-01');
+  const esMesEnCurso = (y===hoy.getFullYear() && m===hoy.getMonth()+1);
+  const hd=hoy.getDate();
+  const rec=n=>Math.min(Math.max(n,1),total);
+  // getDay(): 0=domingo. Acá la semana arranca en lunes, como el calendario.
+  const dowLun=(hoy.getDay()+6)%7;
+  const lunes=hd-dowLun;                 // puede caer en el mes anterior (≤0)
+  const motivo='Solo aplica en el mes en curso';
+
+  const lista=[
+    {id:'hoy',    txt:'Hoy',            rango: esMesEnCurso ? [hd,hd] : null},
+    {id:'ayer',   txt:'Ayer',           rango: (esMesEnCurso && hd>1) ? [hd-1,hd-1] : null},
+    {id:'d7',     txt:'Últimos 7 días', rango: esMesEnCurso ? [rec(hd-6),hd] : null},
+    {id:'d14',    txt:'Últimos 14 días',rango: esMesEnCurso ? [rec(hd-13),hd] : null},
+    // Semana en curso: del lunes a hoy, recortada al mes. Si el lunes cae en el
+    // mes anterior queda "del 1 a hoy", que es lo que este tab puede mostrar.
+    {id:'sem',    txt:'Esta semana',    rango: esMesEnCurso ? [rec(lunes),hd] : null},
+    // La semana pasada entera, recortada. Si terminó antes de que empezara el mes
+    // no hay nada que enseñar y el atajo queda apagado.
+    {id:'semant', txt:'Semana pasada',  rango: (esMesEnCurso && lunes-1>=1) ? [rec(lunes-7),rec(lunes-1)] : null},
+    {id:'mes',    txt:'Todo el mes',    rango: [0,0]},   // 0,0 = sin filtro de día
+  ];
+  return lista.map(a=>Object.assign(a,{motivo: a.rango?'':motivo}));
+}
+
+function _vbAtajo(id,ev){
+  if(ev) ev.stopPropagation();
+  const a=_vbAtajos().find(x=>x.id===id);
+  if(!a || !a.rango) return;
+  _vbFiltro.d1=a.rango[0]; _vbFiltro.d2=a.rango[1];
+  // _vbRender vuelve a dibujar el calendario si está abierto: un solo camino.
+  _vbPagReset(); _vbRender();
+}
+
+// Marca el atajo que coincide EXACTAMENTE con el rango elegido, para que se vea
+// cuál está puesto aunque se haya llegado tocando días sueltos en la grilla.
+function _vbAtajoActivo(){
+  const {d1,d2}=_vbFiltro;
+  const a=_vbAtajos().find(x=>x.rango && x.rango[0]===d1 && x.rango[1]===(d2||d1));
+  return a?a.id:'';
+}
+
 function _vbCalRender(){
   const c=document.getElementById('vb-cal'); if(!c) return;
   const total=_gdDiasEnMes(_gdMes||'2000-01');
@@ -2537,8 +2595,16 @@ function _vbCalRender(){
     celdas+='<button class="'+cls.join(' ')+'" onclick="_vbCalDia('+d+',event)">'+d+'</button>';
   }
 
+  const act=_vbAtajoActivo();
+  const atajos=_vbAtajos().map(a=>
+    '<button class="vb-cal-rap'+(a.id===act?' on':'')+'"'+
+    (a.rango?'':' disabled title="'+esc(a.motivo)+'"')+
+    ' onclick="_vbAtajo(\''+a.id+'\',event)">'+esc(a.txt)+'</button>'
+  ).join('');
+
   c.innerHTML=
     '<div class="vb-cal-tit">'+(typeof _cfMesLabel==='function'?_cfMesLabel(_gdMes):_gdMes)+'</div>'+
+    '<div class="vb-cal-rapidos">'+atajos+'</div>'+
     '<div class="vb-cal-grid">'+celdas+'</div>'+
     '<div class="vb-cal-ayuda">'+(d1&&!d2?'Elegí el día final del rango':'Tocá un día, y otro para el rango')+'</div>'+
     '<div class="vb-cal-pie">'+
