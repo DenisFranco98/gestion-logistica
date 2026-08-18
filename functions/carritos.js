@@ -154,7 +154,12 @@ async function registrar(req, res, estadoPorDefecto) {
   if (previo) {
     // Existe: se actualiza la información que venga con algo y el estado. No se
     // recrea el registro ni se cambia de mes.
-    const cambios = Object.assign({}, camposComunes(d), { actualizado: ahora });
+    // _raw se REGRABA con el último envío. Antes solo se guardaba al crear, así que
+    // al depurar mostraba el primer payload mientras los campos venían de otro
+    // posterior — y eso hizo perder tiempo persiguiendo un importe que "el mismo
+    // texto" guardaba distinto en dos carritos. El último envío es el que explica
+    // lo que hay guardado.
+    const cambios = Object.assign({}, camposComunes(d), { actualizado: ahora, _raw: d });
     if (fechaPayload) cambios.fecha = fechaPayload;
     const hist = conHistorial(previo.datos, estado, ahora);
     if (hist) Object.assign(cambios, hist);

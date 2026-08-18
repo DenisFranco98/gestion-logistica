@@ -232,9 +232,26 @@ function aEntero(v) {
 }
 
 function aNumero(v) {
-  // Texto: se queda con los dígitos. "99.990", "$ 99.990" y "99990" dan lo mismo.
   if (typeof v !== 'number') {
-    const n = parseInt(String(v == null ? '' : v).replace(/[^\d]/g, ''), 10);
+    // TEXTO. Antes se quedaba con los dígitos a secas, y eso multiplicaba por 100
+    // cualquier importe que trajera céntimos: "69.990,00" daba 6.999.000. Pasó de
+    // verdad —el bot manda unas veces "69.990" y otras "69.990,00"—, y como el
+    // error es exactamente ×100 no salta a la vista en una tabla larga.
+    //
+    // La regla mira CUÁNTOS dígitos hay después del último separador:
+    //   1 o 2 dígitos -> es decimal, y se descarta ("69.990,00" -> 69990)
+    //   3 dígitos     -> es de miles ("69.990" -> 69990 · "1.234.567" -> 1234567)
+    // Sirve para las dos convenciones, la local (1.234,56) y la inglesa (1,234.56),
+    // porque lo que decide es la POSICIÓN del último separador, no cuál sea.
+    const s = String(v == null ? '' : v).trim().replace(/[^\d.,]/g, '');
+    if (!s) return 0;
+    const sep = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
+    if (sep >= 0 && (s.length - sep - 1) <= 2 && (s.length - sep - 1) > 0) {
+      const entero = s.slice(0, sep).replace(/[.,]/g, '');
+      const n = parseInt(entero, 10);
+      return isFinite(n) ? n : 0;
+    }
+    const n = parseInt(s.replace(/[^\d]/g, ''), 10);
     return isFinite(n) ? n : 0;
   }
   if (!isFinite(v) || v <= 0) return 0;

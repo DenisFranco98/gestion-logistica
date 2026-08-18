@@ -68,6 +68,23 @@ eq(L.aNumero(117), 117000, 'el bot mandó 117.000 sin comillas');
 eq(L.aNumero(157477.5), 157478, 'decimal por encima del umbral: se respeta');
 eq(L.aNumero(99990), 99990, 'sin punto ya venía bien');
 
+console.log('\nVALOR — importes CON CÉNTIMOS (el que llegó a producción como millones)');
+// El bot manda unas veces "69.990" y otras "69.990,00". Quedarse con los dígitos a
+// secas convertía el segundo en 6.999.000: el error es exactamente ×100 y en una
+// tabla larga no salta a la vista. Lo que decide es cuántos dígitos hay después
+// del último separador: 1 o 2 son céntimos, 3 son miles.
+eq(L.aNumero('69.990,00'), 69990, '"69.990,00" (el caso real) NO son 6.999.000');
+eq(L.aNumero('79.990,00'), 79990, '"79.990,00" tampoco');
+eq(L.aNumero('69990.00'), 69990, 'con punto decimal y sin miles');
+eq(L.aNumero('69990,5'), 69990, 'un solo decimal');
+eq(L.aNumero('1.234.567,89'), 1234567, 'miles y céntimos juntos');
+eq(L.aNumero('69,990.00'), 69990, 'formato inglés: 69,990.00');
+eq(L.aNumero('$ 69.990,00'), 69990, 'con símbolo y céntimos');
+// Y lo de siempre tiene que seguir funcionando igual.
+eq(L.aNumero('69.990'), 69990, 'sin céntimos sigue siendo miles');
+eq(L.aNumero('1.234.567'), 1234567, 'tres grupos de miles');
+eq(L.aNumero('178,000'), 178000, 'coma de miles con 3 dígitos');
+
 console.log('\nCANTIDAD — NO se le aplica la corrección de miles');
 eq(L.aEntero(2), 2, 'dos unidades siguen siendo dos');
 eq(L.aEntero(1), 1, 'una');
