@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/shared/shared.css?v=20260818d">
+<link rel="stylesheet" href="/shared/shared.css?v=20260818e">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -92,7 +92,7 @@ window._sbEstadosToggle=function(){
         <span class="adm-nav-icon">🏪</span> Tiendas
       </button>
       <button class="adm-nav-item" id="tab-btn-botventas" onclick="_admTab('botventas')">
-        <span class="adm-nav-icon">🤖</span> Bot de ventas
+        <span class="adm-nav-icon">🔌</span> Integraciones
       </button>
       <div class="adm-sidebar-label">Gestiones Diarias</div>
       <button class="adm-nav-item" id="tab-btn-gdconsolid" onclick="_admTab('gdconsolid')">
@@ -435,7 +435,7 @@ window._sbEstadosToggle=function(){
            el bot. Hacen falta los dos: el código no es un secreto. Ver
            api-ventas-bot/ para los endpoints que consumen esto. -->
       <div id="adm-tab-botventas" style="display:none;">
-        <div class="adm-sec-head"><div class="adm-sec-title">Bot de ventas — tiendas conectadas</div></div>
+        <div class="adm-sec-head"><div class="adm-sec-title">Tiendas conectadas</div></div>
         <div class="botw-intro">
           Cada tienda conectada recibe las ventas que registra el bot de ChateaPro.
           <b>La clave es un secreto</b>: quien la tenga puede registrar ventas en esa tienda.
@@ -1508,8 +1508,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="/shared/app-shared.js?v=20260818d"></script>
-<script src="/gestiones-diarias.js?v=20260818d"></script>
+<script src="/shared/app-shared.js?v=20260818e"></script>
+<script src="/gestiones-diarias.js?v=20260818e"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

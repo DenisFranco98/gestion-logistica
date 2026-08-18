@@ -1496,6 +1496,9 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .botw-doc-intro{font-size:.74rem;color:var(--text-2);line-height:1.5;margin-bottom:12px;}
 .botw-doc-paso{font-size:.72rem;font-weight:800;color:var(--text-1);margin:14px 0 6px;display:flex;align-items:center;gap:7px;}
 .botw-doc-paso b{background:var(--accent);color:var(--accent-text);width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.64rem;flex-shrink:0;}
+/* "(opcional)" al lado del número del paso: en minúscula y apagado, para que se
+   distinga a simple vista de los pasos que sí hay que configurar. */
+.botw-doc-op{font-size:.62rem;font-weight:600;color:var(--text-3);text-transform:none;letter-spacing:0;}
 .botw-doc-b{border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px;}
 .botw-doc-h{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg-hover);padding:5px 10px;font-size:.64rem;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;}
 .botw-doc-h button{border:1.5px solid var(--border);background:var(--bg-card);color:var(--text-2);border-radius:6px;padding:3px 9px;font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;text-transform:none;letter-spacing:0;}

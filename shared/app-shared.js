@@ -6913,7 +6913,8 @@ function _botwRender(empresas, misIds){
         <button onclick="_botwToggle('${esc(code)}')">${activo?'Revocar':'Reactivar'}</button>
         <button onclick="_botwRegenerar('${esc(code)}')">Generar clave nueva</button>
         <button onclick="_botwCambiarCodigo('${esc(code)}')">Cambiar código</button>
-        <button onclick="_botwDocs('${esc(code)}',this)">📄 Cómo conectarlo</button>
+        <button onclick="_botwDocs('${esc(code)}',this,'ventas')">📄 Agente de ventas</button>
+        <button onclick="_botwDocs('${esc(code)}',this,'carritos')">🛒 Agente de carritos</button>
         <button class="botw-del" onclick="_botwEliminar('${esc(code)}')">Eliminar integración</button>
       </div>
       <div class="botw-docs" id="botw-docs-${esc(code)}" style="display:none;"></div>
@@ -6937,17 +6938,41 @@ function _botwBaseUrl(){
 // La clave NO se escribe en los ejemplos, ni siquiera en el header: quedaría a
 // la vista de cualquiera que pase por detrás y en cualquier captura de pantalla.
 // Se deja el marcador y el botón de copiar de arriba, que sí la entrega.
-window._botwDocs = function(code, btn){
+// `tipo` es 'ventas' o 'carritos'. Son dos agentes distintos en ChateaPro y cada
+// uno tiene sus endpoints, así que se documentan por separado: un solo documento
+// con todo obligaría a leer la mitad que no se está configurando.
+//
+// Los dos botones comparten el mismo contenedor, así que abrir uno cierra el otro.
+// Se recuerda cuál está abierto en un data- para que volver a pulsar el mismo lo
+// cierre y pulsar el otro lo cambie, en vez de tener que cerrar y abrir.
+window._botwDocs = function(code, btn, tipo){
+  tipo = tipo || 'ventas';
   const cont = document.getElementById('botw-docs-'+code);
   if(!cont) return;
-  if(cont.style.display !== 'none'){ cont.style.display='none'; btn.textContent='📄 Cómo conectarlo'; return; }
-  btn.textContent='📄 Ocultar';
+
+  const fila = btn.parentElement;
+  const restaurar = () => {
+    [...fila.querySelectorAll('button')].forEach(b=>{
+      if(b.dataset.txtOrig){ b.textContent = b.dataset.txtOrig; delete b.dataset.txtOrig; }
+    });
+  };
+  // Mismo botón otra vez: se cierra.
+  if(cont.style.display !== 'none' && cont.dataset.tipo === tipo){
+    cont.style.display='none'; restaurar(); return;
+  }
+  restaurar();
+  btn.dataset.txtOrig = btn.textContent;
+  btn.textContent = '✕ Ocultar';
+  cont.dataset.tipo = tipo;
+
   const base = _botwBaseUrl();
   const bloque = (titulo, texto, id) => `
     <div class="botw-doc-b">
       <div class="botw-doc-h"><span>${titulo}</span><button onclick="_botwCopiarTxt('${id}')">Copiar</button></div>
       <pre id="${id}">${esc(texto)}</pre>
     </div>`;
+
+  if(tipo === 'carritos'){ cont.innerHTML = _botwDocsCarritos(code, base, bloque); cont.style.display='block'; return; }
 
   const body = JSON.stringify({
     workspace: code,
@@ -7003,13 +7028,120 @@ window._botwDocs = function(code, btn){
       <b>order</b> es el pedido completo ("2 CEPILLOS DE BAMBU") y <b>producto</b> solo el nombre ("CEPILLO BAMBU").
     </div>
 
+    <div class="botw-doc-paso"><b>3</b> Cambiar el estado más adelante <span class="botw-doc-op">(opcional)</span></div>
+    <div class="botw-doc-nota">Para cuando el pedido se confirma o se cae <i>después</i> de haberlo
+    registrado. Payload corto: no hace falta volver a mandar los datos del pedido.</div>
+    ${bloque('POST · dirección', base+'/ventasEstado', 'botw-d5-'+code)}
+    ${bloque('POST · cuerpo (body) en formato JSON',
+      JSON.stringify({ workspace: code, telefono: '3001112233', fecha_compra: '2026-08-13', estado: 'CONFIRMADO' }, null, 2),
+      'botw-d6-'+code)}
+    <div class="botw-doc-nota">Encabezados iguales al paso 2. Si esa venta no está registrada
+    responde <code>404</code> y no crea nada: primero hay que registrarla con el paso 2.</div>
+
     <div class="botw-doc-nota warn">
-      Si el mismo pedido llega dos veces, <b>no se duplica</b>: se actualiza el estado y responde
-      <code>{"duplicado": true}</code>. Siempre responde <code>200</code>, incluso cuando ya existía,
-      para que el bot no lo reintente en vano.
+      Si el mismo pedido llega dos veces, <b>no se duplica</b> y responde <code>{"duplicado": true}</code>.
+      <b>El registro NO cambia el estado de una venta que ya existe</b>: si el bot registra siempre en
+      PENDIENTE, sus reintentos no van a pisar lo que un asesor haya gestionado. Para cambiar el estado
+      está el paso 3. Siempre responde <code>200</code>, incluso cuando ya existía, para que el bot no
+      lo reintente en vano.
     </div>`;
   cont.style.display='block';
 };
+
+// ── Documentación del AGENTE DE CARRITOS ─────────────────────────────────
+// Dos payloads y una consulta. La diferencia clave con ventas está arriba del
+// todo, porque es lo que más confunde al configurarlo: acá la identidad es
+// telefono + id_carrito, y el id es obligatorio en los dos envíos.
+function _botwDocsCarritos(code, base, bloque){
+  const tienda = (_botwData[code]||{}).nombre || '';
+  const completos = JSON.stringify({
+    workspace: code,
+    tienda: tienda,
+    id_carrito: '1344229114102',
+    NOMBRES: 'María',
+    APELLIDOS: 'Gómez Ruiz',
+    'DIRECCIÓN Y BARRIO': 'Cra 45 #12-30, Laureles',
+    DEPARTAMENTO: 'Antioquia',
+    CIUDAD: 'Medellín',
+    'TELÉFONO': '3001112233',
+    CANTIDAD: 2,
+    'PRECIO TOTAL (SIN PUNTOS NI COMAS)': '89000',
+    NOTA: 'CEPILLO BAMBU'
+  }, null, 2);
+
+  const recuperado = JSON.stringify({
+    workspace: code,
+    id_carrito: '1344229114102',
+    Fecha: '2026-08-18',
+    'Nombre del usuario': 'María Gómez',
+    'Numero de telefono': '3001112233',
+    Ciudad: 'Medellín',
+    Departamento: 'Antioquia',
+    Producto: 'CEPILLO BAMBU',
+    Cantidad: 2,
+    Valor: '89000',
+    'ESTADO DE LA ORDEN': ''
+  }, null, 2);
+
+  return `
+    <div class="botw-doc-intro">
+      Dos envíos distintos: uno para el carrito que ya tiene <b>todos los datos</b> y solo falta
+      confirmar, y otro para avisar que el carrito <b>se recuperó</b>. Los dos llegan a la pestaña
+      <b>🛒 Carritos Bot</b> de Gestiones Diarias.
+    </div>
+
+    <div class="botw-doc-nota warn">
+      <b>Lo más importante:</b> acá el carrito se identifica por <code>telefono</code> +
+      <code>id_carrito</code>, no por la fecha como en ventas. <b>El <code>id_carrito</code> es
+      obligatorio en los dos envíos</b> — es el número que genera ChateaPro, por ejemplo
+      <code>1344229114102</code>. Sin él responde <code>400</code> y no guarda nada.<br>
+      Gracias a eso un mismo cliente puede tener <b>varios carritos abiertos</b> sin que se pisen.
+    </div>
+
+    <div class="botw-doc-paso"><b>1</b> Consultar si el carrito ya está <span class="botw-doc-op">(opcional)</span></div>
+    ${bloque('POST · dirección', base+'/carritosExiste', 'botw-c1-'+code)}
+    ${bloque('POST · cuerpo (body) en formato JSON',
+      JSON.stringify({ workspace: code, telefono: '3001112233', id_carrito: '1344229114102' }, null, 2),
+      'botw-c1b-'+code)}
+    <div class="botw-doc-nota">Responde <code>{"existe": true}</code> o <code>false</code>.
+    En <i>Ruta JSON</i> usá <code>$.existe</code>. No es obligatorio: los dos envíos de abajo ya
+    evitan duplicar por su cuenta.</div>
+
+    <div class="botw-doc-paso"><b>2</b> Carrito con los datos completos</div>
+    <div class="botw-doc-nota">El que tiene todo listo y solo falta confirmar con el cliente.
+    Entra con estado <b>DATOS COMPLETOS</b>.</div>
+    ${bloque('POST · dirección', base+'/carritos', 'botw-c2-'+code)}
+    ${bloque('Encabezados', 'Content-Type: application/json\nX-Api-Key: (la clave de arriba, botón 📋)', 'botw-c3-'+code)}
+    ${bloque('Cuerpo (body) en formato JSON', completos, 'botw-c4-'+code)}
+    <div class="botw-doc-nota">Los nombres son los mismos títulos del Excel, así que se pueden mapear
+    tal cual. <b>NOTA</b> es el nombre del producto. <b>PRECIO TOTAL</b> es el total del carrito, no el
+    precio por unidad.</div>
+
+    <div class="botw-doc-paso"><b>3</b> El carrito se recuperó</div>
+    <div class="botw-doc-nota">Si ese carrito ya estaba, se <b>actualiza</b> y pasa a
+    <b>CARRITO RECUPERADO</b>. Si nunca se había visto, se registra directamente como recuperado.</div>
+    ${bloque('POST · dirección', base+'/carritosRecuperado', 'botw-c5-'+code)}
+    ${bloque('Cuerpo (body) en formato JSON', recuperado, 'botw-c6-'+code)}
+    <div class="botw-doc-nota">Encabezados iguales al paso 2.
+    Si mandás <code>ESTADO DE LA ORDEN</code> con algo, se usa ese estado; si va vacío, queda como
+    <b>CARRITO RECUPERADO</b>. En <i>Ruta JSON</i>, <code>$.duplicado</code> dice si el carrito ya
+    existía y <code>$.estado</code> con cuál quedó.</div>
+
+    <div class="botw-doc-nota">
+      <b>Qué es obligatorio:</b> <code>workspace</code>, <code>telefono</code> e
+      <code>id_carrito</code>. El resto puede ir vacío y se completa después.<br>
+      <b>La fecha</b> solo la trae el envío de recuperación; en el de datos completos se usa la del
+      momento en que llega.<br>
+      <b>Al actualizar no se pierde nada:</b> los campos que no mandés se dejan como estaban, así que
+      la dirección cargada en el paso 2 sigue ahí después del paso 3.
+    </div>
+
+    <div class="botw-doc-nota warn">
+      Si el mismo carrito llega dos veces <b>no se duplica</b>: responde <code>{"duplicado": true}</code>
+      y actualiza lo que haya cambiado. Y un carrito <b>no cambia de mes</b> aunque se recupere en el
+      siguiente: se queda donde se registró.
+    </div>`;
+}
 
 window._botwCopiarTxt = function(id){
   const el = document.getElementById(id);
