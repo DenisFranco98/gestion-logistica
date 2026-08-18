@@ -39,8 +39,11 @@ function _cfInit(){
   const prevM=pm.getFullYear()+'-'+_cfPad(pm.getMonth()+1);
   const lbl=document.getElementById('cf-mes-lbl');
   if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
+  // Al arrancar se abre la sección que pida la URL, no siempre el Dashboard: es
+  // lo que hace que /control-financiero/er funcione al pegarlo o al recargar.
+  const _inicial = _cfRutaAplicar();
   if(typeof _db==='undefined'){
-    _cfCfg=JSON.parse(JSON.stringify(_CF_DEF));_cfMD={};_cfPrevMD={};_cfTab('dash');return;
+    _cfCfg=JSON.parse(JSON.stringify(_CF_DEF));_cfMD={};_cfPrevMD={};_cfTab(_inicial,true);return;
   }
   Promise.all([
     _leerTienda(_cfCfgBase),
@@ -49,8 +52,8 @@ function _cfInit(){
   ]).then(([cs,ms,ps])=>{
     _cfCfg=Object.assign(JSON.parse(JSON.stringify(_CF_DEF)),cs.val()||{});
     _cfMD=ms.val()||{};_cfPrevMD=ps.val()||{};
-    _cfTab('dash');
-  }).catch(()=>{_cfCfg=JSON.parse(JSON.stringify(_CF_DEF));_cfMD={};_cfPrevMD={};_cfTab('dash');});
+    _cfTab(_inicial,true);
+  }).catch(()=>{_cfCfg=JSON.parse(JSON.stringify(_CF_DEF));_cfMD={};_cfPrevMD={};_cfTab(_inicial,true);});
 }
 
 function _cfVolver(){
@@ -58,9 +61,59 @@ function _cfVolver(){
   window._gdMostrarModeSelect(a);
 }
 
-function _cfTab(tab){
+// ── RUTAS DEL MÓDULO ─────────────────────────────────────────────────────
+// Igual que el Centro de Operaciones: cada pestaña con su URL real y sin "#",
+// /control-financiero/er y compañía. Antes la URL se quedaba en
+// /control-financiero mirases lo que mirases.
+//
+// Depende de que el hosting mande /control-financiero/** a control-financiero.html
+// (el rewrite de firebase.json). OJO: el catch-all manda todo lo demás a
+// index.html, así que sin esa regla ESPECÍFICA una recarga en /control-financiero/er
+// abriría la landing en vez del módulo.
+const _CF_TABS = ['dash','mes','er','config','ordenes','analiticas'];
+const _CF_TAB_INICIAL = 'dash';
+
+function _cfRouterActivo(){ return typeof history !== 'undefined' && !!history.pushState; }
+
+function _cfRutaLeer(){
+  const m = String(location.pathname||'').match(/^\/control-financiero\/([a-z]+)\/?$/);
+  return (m && _CF_TABS.indexOf(m[1]) >= 0) ? m[1] : null;
+}
+
+function _cfRutaEscribir(tab, reemplazar){
+  if(!_cfRouterActivo()) return;
+  const url = '/control-financiero/' + tab;
+  if(location.pathname === url) return;
+  history[reemplazar ? 'replaceState' : 'pushState']({cfTab:tab}, '', url);
+}
+
+// Lo que se hace al arrancar el módulo: respetar la sección que pida la URL.
+function _cfRutaAplicar(){
+  const tab = _cfRutaLeer() || _CF_TAB_INICIAL;
+  _cfRutaEscribir(tab, true);      // replaceState: entrar no debe dejar historial de más
+  return tab;
+}
+
+window.addEventListener('popstate', function(){
+  if(!_cfRouterActivo()) return;
+  // Solo si el módulo está a la vista: estando en el login o en el selector de
+  // tienda, un atrás no debe ponerse a repintar pestañas de Control Financiero.
+  // Se mira #cf-panel y no offsetParent porque offsetParent también da null con
+  // position:fixed, y eso haría que el atrás dejara de funcionar sin motivo.
+  const panel = document.getElementById('cf-panel');
+  if(!panel || getComputedStyle(panel).display === 'none') return;
+  _cfTab(_cfRutaLeer() || _CF_TAB_INICIAL, true);
+});
+
+// _desdeLaRuta = "no toques la URL". Lo pasan el popstate, el arranque y —esto es
+// lo que lo diferencia del panel admin— los REPINTADOS: _cfCargarMes() vuelve a
+// llamar a _cfTab con la misma pestaña después de leer otro mes, y eso no es
+// navegar. Sin el flag, cambiar de mes metía una entrada de historial por cada
+// clic en la flecha y el botón atrás no volvía a ningún lado.
+function _cfTab(tab, _desdeLaRuta){
   _cfCurTab=tab;
-  ['dash','mes','er','config','ordenes','analiticas'].forEach(t=>{
+  if(!_desdeLaRuta) _cfRutaEscribir(tab);
+  _CF_TABS.forEach(t=>{
     const c=document.getElementById('cf-tab-'+t);
     const b=document.getElementById('cf-tab-btn-'+t);
     if(c)c.style.display=t===tab?'block':'none';
@@ -91,9 +144,12 @@ function _cfCargarMes(){
     ]).then(([s,p])=>{
       _cfMD=s.val()||{};
       _cfPrevMD=p.val()||{};
-      _cfTab(_cfCurTab);
+      // Repintado con los datos del mes nuevo: la pestaña es la misma, así que la
+      // URL no se toca. Si se tocara, cada flecha de mes dejaría una entrada de
+      // historial y el botón atrás no llevaría a ninguna parte.
+      _cfTab(_cfCurTab,true);
     });
-  } else _cfTab(_cfCurTab);
+  } else _cfTab(_cfCurTab,true);
 }
 function _cfPrevMes(){
   const [y,m]=_cfMes.split('-').map(Number);

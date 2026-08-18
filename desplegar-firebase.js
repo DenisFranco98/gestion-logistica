@@ -51,18 +51,20 @@ function copiar(desde, hacia, esRaiz) {
 fs.rmSync(DESTINO, { recursive: true, force: true });
 copiar(REPO, DESTINO, true);
 
-// El firebase.json de la copia es mínimo a propósito: acá ya no hay nada que
-// ignorar porque solo se copió lo que va. cleanUrls replica /gestion-logistica ->
-// .html de GitHub Pages, y el rewrite es lo que hace falta para que history
-// .pushState sobreviva a un F5.
+// El firebase.json de la copia SE DERIVA del del repo, no se escribe a mano: si
+// fueran dos copias sueltas, tarde o temprano una tendría un rewrite que la otra
+// no —y el desplegado sería el de acá, o sea el equivocado—. Lo único que cambia
+// es "ignore", que en la copia sobra porque solo se copió lo que va.
+const hostingRepo = JSON.parse(fs.readFileSync(path.join(REPO, 'firebase.json'), 'utf8')).hosting;
+if (!hostingRepo) { console.error('firebase.json del repo no tiene sección "hosting"'); process.exit(1); }
+if (!Array.isArray(hostingRepo.rewrites) || !hostingRepo.rewrites.length) {
+  console.error('firebase.json del repo no tiene rewrites: /admin/... y /control-financiero/... darían 404 al recargar');
+  process.exit(1);
+}
 fs.writeFileSync(path.join(DESTINO, 'firebase.json'), JSON.stringify({
-  hosting: {
-    public: '.',
-    cleanUrls: true,
-    ignore: ['firebase.json'],
-    rewrites: [{ source: '**', destination: '/index.html' }],
-  },
+  hosting: Object.assign({}, hostingRepo, { public: '.', ignore: ['firebase.json'] }),
 }, null, 2) + '\n');
+console.log('rewrites que se despliegan: ' + hostingRepo.rewrites.map(r => r.source + ' -> ' + r.destination).join(' | '));
 
 const cuenta = (function contar(dir) {
   return fs.readdirSync(dir, { withFileTypes: true })

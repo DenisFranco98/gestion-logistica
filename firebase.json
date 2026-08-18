@@ -29,6 +29,8 @@
       "*.log"
     ],
     "rewrites": [
+      { "source": "/control-financiero/**", "destination": "/control-financiero.html" },
+      { "source": "/admin/**", "destination": "/index.html" },
       { "source": "**", "destination": "/index.html" }
     ]
   }
