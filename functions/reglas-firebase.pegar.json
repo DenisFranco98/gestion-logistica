@@ -27,6 +27,26 @@
         }
       }
     },
+    "carritos_bot": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": false,
+        "$mes": {
+          "$carritoId": {
+            ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+          }
+        }
+      }
+    },
+    "carritos_bot_idx": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": false,
+        "$carritoId": {
+          ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+        }
+      }
+    },
     "historial_diario": {
       ".read": "auth != null",
       ".write": "auth != null"

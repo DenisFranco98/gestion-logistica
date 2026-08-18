@@ -73,6 +73,39 @@ function mesDe(fechaCompra) {
   return f ? f.slice(0, 4) + '-' + f.slice(4, 6) : '';
 }
 
+// ── Identidad de un CARRITO ──────────────────────────────────────────────
+// Un carrito se identifica por teléfono + id de carrito, no por teléfono +
+// fecha como las ventas. La razón: el id lo genera ChateaPro y es la identidad
+// REAL del carrito, así que el mismo cliente puede tener varios carritos abiertos
+// sin que se pisen, y "recuperar" uno es encontrarlo exacto sin depender de
+// cuándo llegue el aviso.
+//
+// El id se trata como TEXTO aunque parezca un número (1344229114102): con 13
+// dígitos ya roza el límite donde JSON.parse empieza a perder precisión, y un id
+// redondeado apuntaría a otro carrito. Se le quita todo lo que no sea dígito o
+// guión por si el bot lo manda con espacios o prefijos.
+function normIdCarrito(v) {
+  return String(v == null ? '' : v).trim().replace(/[^\w-]/g, '');
+}
+
+// Sin teléfono o sin id no hay identidad posible: se devuelve vacío y el endpoint
+// responde 400 en vez de inventar una clave que después nadie podría emparejar.
+function claveCarrito(telefono, idCarrito) {
+  const t = normTelefono(telefono);
+  const i = normIdCarrito(idCarrito);
+  return (t && i) ? t + '_' + i : '';
+}
+
+// Fecha de HOY en formato YYYYMMDD, hora de Colombia. La usa el payload de datos
+// completos, que no trae fecha: hace falta una para saber en qué mes guardar el
+// carrito. Se calcula sobre UTC-5 y no con toISOString() porque en UTC, a partir
+// de las 19:00 en Colombia, ya es el día siguiente — el mismo error que documenta
+// _hoyLocal() en el front.
+function hoyColombia() {
+  const ahora = new Date(Date.now() - 5 * 3600 * 1000);
+  return ahora.getUTCFullYear() + p2(ahora.getUTCMonth() + 1) + p2(ahora.getUTCDate());
+}
+
 // ── Autenticación del bot ────────────────────────────────────────────────
 // El WORKSPACE dice a qué tienda va la venta, pero no prueba quién la manda:
 // viaja en el payload y cualquiera que lo descubra podría inyectar ventas. Por
@@ -186,5 +219,6 @@ function aNumero(v) {
 
 module.exports = {
   db, cors, body, autenticar, fbKey,
-  normTelefono, normFecha, claveVenta, mesDe, aNumero, aEntero
+  normTelefono, normFecha, claveVenta, mesDe, aNumero, aEntero,
+  normIdCarrito, claveCarrito, hoyColombia
 };

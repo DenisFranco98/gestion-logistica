@@ -4,17 +4,25 @@
 // así que el Admin SDK se autentica solo: no hay cuenta de servicio que generar
 // ni credencial que guardar.
 //
-// Se exportan dos funciones y cada una queda en su propia URL:
-//   .../ventas         POST      registra la venta
-//   .../ventasExiste   GET|POST  consulta si el pedido ya está
+// Cada función queda en su propia URL:
+//   .../ventas               POST      registra la venta
+//   .../ventasExiste         GET|POST  consulta si el pedido ya está
+//   .../carritos             POST      carrito con los datos completos
+//   .../carritosRecuperado   POST      el carrito se recuperó
+//   .../carritosExiste       GET|POST  consulta si el carrito ya está
 //
-// Se dejan como dos funciones sueltas en vez de una con enrutador para no sumar
-// Express: son dos caminos que no comparten nada más que lib.js.
+// Se dejan como funciones sueltas en vez de una con enrutador para no sumar
+// Express: son caminos que no comparten nada más que lib.js. Los de carritos
+// viven en carritos.js, que es otro dominio —una venta ya ocurrió, un carrito es
+// una intención— y mezclarlos acá habría hecho este archivo el doble de largo.
 const { onRequest } = require('firebase-functions/v2/https');
 const {
   db, cors, body, autenticar, fbKey,
   claveVenta, mesDe, normTelefono, normFecha, aNumero, aEntero
 } = require('./lib');
+const {
+  handlerCarritos, handlerCarritoRecuperado, handlerCarritoExiste
+} = require('./carritos');
 
 // La misma región que la base de datos. Cruzar de región le sumaría a cada
 // escritura un viaje de ida y vuelta entre continentes, y esto se llama en cada
@@ -185,7 +193,13 @@ const OPCIONES = { region: REGION, maxInstances: 10, memory: '256MiB', timeoutSe
 
 exports.ventas = onRequest(OPCIONES, handlerVentas);
 exports.ventasExiste = onRequest(OPCIONES, handlerExiste);
+exports.carritos = onRequest(OPCIONES, handlerCarritos);
+exports.carritosRecuperado = onRequest(OPCIONES, handlerCarritoRecuperado);
+exports.carritosExiste = onRequest(OPCIONES, handlerCarritoExiste);
 
 // Se exportan también los handlers para que los tests los llamen directo, sin
 // levantar el emulador.
-exports._handlers = { ventas: handlerVentas, existe: handlerExiste };
+exports._handlers = {
+  ventas: handlerVentas, existe: handlerExiste,
+  carritos: handlerCarritos, recuperado: handlerCarritoRecuperado, carritoExiste: handlerCarritoExiste
+};

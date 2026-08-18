@@ -18,15 +18,23 @@
 // quitan—, así que para proteger un solo nodo hay que bajar ese permiso a cada
 // nodo por separado.
 //
-// QUÉ NODOS ESTÁN CERRADOS HOY (2026-08-17) — los otros 25 siguen abiertos:
+// QUÉ NODOS ESTÁN CERRADOS (al 2026-08-18) — los otros 19 siguen abiertos:
 //
 //   bot_workspaces      lectura solo por consulta filtrada por empresa propia;
 //                       escritura validando el empresaId contra admin_empresas
 //   ventas_bot          las crea solo la Cloud Function; borrar, solo el dueño
 //   ventas_bot_idx      ídem
+//   carritos_bot        ídem — los carritos del bot, clave telefono_idCarrito
+//   carritos_bot_idx    ídem, y además dice en qué mes vive cada carrito
 //   config              superAdminUid solo lo reescribe el super admin actual
 //   users               escritura: tu propio nodo, un admin, o el super admin
 //   admins              ídem (el auto-registro de clientes sigue funcionando)
+//   session_hist        por uid: lo tuyo, y los admins todo
+//   session_reports     ídem
+//   control_financiero  por tienda (user_tiendas o admin_empresas)
+//   reportes            ídem
+//   reportes_img        ídem
+//   logistica_live      ídem
 //
 // ORDEN DE PUBLICACIÓN: primero el código, después estas reglas. Ya se hizo así
 // (commits c09b138 y 3438058, publicados). Al revés, el código viejo choca:
@@ -113,6 +121,47 @@
       }
     },
 
+
+    // ── CARRITOS DEL BOT ─────────────────────────────────────────────────
+    // Mismo criterio que ventas_bot: los CREA solo la Cloud Function, que usa el
+    // Admin SDK y no pasa por estas reglas, así que .write es false a nivel de
+    // tienda y no hay forma de inventar carritos desde el navegador.
+    //
+    // Lee cualquiera con acceso a esa tienda. La diferencia con ventas es que acá
+    // la clave es telefono_idCarrito y no telefono_fecha, pero para las reglas da
+    // igual: lo que se valida es de qué tienda cuelga.
+    //
+    // BORRAR es la única escritura permitida desde la app, y solo al DUEÑO. El
+    // "!newData.exists()" es lo que lo hace seguro: autoriza a eliminar, pero no a
+    // crear ni a modificar. Sin eso, abrir la escritura para poder borrar
+    // habilitaría también inventar carritos o cambiarles el importe.
+    "carritos_bot": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": false,
+        "$mes": {
+          "$carritoId": {
+            ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+          }
+        }
+      }
+    },
+
+    // Índice para responder "¿ya existe este carrito?" sin leer el mes entero, y
+    // para saber en qué mes vive cada uno. Eso segundo importa más acá que en
+    // ventas: como la clave NO lleva la fecha, un carrito creado en agosto y
+    // recuperado en septiembre podría acabar duplicado en los dos meses. El índice
+    // es lo que dice dónde está, así que al borrar un carrito hay que borrar
+    // TAMBIÉN su entrada acá, o /carritosExiste seguiría diciendo que existe.
+    "carritos_bot_idx": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": false,
+        "$carritoId": {
+          ".write": "!newData.exists() && auth != null && root.child('users').child(auth.uid).child('rol').val() === 'dueno' && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()"
+        }
+      }
+    },
 
     // ── EL RESTO ─────────────────────────────────────────────────────────
     // Los 28 nodos que ya existían, con el mismo permiso que tienen hoy. No se
