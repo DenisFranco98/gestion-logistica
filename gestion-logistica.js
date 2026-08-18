@@ -418,6 +418,10 @@ const WA_MSGS={
 };
 
 let pedidos=[], gestiones={}, filtroActivo=null, filtrosSeccion={}, filtroTiendas=[];
+// Router del módulo (ver _glRutaAplicar, más abajo). Se declara ACÁ y no junto a
+// sus funciones porque renderAll la lee, y un let no se hoistea: declarada abajo,
+// cualquier render que ocurriera antes de esa línea reventaría.
+let _glRutaAplicada = false;
 let _pedidoMap=new Map(); // Índice O(1) por id para evitar pedidos.find() lineal
 // Cards expandidas (persiste entre re-renders vía _actualizarCard)
 const _cardsExp=new Set();
@@ -1591,6 +1595,10 @@ function renderAll(){
     renderPills();renderCards();_agruparColsPorDias();_cardFloatReabrir();renderProgress();renderResumen();
     actualizarBtnRapid();actualizarBtnSeguimiento();actualizarBtnTransp();
     actualizarBadgeSinGuia();buildSecNav();renderTranspLinks();
+    // Al final: el filtro que pida la URL se aplica cuando los pedidos ya están
+    // pintados. Solo actúa la primera vez (ver _glRutaAplicar), así que no entra
+    // en bucle aunque vuelva a llamar a renderAll.
+    _glRutaAplicar();
   });
 }
 
@@ -1657,6 +1665,56 @@ function renderTranspLinks(){
   ).join('');
 }
 
+// ── RUTAS DEL MÓDULO ─────────────────────────────────────────────────────
+// Acá NO hay pestañas: hay un FILTRO por estado, que además es un toggle (volver
+// a pulsar el mismo lo quita). Así que la ruta refleja el filtro y "sin filtro"
+// es /gestion-logistica a secas:
+//
+//   /gestion-logistica            todos los pedidos
+//   /gestion-logistica/novedad    solo los que están en novedad
+//
+// Diferencia honesta con los otros módulos: acá los pedidos salen de un Excel que
+// cada quien carga en su navegador, así que mandarle el enlace a otra persona NO
+// le muestra estos pedidos —tendrá que cargar su propio archivo—. Lo que sí gana
+// es que F5 conserva el filtro y que el botón atrás lo quita, que es lo natural.
+//
+// Depende del rewrite "/gestion-logistica/** -> /gestion-logistica.html".
+const _GL_FILTROS = ESTADOS.map(e => e.key).concat(['pendiente']);
+
+function _glRouterActivo(){ return typeof history !== 'undefined' && !!history.pushState; }
+
+function _glRutaLeer(){
+  // [a-z_]+ y no [a-z]+: hay claves con guión bajo, como pendiente_sin_guia.
+  const m = String(location.pathname||'').match(/^\/gestion-logistica\/([a-z_]+)\/?$/);
+  return (m && _GL_FILTROS.indexOf(m[1]) >= 0) ? m[1] : null;
+}
+
+function _glRutaEscribir(filtro, reemplazar){
+  if(!_glRouterActivo()) return;
+  const url = filtro ? '/gestion-logistica/' + filtro : '/gestion-logistica';
+  if(location.pathname === url) return;
+  history[reemplazar ? 'replaceState' : 'pushState']({glFiltro:filtro||null}, '', url);
+}
+
+// Se aplica UNA sola vez, y solo cuando ya hay pedidos: antes de cargar el Excel
+// el filtro no significa nada, y forzarlo dejaría la pantalla en un estado que el
+// usuario no pidió. Por eso lo llama renderAll y no el arranque de la página.
+// (_glRutaAplicada se declara arriba con las globales: renderAll la lee y las
+// declaraciones let no se hoistean.)
+function _glRutaAplicar(){
+  if(!_glRouterActivo() || _glRutaAplicada || !pedidos.length) return;
+  _glRutaAplicada = true;
+  const f = _glRutaLeer();
+  if(f && f !== filtroActivo){ filtroActivo = f; renderAll(); }
+  else if(!f) _glRutaEscribir(filtroActivo, true);   // normaliza sin dejar historial
+}
+
+window.addEventListener('popstate', function(){
+  if(!_glRouterActivo() || !pedidos.length) return;
+  const f = _glRutaLeer();
+  if(f !== filtroActivo){ filtroActivo = f; renderAll(); }
+});
+
 function renderPills(){
   const div=document.getElementById('pills');div.innerHTML='';
   const pendSinGuia=pedidos.filter(p=>p.estadoKey==='pendiente').length;
@@ -1674,7 +1732,7 @@ function renderPills(){
       // dejando, así que se le imputa ANTES de cambiar el filtro. Si no, los
       // cambios rápidos de estado no contarían para ninguna.
       _tickTiempoActivo();
-      filtroActivo=ac?null:est.key;renderAll();guardar();
+      filtroActivo=ac?null:est.key;_glRutaEscribir(filtroActivo);renderAll();guardar();
     };
     div.appendChild(sp);
   });
@@ -1684,7 +1742,7 @@ function renderPills(){
     const pAc=filtroActivo==='pendiente';
     pBtn.style.cssText='border-color:var(--danger);color:'+(pAc?'white':'#dc2626')+';background:'+(pAc?'#dc2626':'');
     pBtn.innerHTML='⏳ Sin guía <strong>('+pendSinGuia+')</strong>';
-    pBtn.onclick=()=>{_tickTiempoActivo();filtroActivo=pAc?null:'pendiente';renderAll();};
+    pBtn.onclick=()=>{_tickTiempoActivo();filtroActivo=pAc?null:'pendiente';_glRutaEscribir(filtroActivo);renderAll();};
     div.appendChild(pBtn);
   }
 }
@@ -4806,6 +4864,9 @@ function limpiarApp(){
   _fbGuardarInformeSesion();
   localStorage.removeItem(LS_KEY);
   pedidos=[];gestiones={};filtroActivo=null;filtrosSeccion={};filtroTiendas=[];
+  // Se vacía el tablero: la URL no puede quedarse anunciando un filtro que ya no
+  // existe. Y se rearma el router, porque el próximo Excel es una sesión nueva.
+  _glRutaEscribir(null, true); _glRutaAplicada = false;
   waCounters={reparto:0,oficina:0,transito:0,novedad:0,rechazado:0};
   sesionInicio=null;tiemposPorSeccion={};
   ultimaGestion=Date.now();contadorAlertasInactividad=0;
@@ -5866,6 +5927,9 @@ function _modoLogistica(){
   // checkSesion() ofrece restaurar lo guardado en localStorage.
   pedidos=[]; gestiones={};
   filtroActivo=null; filtrosSeccion={}; filtroTiendas=[];
+  // Igual que en limpiarApp: sin tablero no hay filtro que anunciar, y el router
+  // se rearma para la sesión siguiente.
+  _glRutaEscribir(null, true); _glRutaAplicada = false;
   document.getElementById('main').style.display='none';
   document.body.classList.remove('data-loaded');
   const _rp=document.getElementById('right-panel');
