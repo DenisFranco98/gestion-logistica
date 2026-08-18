@@ -37,6 +37,7 @@ function _gdResetMes(){
   _novData={}; _repData={}; _roData={}; _antData={con:{},sin:{}};
   _vbData={}; _vbAds={}; _vbDiasConVenta=new Set(); _vbUltima=0;
   _vbPag.pagina=1;
+  _carData={}; _carUltima=0; _carPag.pagina=1;
 }
 
 // Y lo que pertenece A LA TIENDA, que además incluye todo lo del mes.
@@ -48,8 +49,8 @@ function _gdResetMes(){
 // sumarlo a la función que corresponda.
 function _gdResetEstado(){
   _gdResetMes();
-  [_roSearchTimer,_antSearchTimer,_novSearchTimer,_vbSearchTimer].forEach(t=>{ if(t) clearTimeout(t); });
-  _roSearchTimer=null; _antSearchTimer=null; _novSearchTimer=null; _vbSearchTimer=null;
+  [_roSearchTimer,_antSearchTimer,_novSearchTimer,_vbSearchTimer,_carSearchTimer].forEach(t=>{ if(t) clearTimeout(t); });
+  _roSearchTimer=null; _antSearchTimer=null; _novSearchTimer=null; _vbSearchTimer=null; _carSearchTimer=null;
 
   // El catálogo se arma por TIENDA, no por mes: sobrevive a un cambio de mes y
   // solo se tira al cambiar de tienda.
@@ -63,6 +64,7 @@ function _gdResetEstado(){
   _novFilter={q:'',sol:''};
   _antFilter={con:{q:'',transport:'',entrega:'',estado:''},sin:{q:'',transport:'',entrega:'',estado:''}};
   _vbFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
+  _carFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
 }
 
 function _gdInit(){
@@ -686,6 +688,8 @@ function _gdRefreshActiveTab(){
   // Las ventas del bot viven en ventas_bot/{tienda}/{mes}, así que cambiar de
   // mes obliga a releer: sin esto la tabla seguía mostrando el mes anterior.
   if(_gdActiveTab==='ventasbot') _vbInit();
+  // Los carritos igual: carritos_bot/{tienda}/{mes}.
+  if(_gdActiveTab==='carritos') _carInit();
 }
 function _gdVolver(){
   document.getElementById('gd-panel').style.display='none';
@@ -702,7 +706,7 @@ function _gdVolver(){
 // Acá _gdTab NO se llama desde dentro (a diferencia de _cfTab): cambiar de mes va
 // por _gdRefreshActiveTab(), que llama directo a los _xInit() y no pasa por acá.
 // Así que no hace falta distinguir repintados de navegación.
-const _GD_TABS = ['gestion','consolidado','novedades','reportes','anticipos','ro','ventasbot'];
+const _GD_TABS = ['gestion','consolidado','novedades','reportes','anticipos','ro','ventasbot','carritos'];
 const _GD_TAB_INICIAL = 'gestion';   // el que el HTML ya trae activo
 
 function _gdRouterActivo(){ return typeof history !== 'undefined' && !!history.pushState; }
@@ -747,7 +751,7 @@ function _gdTab(tab, _desdeLaRuta){
   // si se cambia de tab con él abierto, queda escuchando clics para un panel
   // que ya nadie ve.
   _vbCalCerrar();
-  ['gestion','consolidado','novedades','reportes','anticipos','ro','ventasbot'].forEach(t=>{
+  _GD_TABS.forEach(t=>{
     const c=document.getElementById('gd-tab-'+t);
     const b=document.getElementById('gd-tab-btn-'+t);
     if(c) c.style.display=t===tab?(t==='gestion'?'flex':'block'):'none';
@@ -769,6 +773,7 @@ function _gdTab(tab, _desdeLaRuta){
   if(tab==='reportes') _repInit();
   if(tab==='ro') _roInit();
   if(tab==='ventasbot') _vbInit();
+  if(tab==='carritos') _carInit();
 }
 
 // ── CONSOLIDADO ─────────────────────────────────────────────────────────
@@ -3065,4 +3070,266 @@ function _vbRenderAnalitica(filas, totalGeneral){
       _vbAgrupar(filas, v=>v.producto, '(sin producto)'), 'facturacion', totalGeneral, true) +
     _vbTablaAnalitica('Por anuncio', 'ID DEL ANUNCIO',
       _vbAgrupar(filas, v=>v.id_anuncio, '(sin anuncio)'), 'ventas', totalGeneral);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ─────────────────────────── CARRITOS BOT ─────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+// Los carritos que manda el bot de ChateaPro a /carritos y /carritosRecuperado.
+// Solo lectura: los escriben las Cloud Functions con el Admin SDK y las reglas
+// dejan el nodo en read-only para la tienda.
+//
+// Un carrito NO es una venta. Es una intención que todavía puede recuperarse o
+// perderse, así que vive en su propio nodo y sus importes NO se suman a los de
+// Ventas Bot: serían plata que nadie pagó.
+//
+// La identidad es telefono_idCarrito (ver functions/carritos.js), lo que permite
+// que el mismo cliente tenga varios carritos abiertos sin que se pisen.
+let _carData={}, _carFiltro={q:'',estado:'',d1:0,d2:0,producto:''}, _carSearchTimer=null, _carUltima=0;
+let _carPag={ tam: 50, pagina: 1 };
+
+const CAR_EST_COMPLETOS='DATOS COMPLETOS';
+const CAR_EST_RECUPERADO='CARRITO RECUPERADO';
+
+function _carPagReset(){ _carPag.pagina=1; }
+function _carPagTam(v){
+  _carPag.tam=parseInt(v,10)||50;
+  _carPagReset();
+  try{ localStorage.setItem('lgs_car_pag_tam', String(_carPag.tam)); }catch(_){}
+  _carRender();
+}
+function _carPagIr(p){ _carPag.pagina=p; _carRender(); const t=document.getElementById('gd-tab-carritos'); if(t) t.scrollTop=0; }
+
+// `conservarFiltros` distingue los dos motivos para leer, igual que en Ventas Bot:
+// abrir el tab o cambiar de mes los limpia (un producto del mes anterior puede no
+// existir en este); el botón que refresca los conserva, porque quien mira algo
+// filtrado quiere ver si entró algo nuevo ahí.
+function _carInit(conservarFiltros){
+  const wrap=document.getElementById('car-table-wrap');
+  if(!wrap) return;
+  if(!conservarFiltros) wrap.innerHTML='<div style="padding:14px;color:var(--text-3);font-size:.72rem;text-align:center;">Cargando...</div>';
+  if(typeof _db==='undefined'){ _carData={}; _carRender(); return Promise.resolve(); }
+  try{ const t=parseInt(localStorage.getItem('lgs_car_pag_tam'),10); if(t) _carPag.tam=t; }catch(_){}
+  return _db.ref('carritos_bot/'+_gdTK()+'/'+_gdMes).once('value').then(snap=>{
+    _carData=snap.val()||{};
+    if(!conservarFiltros){
+      _carFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
+      const inp=document.getElementById('car-buscar'); if(inp) inp.value='';
+    }
+    _carUltima=Date.now();
+    _carRender();
+  }).catch(e=>{
+    // Lo más probable es que la tienda todavía no esté conectada al bot: se
+    // explica en vez de mostrar un error crudo.
+    wrap.innerHTML='<div class="adm-empty">No se pudieron leer los carritos del bot.<br><span style="font-size:.7rem;">'+esc(e.message)+'</span></div>';
+  });
+}
+
+async function _carRecargar(btn){
+  if(btn){ btn.disabled=true; btn.classList.add('girando'); }
+  try{ await _carInit(true); }
+  finally{ if(btn){ btn.disabled=false; btn.classList.remove('girando'); } }
+}
+
+function _carSearch(q){
+  _carFiltro.q=q;
+  if(_carSearchTimer)clearTimeout(_carSearchTimer);
+  _carSearchTimer=setTimeout(function(){_carPagReset();_carRender();},200);
+}
+function _carFiltroSet(campo,valor){ _carFiltro[campo]=valor; _carPagReset(); _carRender(); }
+function _carEstChip(e,btn){
+  _carFiltro.estado=e; _carPagReset();
+  const cont=btn?btn.parentElement:document.getElementById('car-chips');
+  if(cont) [...cont.querySelectorAll('.tab-chip')].forEach(b=>b.classList.toggle('on', b===btn));
+  _carRender();
+}
+
+// El rango de días reutiliza _vbAtajos(), que devuelve números de día del mes
+// visible y ya resuelve lo difícil: que los atajos relativos a hoy solo existan en
+// el mes en curso y que las semanas se recorten al mes. Duplicar esa lógica sería
+// garantizar que algún día divergiera de la otra pestaña.
+function _carDiaChip(id,btn){
+  const a=_vbAtajos().find(x=>x.id===id);
+  if(!a||!a.rango) return;
+  _carFiltro.d1=a.rango[0]; _carFiltro.d2=a.rango[1];
+  _carPagReset(); _carRender();
+}
+function _carDiaActivo(){
+  const d1=_carFiltro.d1, d2=_carFiltro.d2;
+  const a=_vbAtajos().find(x=>x.rango && x.rango[0]===d1 && x.rango[1]===(d2||d1));
+  return a?a.id:'';
+}
+// ¿Este carrito cae en el rango de días elegido? Aparte porque lo usan la tabla y
+// la lista de productos, y si divergieran el selector ofrecería productos que la
+// tabla no muestra — el mismo problema que ya se arregló en Ventas Bot.
+function _carEnRangoDias(v){
+  if(!_carFiltro.d1) return true;
+  const d=parseInt(String(v.fecha||'').slice(6,8),10)||0;
+  return !!d && d>=_carFiltro.d1 && d<=(_carFiltro.d2||_carFiltro.d1);
+}
+
+// dd/mm — la fecha se guarda como YYYYMMDD (texto), se formatea cortando sin
+// construir un Date, que en UTC correría el día.
+function _carFecha(v){
+  const s=String(v||'');
+  return s.length===8 ? s.slice(6,8)+'/'+s.slice(4,6) : (s||'—');
+}
+function _carMonto(n){ const v=parseInt(n,10)||0; return v?'$ '+v.toLocaleString('es-CO'):'—'; }
+
+function _carRender(){
+  const wrap=document.getElementById('car-table-wrap');
+  if(!wrap) return;
+  const todos=Object.entries(_carData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+
+  // Chips de rango de días. Se repintan siempre: cuál está activo depende del
+  // filtro, y cuáles se pueden usar depende del mes que se esté viendo.
+  const cd=document.getElementById('car-dia-chips');
+  if(cd){
+    const act=_carDiaActivo();
+    cd.innerHTML='<span class="tab-chip-lbl">Días:</span>'+
+      _vbAtajos().map(function(a){
+        return '<button class="tab-chip'+(a.id===act?' on':'')+'"'+
+          (a.rango?'':' disabled title="'+esc(a.motivo)+'"')+
+          ' onclick="_carDiaChip(\''+a.id+'\',this)">'+esc(a.txt)+'</button>';
+      }).join('');
+  }
+
+  // Productos: solo los que hay en los días filtrados, no los del mes entero.
+  const enRango=todos.filter(function(par){ return _carEnRangoDias(par[1]); });
+  const prods=[...new Set(enRango.map(function(par){ return String(par[1].producto||'').trim(); }).filter(Boolean))].sort();
+  // Si el producto elegido no existe en los días nuevos se suelta el filtro: si no,
+  // el selector mostraría "Todos" mientras la tabla sigue filtrada por él.
+  if(_carFiltro.producto && prods.indexOf(_carFiltro.producto)<0) _carFiltro.producto='';
+  const selP=document.getElementById('car-producto');
+  if(selP && selP.dataset.vals!==prods.join('|')){
+    selP.dataset.vals=prods.join('|');
+    selP.innerHTML='<option value="">Todos los productos</option>'+
+      prods.map(function(p){ return '<option value="'+esc(p)+'">'+esc(p)+'</option>'; }).join('');
+  }
+  if(selP) selP.value=_carFiltro.producto||'';
+
+  // Chips de estado. Los dos que genera la API van fijos —son los que dan sentido
+  // a la pestaña— y si aparece otro se agrega solo, porque el estado lo define el
+  // bot y una lista cerrada quedaría vieja en cuanto cambien el flujo.
+  const estados=[...new Set(todos.map(function(par){ return String(par[1].estado||'').trim(); }).filter(Boolean))];
+  [CAR_EST_COMPLETOS,CAR_EST_RECUPERADO].forEach(function(e){ if(estados.indexOf(e)<0) estados.push(e); });
+  estados.sort();
+  const chips=document.getElementById('car-chips');
+  if(chips && chips.dataset.estados!==estados.join('|')){
+    chips.dataset.estados=estados.join('|');
+    chips.innerHTML='<button class="tab-chip'+(_carFiltro.estado?'':' on')+'" onclick="_carEstChip(\'\',this)">Todos</button>'+
+      estados.map(function(e){
+        return '<button class="tab-chip'+(_carFiltro.estado===e?' on':'')+'" onclick="_carEstChip(\''+esc(e)+'\',this)">'+esc(e)+'</button>';
+      }).join('');
+  }
+
+  const q=(_carFiltro.q||'').toLowerCase();
+  const filas=todos.filter(function(par){
+    const v=par[1];
+    if(_carFiltro.estado && String(v.estado||'')!==_carFiltro.estado) return false;
+    if(!_carEnRangoDias(v)) return false;
+    if(_carFiltro.producto && String(v.producto||'')!==_carFiltro.producto) return false;
+    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.departamento,v.direccion,v.id_carrito]
+      .some(function(x){ return String(x||'').toLowerCase().includes(q); })) return false;
+    return true;
+  });
+
+  // Los KPIs de esta pestaña no son los de ventas: acá importa cuántos esperan
+  // confirmación y cuántos se recuperaron. El importe se llama "valor potencial" a
+  // propósito — no es facturación, es lo que entraría si todos se confirmaran.
+  const porConfirmar=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_COMPLETOS; }).length;
+  const recuperados=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_RECUPERADO; }).length;
+  const total=filas.reduce(function(s,par){ return s+(parseInt(par[1].valor,10)||0); },0);
+  const res=document.getElementById('car-resumen');
+  if(res){
+    res.innerHTML = todos.length
+      ? '<div class="vb-kpi"><b>'+filas.length+'</b><span>carritos'+(filas.length<todos.length?' (de '+todos.length+')':'')+'</span></div>'+
+        '<div class="vb-kpi"><b>'+porConfirmar+'</b><span>por confirmar</span></div>'+
+        '<div class="vb-kpi"><b>'+recuperados+'</b><span>recuperados</span></div>'+
+        '<div class="vb-kpi"><b>'+_carMonto(total)+'</b><span>valor potencial</span></div>'+
+        (_carUltima?'<div class="vb-actualizado">Datos al '+new Date(_carUltima).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+'</div>':'')
+      : '';
+  }
+
+  if(!todos.length){
+    wrap.innerHTML='<div class="adm-empty">Todavía no hay carritos del bot en '+
+      (typeof _cfMesLabel==='function'?_cfMesLabel(_gdMes):_gdMes)+'.<br>'+
+      '<span style="font-size:.7rem;">Los manda ChateaPro a /carritos y /carritosRecuperado.</span></div>';
+    const p0=document.getElementById('car-paginacion'); if(p0) p0.innerHTML='';
+    return;
+  }
+  if(!filas.length){
+    wrap.innerHTML='<div class="adm-empty">Ningún carrito coincide con este filtro.</div>';
+    const p0=document.getElementById('car-paginacion'); if(p0) p0.innerHTML='';
+    return;
+  }
+
+  // Paginación: el tamaño se recuerda, la página no. Volver a un tab y aparecer en
+  // la página 7 sin saber por qué es peor que volver al principio.
+  const tam=_carPag.tam;
+  const paginas=Math.max(1,Math.ceil(filas.length/tam));
+  if(_carPag.pagina>paginas) _carPag.pagina=paginas;
+  const desde=(_carPag.pagina-1)*tam;
+  const pagina=filas.slice(desde,desde+tam);
+
+  const pill=function(e){
+    const est=String(e||'');
+    const color = est===CAR_EST_RECUPERADO ? 'var(--success)' : (est===CAR_EST_COMPLETOS ? 'var(--warning)' : 'var(--text-3)');
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;border:1.5px solid '+color+';color:'+color+';font-size:.6rem;font-weight:800;white-space:nowrap;">'+esc(est||'—')+'</span>';
+  };
+
+  wrap.innerHTML=
+    // ant-tbl es la que trae padding, bordes y encabezado; vb-tbl solo suma los
+    // ajustes de esta familia de tablas. Con vb-tbl a secas las celdas quedaban
+    // pegadas unas a otras.
+    '<div style="overflow-x:auto;"><table class="ant-tbl vb-tbl"><thead><tr>'+
+      '<th>FECHA</th><th>CLIENTE</th><th>TELÉFONO</th><th>CIUDAD</th>'+
+      '<th>PRODUCTO</th><th style="text-align:center;">CANT.</th><th style="text-align:right;">VALOR</th><th>ESTADO</th>'+
+    '</tr></thead><tbody>'+
+    pagina.map(function(par){
+      const v=par[1];
+      return '<tr>'+
+        '<td>'+_carFecha(v.fecha)+'</td>'+
+        // La dirección va debajo del nombre y no en columna propia: solo la trae uno
+        // de los dos payloads, así que como columna quedaría medio vacía.
+        '<td>'+esc(v.nombre||'—')+
+          (v.direccion?'<div style="font-size:.6rem;color:var(--text-3);">'+esc(v.direccion)+'</div>':'')+'</td>'+
+        '<td style="font-family:var(--f-mono);">'+esc(v.telefono||'—')+'</td>'+
+        '<td>'+esc(v.ciudad||'—')+
+          (v.departamento?'<div style="font-size:.6rem;color:var(--text-3);">'+esc(v.departamento)+'</div>':'')+'</td>'+
+        '<td>'+esc(v.producto||'—')+'</td>'+
+        '<td style="text-align:center;">'+(parseInt(v.cantidad,10)||0)+'</td>'+
+        '<td style="text-align:right;font-family:var(--f-mono);">'+_carMonto(v.valor)+'</td>'+
+        '<td>'+pill(v.estado)+'</td>'+
+      '</tr>';
+    }).join('')+
+    '</tbody></table></div>';
+
+  const pag=document.getElementById('car-paginacion');
+  if(pag){
+    if(paginas<=1){ pag.innerHTML=''; }
+    else{
+      // Las clases son las que ya usa la paginación de Ventas Bot: .actual para la
+      // página en curso, .vb-pag-btns el contenedor y .vb-pag-gap los puntos. Con
+      // nombres propios los botones salían sin estilo.
+      const btn=function(p,txt,activo){ return '<button class="vb-pag-btn'+(activo?' actual':'')+'" onclick="_carPagIr('+p+')">'+txt+'</button>'; };
+      let nums='';
+      for(let p=1;p<=paginas;p++){
+        if(paginas>7 && p>2 && p<paginas-1 && Math.abs(p-_carPag.pagina)>1){
+          if(p===3) nums+='<span class="vb-pag-gap">…</span>';
+          continue;
+        }
+        nums+=btn(p,String(p),p===_carPag.pagina);
+      }
+      pag.innerHTML=
+        '<div class="vb-pag-tam">Ver <select onchange="_carPagTam(this.value)">'+
+          [10,50,100,200].map(function(n){ return '<option value="'+n+'"'+(n===tam?' selected':'')+'>'+n+'</option>'; }).join('')+
+        '</select></div>'+
+        '<div class="vb-pag-btns">'+
+          (_carPag.pagina>1?btn(_carPag.pagina-1,'‹'):'')+nums+
+          (_carPag.pagina<paginas?btn(_carPag.pagina+1,'›'):'')+
+        '</div>'+
+        '<div class="vb-pag-info"><b>'+(desde+1)+'–'+Math.min(desde+tam,filas.length)+'</b> de <b>'+filas.length+'</b></div>';
+    }
+  }
 }

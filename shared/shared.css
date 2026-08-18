@@ -1468,6 +1468,11 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
    dentro. Es la misma regla que ya tienen ro, anticipos, novedades y
    consolidado; faltaba solo esta y con 111 ventas la tabla se cortaba. */
 #gd-tab-ventasbot{display:none;flex:1;overflow:auto;padding:12px 14px 40px;}
+/* Carritos Bot necesita la misma regla y por el mismo motivo: cada tab de
+   Gestiones Diarias tiene que traer su propio scroll o la tabla se corta sin
+   poder desplazarse. Reutiliza las clases .vb-* porque es la pestaña hermana y
+   se ve igual a propósito. */
+#gd-tab-carritos{display:none;flex:1;overflow:auto;padding:12px 14px 40px;}
 .vb-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
 .vb-bar input{flex:1;min-width:220px;padding:8px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.76rem;font-family:inherit;}
 .vb-chips{display:flex;gap:6px;flex-wrap:wrap;}

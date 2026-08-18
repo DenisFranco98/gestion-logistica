@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/shared/shared.css?v=20260818b">
+<link rel="stylesheet" href="/shared/shared.css?v=20260818c">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -891,6 +891,7 @@ window._sbEstadosToggle=function(){
     <button class="gd-tab-btn" id="gd-tab-btn-anticipos" onclick="_gdTab('anticipos')">💰 Anticipos</button>
     <button class="gd-tab-btn" id="gd-tab-btn-ro" onclick="_gdTab('ro')">🏢 R.O.</button>
     <button class="gd-tab-btn" id="gd-tab-btn-ventasbot" onclick="_gdTab('ventasbot')">🤖 Ventas Bot</button>
+    <button class="gd-tab-btn" id="gd-tab-btn-carritos" onclick="_gdTab('carritos')">🛒 Carritos Bot</button>
   </div>
   <div class="panel-main">
   <!-- TAB: Gestión -->
@@ -1112,6 +1113,37 @@ window._sbEstadosToggle=function(){
          Los totales de arriba y el del pie siguen siendo de todo lo filtrado,
          no de la página: paginar es una forma de mirar, no un filtro más. -->
     <div id="vb-paginacion" class="vb-pag"></div>
+  </div>
+
+  <!-- TAB: Carritos Bot -->
+  <!-- Solo lectura, igual que Ventas Bot: los carritos los escriben los endpoints
+       /carritos y /carritosRecuperado con el Admin SDK, y las reglas dejan el nodo
+       en read-only para la tienda. No hay inputs a propósito — corregir un dato
+       desde acá daría la impresión de que se guarda, y el bot lo pisaría en el
+       próximo envío.
+
+       Un carrito NO es una venta: es una intención que puede recuperarse o
+       perderse. Por eso está en su propia pestaña y sus importes no se suman a los
+       de Ventas Bot, que serían plata que nadie pagó todavía. -->
+  <div id="gd-tab-carritos" style="display:none;">
+    <div class="vb-bar">
+      <input type="text" id="car-buscar" placeholder="Buscar por cliente, teléfono, producto, ciudad o ID de carrito..." oninput="_carSearch(this.value)">
+      <!-- Rango de días dentro del mes que manda la barra de arriba (◀ mes ▶),
+           igual que en Ventas Bot: el nodo se lee por mes. -->
+      <div class="tab-chips" id="car-dia-chips"></div>
+      <!-- Los productos se llenan con lo que hay en los días filtrados, no con
+           una lista fija: los define el bot. -->
+      <select id="car-producto" onchange="_carFiltroSet('producto',this.value)"><option value="">Todos los productos</option></select>
+      <!-- Se lee una vez al abrir el tab, no queda suscrito: un carrito que entra
+           mientras está abierto no aparece solo. -->
+      <button id="car-refrescar" class="vb-btn-ref" onclick="_carRecargar(this)" title="Buscar carritos nuevos">↻</button>
+      <div class="vb-chips" id="car-chips"></div>
+    </div>
+    <div id="car-resumen" class="vb-resumen"></div>
+    <div id="car-table-wrap"></div>
+    <!-- Paginación después de la tabla, donde se llega leyendo. Los totales de
+         arriba son de todo lo filtrado, no de la página. -->
+    <div id="car-paginacion" class="vb-pag"></div>
   </div>
   </div><!-- /panel-main -->
   </div><!-- /panel-body -->
@@ -1476,8 +1508,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="/shared/app-shared.js?v=20260818b"></script>
-<script src="/gestiones-diarias.js?v=20260818b"></script>
+<script src="/shared/app-shared.js?v=20260818c"></script>
+<script src="/gestiones-diarias.js?v=20260818c"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión
