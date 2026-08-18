@@ -30,6 +30,7 @@
     ],
     "rewrites": [
       { "source": "/control-financiero/**", "destination": "/control-financiero.html" },
+      { "source": "/gestiones-diarias/**", "destination": "/gestiones-diarias.html" },
       { "source": "/admin/**", "destination": "/index.html" },
       { "source": "**", "destination": "/index.html" }
     ]

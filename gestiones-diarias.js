@@ -13,6 +13,10 @@ function _gdInit(){
   window._gdVerAsesor=null;
   _gdCargar();
   _gdVerBarra();
+  // Va al final, después de _gdCargar: si la URL pide una pestaña que no es
+  // Gestión, su carga tiene que salir DESPUÉS de la del módulo, igual que cuando
+  // se llega ahí haciendo clic.
+  _gdRutaAplicar();
 }
 
 // _gdKey/_gdTK/_gdAK/_leerTienda viven en shared/app-shared.js.
@@ -621,9 +625,56 @@ function _gdVolver(){
   window._gdMostrarModeSelect(a);
 }
 
+// ── RUTAS DEL MÓDULO ─────────────────────────────────────────────────────
+// Cada pestaña con su URL real y sin "#": /gestiones-diarias/novedades y
+// compañía. Depende del rewrite "/gestiones-diarias/** -> gestiones-diarias.html"
+// en firebase.json — sin esa regla ESPECÍFICA, el catch-all manda la recarga a
+// index.html y se abriría la landing en vez del módulo.
+//
+// Acá _gdTab NO se llama desde dentro (a diferencia de _cfTab): cambiar de mes va
+// por _gdRefreshActiveTab(), que llama directo a los _xInit() y no pasa por acá.
+// Así que no hace falta distinguir repintados de navegación.
+const _GD_TABS = ['gestion','consolidado','novedades','reportes','anticipos','ro','ventasbot'];
+const _GD_TAB_INICIAL = 'gestion';   // el que el HTML ya trae activo
+
+function _gdRouterActivo(){ return typeof history !== 'undefined' && !!history.pushState; }
+
+function _gdRutaLeer(){
+  const m = String(location.pathname||'').match(/^\/gestiones-diarias\/([a-z]+)\/?$/);
+  return (m && _GD_TABS.indexOf(m[1]) >= 0) ? m[1] : null;
+}
+
+function _gdRutaEscribir(tab, reemplazar){
+  if(!_gdRouterActivo()) return;
+  const url = '/gestiones-diarias/' + tab;
+  if(location.pathname === url) return;
+  history[reemplazar ? 'replaceState' : 'pushState']({gdTab:tab}, '', url);
+}
+
+// Al abrir el módulo. Si la URL pide el tab inicial (o no pide nada) NO se llama a
+// _gdTab: el HTML ya viene con Gestión activo y _gdInit acaba de cargar sus datos,
+// así que repintarlo sería trabajo de más.
+function _gdRutaAplicar(){
+  if(!_gdRouterActivo()) return;
+  const tab = _gdRutaLeer();
+  if(tab && tab !== _GD_TAB_INICIAL) _gdTab(tab, true);
+  else _gdRutaEscribir(_GD_TAB_INICIAL, true);
+}
+
+window.addEventListener('popstate', function(){
+  if(!_gdRouterActivo()) return;
+  // Solo con el módulo a la vista: estando en el login o en el selector de tienda
+  // un atrás no debe repintar pestañas. Se mira el display de #gd-panel y no
+  // offsetParent, que da null también con position:fixed.
+  const panel = document.getElementById('gd-panel');
+  if(!panel || getComputedStyle(panel).display === 'none') return;
+  _gdTab(_gdRutaLeer() || _GD_TAB_INICIAL, true);
+});
+
 // ── TABS GD ────────────────────────────────────────────────────────────
-function _gdTab(tab){
+function _gdTab(tab, _desdeLaRuta){
   _gdActiveTab=tab;
+  if(!_desdeLaRuta) _gdRutaEscribir(tab);
   // El calendario de Ventas Bot es un popover con un listener en el documento:
   // si se cambia de tab con él abierto, queda escuchando clics para un panel
   // que ya nadie ve.
