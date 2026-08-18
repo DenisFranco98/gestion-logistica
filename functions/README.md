@@ -134,7 +134,7 @@ CLI lo ofrece solo.
 
 ### 3. Conectar la tienda desde el panel
 
-**Centro de Operaciones → 🤖 Bot de ventas** → elegí la tienda → *Conectar
+**Centro de Operaciones → 🔌 Integraciones** → elegí la tienda → *Conectar
 tienda*. Genera el código (`WS-3D-COMPANY`) y una clave de 48 hex, y los deja en
 `bot_workspaces/{codigo}`. Desde ahí también se **revoca** (el bot deja de poder
 escribir sin borrar las ventas ya registradas) y se **genera una clave nueva** si

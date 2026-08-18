@@ -6811,7 +6811,7 @@ window._cambiarEmpresa = function(empresaId){
   localStorage.setItem('lgs_empresa_actual', empresaId);
 };
 
-// ===== BOT DE VENTAS — workspaces y API keys =====================
+// ===== INTEGRACIONES — workspaces y API keys del bot =============
 // Cada tienda que quiera recibir ventas del bot de ChateaPro necesita una
 // entrada en bot_workspaces/{codigo}: el código identifica la tienda y la API
 // key prueba que quien manda es su bot. Los dos hacen falta — el código viaja
