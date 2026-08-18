@@ -209,6 +209,34 @@ const CLAVE = '3001112233_' + ID;
   const cm = get('carritos_bot/-Oz9bT/' + Object.keys(get('carritos_bot/-Oz9bT'))[0] + '/3001112233_A1');
   eq([cm.ciudad, cm.departamento, cm.cantidad], ['Cali', 'Valle', 5], 'minúsculas, MAYÚSCULAS y MeZcLaDo dan lo mismo');
 
+  console.log('\nEL CUERPO UNIFICADO QUE MUESTRA LA DOCUMENTACIÓN DEL PANEL');
+  // Los dos envíos usan el MISMO cuerpo; el de recuperación solo agrega fecha y
+  // estado. Si esto se rompiera, la documentación estaría enseñando algo que no
+  // funciona, que es peor que no documentar.
+  limpiar();
+  const unificado = {
+    workspace: 'WS-3D-001', id_carrito: ID,
+    nombre: 'María Gómez Ruiz', telefono: '3001112233',
+    direccion: 'Cra 45 #12-30, Laureles', ciudad: 'Medellín', departamento: 'Antioquia',
+    producto: 'CEPILLO BAMBU', cantidad: 2, valor: '89000'
+  };
+  const u1 = await llamar(postCarrito, { body: unificado, headers: HDR });
+  eq(u1.json.ok, true, 'el cuerpo de la doc funciona en /carritos');
+  const cu = get('carritos_bot/-Oz9bT/' + u1.json.mes + '/' + CLAVE);
+  eq([cu.nombre, cu.telefono, cu.ciudad, cu.departamento, cu.producto, cu.cantidad, cu.valor, cu.direccion],
+     ['María Gómez Ruiz', '3001112233', 'Medellín', 'Antioquia', 'CEPILLO BAMBU', 2, 89000, 'Cra 45 #12-30, Laureles'],
+     'guarda los 8 campos');
+  eq(cu.estado, 'DATOS COMPLETOS', 'con el estado por defecto');
+  // El mismo cuerpo + fecha y estado, en el otro endpoint.
+  const u2 = await llamar(postRecuperado, { body: Object.assign({}, unificado, { fecha: '2026-08-18', estado: '' }), headers: HDR });
+  eq(u2.json.duplicado, true, 'el mismo cuerpo en /carritosRecuperado encuentra el carrito');
+  eq(u2.json.estado, 'CARRITO RECUPERADO', 'y lo pasa a recuperado');
+  const cu2 = get('carritos_bot/-Oz9bT/' + u1.json.mes + '/' + CLAVE);
+  eq(cu2.fecha, '20260818', 'con la fecha del envío');
+  eq(cu2.direccion, 'Cra 45 #12-30, Laureles', 'sin perder la dirección');
+  // Y "tienda" no hace falta: la tienda sale del workspace, no del payload.
+  eq(cu2.tienda, '', 'no hace falta mandar tienda');
+
   console.log('\nEL ESTADO QUE MANDA EL BOT SE RESPETA');
   limpiar();
   await llamar(postCarrito, { body: completos, headers: HDR });

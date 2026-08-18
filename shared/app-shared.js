@@ -7053,35 +7053,29 @@ window._botwDocs = function(code, btn, tipo){
 // todo, porque es lo que más confunde al configurarlo: acá la identidad es
 // telefono + id_carrito, y el id es obligatorio en los dos envíos.
 function _botwDocsCarritos(code, base, bloque){
-  const tienda = (_botwData[code]||{}).nombre || '';
-  const completos = JSON.stringify({
-    workspace: code,
-    tienda: tienda,
-    id_carrito: '1344229114102',
-    NOMBRES: 'María',
-    APELLIDOS: 'Gómez Ruiz',
-    'DIRECCIÓN Y BARRIO': 'Cra 45 #12-30, Laureles',
-    DEPARTAMENTO: 'Antioquia',
-    CIUDAD: 'Medellín',
-    'TELÉFONO': '3001112233',
-    CANTIDAD: 2,
-    'PRECIO TOTAL (SIN PUNTOS NI COMAS)': '89000',
-    NOTA: 'CEPILLO BAMBU'
-  }, null, 2);
-
-  const recuperado = JSON.stringify({
+  // LOS DOS CUERPOS SON EL MISMO, y es a propósito. Antes cada uno copiaba los
+  // títulos de su Excel —uno con NOMBRES/APELLIDOS y NOTA, el otro con "Nombre del
+  // usuario" y Producto— y eso hacía creer que había que armar dos formatos
+  // distintos. Los dos endpoints leen exactamente los mismos campos, así que la
+  // documentación muestra un único formato y el de recuperación solo agrega los
+  // dos que le son propios: la fecha y el estado.
+  const campos = {
     workspace: code,
     id_carrito: '1344229114102',
-    Fecha: '2026-08-18',
-    'Nombre del usuario': 'María Gómez',
-    'Numero de telefono': '3001112233',
-    Ciudad: 'Medellín',
-    Departamento: 'Antioquia',
-    Producto: 'CEPILLO BAMBU',
-    Cantidad: 2,
-    Valor: '89000',
-    'ESTADO DE LA ORDEN': ''
-  }, null, 2);
+    nombre: 'María Gómez Ruiz',
+    telefono: '3001112233',
+    direccion: 'Cra 45 #12-30, Laureles',
+    ciudad: 'Medellín',
+    departamento: 'Antioquia',
+    producto: 'CEPILLO BAMBU',
+    cantidad: 2,
+    valor: '89000'
+  };
+  const completos = JSON.stringify(campos, null, 2);
+  const recuperado = JSON.stringify(Object.assign({}, campos, {
+    fecha: '2026-08-18',
+    estado: ''
+  }), null, 2);
 
   return `
     <div class="botw-doc-intro">
@@ -7113,23 +7107,37 @@ function _botwDocsCarritos(code, base, bloque){
     ${bloque('POST · dirección', base+'/carritos', 'botw-c2-'+code)}
     ${bloque('Encabezados', 'Content-Type: application/json\nX-Api-Key: (la clave de arriba, botón 📋)', 'botw-c3-'+code)}
     ${bloque('Cuerpo (body) en formato JSON', completos, 'botw-c4-'+code)}
-    <div class="botw-doc-nota">Los nombres son los mismos títulos del Excel, así que se pueden mapear
-    tal cual. <b>NOTA</b> es el nombre del producto. <b>PRECIO TOTAL</b> es el total del carrito, no el
-    precio por unidad.</div>
+    <div class="botw-doc-nota"><b>Los dos envíos usan el MISMO cuerpo.</b> El de abajo solo agrega
+    la fecha y el estado; el resto de los campos son idénticos, así que no hay que armar dos formatos.<br>
+    <b>valor</b> es el total del carrito, no el precio por unidad.</div>
+    <div class="botw-doc-nota">
+      <b>Los nombres no distinguen mayúsculas y aceptan los títulos del Excel tal cual</b>, así que
+      cualquiera de estas variantes vale y se puede mapear sin renombrar nada:<br>
+      <code>nombre</code> · <code>NOMBRES</code>+<code>APELLIDOS</code> · <code>Nombre del usuario</code><br>
+      <code>telefono</code> · <code>TELÉFONO</code> · <code>Numero de telefono</code><br>
+      <code>direccion</code> · <code>DIRECCIÓN Y BARRIO</code><br>
+      <code>producto</code> · <code>PRODUCTO</code> · <code>NOTA</code><br>
+      <code>valor</code> · <code>PRECIO TOTAL (SIN PUNTOS NI COMAS)</code><br>
+      <code>ciudad</code> · <code>departamento</code> · <code>cantidad</code>, escritos como sea.
+    </div>
 
     <div class="botw-doc-paso"><b>3</b> El carrito se recuperó</div>
     <div class="botw-doc-nota">Si ese carrito ya estaba, se <b>actualiza</b> y pasa a
     <b>CARRITO RECUPERADO</b>. Si nunca se había visto, se registra directamente como recuperado.</div>
     ${bloque('POST · dirección', base+'/carritosRecuperado', 'botw-c5-'+code)}
     ${bloque('Cuerpo (body) en formato JSON', recuperado, 'botw-c6-'+code)}
-    <div class="botw-doc-nota">Encabezados iguales al paso 2.
-    Si mandás <code>ESTADO DE LA ORDEN</code> con algo, se usa ese estado; si va vacío, queda como
-    <b>CARRITO RECUPERADO</b>. En <i>Ruta JSON</i>, <code>$.duplicado</code> dice si el carrito ya
-    existía y <code>$.estado</code> con cuál quedó.</div>
+    <div class="botw-doc-nota">Encabezados iguales al paso 2. Es el mismo cuerpo del paso 2 más
+    <code>fecha</code> y <code>estado</code>.<br>
+    Si mandás <code>estado</code> con algo, se usa ese; si va vacío, queda como
+    <b>CARRITO RECUPERADO</b>. También vale escribirlo <code>ESTADO DE LA ORDEN</code>.
+    En <i>Ruta JSON</i>, <code>$.duplicado</code> dice si el carrito ya existía y
+    <code>$.estado</code> con cuál quedó.</div>
 
     <div class="botw-doc-nota">
       <b>Qué es obligatorio:</b> <code>workspace</code>, <code>telefono</code> e
       <code>id_carrito</code>. El resto puede ir vacío y se completa después.<br>
+      <b>No hace falta mandar <code>tienda</code>:</b> la tienda se sabe por el workspace y la clave,
+      así que ese campo no cambia nada.<br>
       <b>La fecha</b> solo la trae el envío de recuperación; en el de datos completos se usa la del
       momento en que llega.<br>
       <b>Al actualizar no se pierde nada:</b> los campos que no mandés se dejan como estaban, así que
