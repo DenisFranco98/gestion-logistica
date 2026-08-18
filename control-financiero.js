@@ -12,6 +12,9 @@ let _cfMes='',_cfCfg={},_cfMD={},_cfPrevMD={},_cfSaveT={},_cfOrdRows=[],_cfCurTa
 // limpia y un let no se hoistea, así que declaradas después reventarían con
 // "before initialization" si el reset llegara a correr primero.
 let _cfXlsOrdenes=null, _cfXlsProductos=null, _cfExtracted=null;
+// Qué fuente de COGS se está usando. Va con el análisis del Excel, así que se
+// reinicia con él; acá arriba por el mismo motivo de hoisting que los de al lado.
+let _cfCogsUsar='orden';
 
 // _gdKey/_gdKeyFallback/toast/esc/norm/_fselHtml viven en shared/app-shared.js
 // _cfTK() es la clave de ESCRITURA (empresaId único). _cfBase/_cfCfgBase aceptan
@@ -50,17 +53,34 @@ function _cfDiasEnMes(m){if(!m)return 30;const [y,mo]=m.split('-');return new Da
 // de una tienda dentro de la otra.
 //
 // Al agregar cualquier variable de módulo que dependa de la tienda, sumarla acá.
-function _cfResetEstado(){
-  _cfCfg={}; _cfMD={}; _cfPrevMD={};
+// Estado que pertenece AL MES. Se rehace tanto al cambiar de mes como al cambiar
+// de tienda, porque en los dos casos lo de antes deja de aplicar: cada mes lleva
+// sus propios Excel, y no hay nada más fácil de creerse que un informe de otro mes
+// con el nombre del mes correcto arriba.
+//
+// Los guardados pendientes se CANCELAN, no se sueltan: _cfSave arma la ruta dentro
+// del setTimeout con _cfBasePath(), que lee el mes Y la tienda del momento en que
+// el timer dispara. Editar un campo y cambiar de mes antes de los 800 ms de
+// debounce escribía ese valor en el mes nuevo. Vaciar el objeto a secas solo perdía
+// la referencia: el timer seguía vivo.
+//
+// El timer 'cfg' se deja correr a propósito: escribe en control_financiero/
+// {tienda}/config, que no depende del mes. Cancelarlo acá perdería un cambio de
+// configuración por el solo hecho de mover el mes.
+function _cfResetMes(){
+  _cfMD={}; _cfPrevMD={};
   _cfOrdRows=[];
   _cfXlsOrdenes=null; _cfXlsProductos=null; _cfExtracted=null;
-  // Los guardados pendientes se CANCELAN, no se sueltan: _cfSave arma la ruta
-  // dentro del setTimeout con _cfBasePath(), que lee la tienda del momento en que
-  // el timer dispara. Un campo editado en una tienda y un cambio de tienda antes
-  // de los 800 ms de debounce terminaban escribiendo ese valor en la tienda nueva.
-  // Vaciar el objeto a secas solo perdía la referencia: el timer seguía vivo.
-  Object.keys(_cfSaveT).forEach(k=>clearTimeout(_cfSaveT[k]));
-  _cfSaveT={};
+  _cfCogsUsar='orden';
+  Object.keys(_cfSaveT).forEach(k=>{ if(k!=='cfg'){ clearTimeout(_cfSaveT[k]); delete _cfSaveT[k]; } });
+}
+
+function _cfResetEstado(){
+  _cfResetMes();
+  // Y lo que es de la TIENDA: la configuración, con su guardado pendiente. Acá sí
+  // hay que cancelar el timer 'cfg', porque _cfCfgPath() lleva la tienda dentro.
+  _cfCfg={};
+  if(_cfSaveT['cfg']){ clearTimeout(_cfSaveT['cfg']); delete _cfSaveT['cfg']; }
 }
 
 function _cfInit(){
@@ -164,7 +184,10 @@ function _cfTab(tab, _desdeLaRuta){
 function _cfCargarMes(){
   const lbl=document.getElementById('cf-mes-lbl');
   if(lbl)lbl.textContent=_cfMesLabel(_cfMes);
-  _cfMD={};_cfPrevMD={};_cfXlsOrdenes=null;_cfXlsProductos=null;_cfExtracted=null;
+  // Antes esta línea limpiaba a mano _cfMD, _cfPrevMD y los dos Excel, y se
+  // olvidaba de _cfOrdRows, de _cfCogsUsar y —lo importante— de los guardados
+  // pendientes, que terminaban escribiendo en el mes nuevo.
+  _cfResetMes();
   const [y,m]=_cfMes.split('-').map(Number);
   const pd=new Date(y,m-2,1);
   const prevM=pd.getFullYear()+'-'+_cfPad(pd.getMonth()+1);
@@ -2286,7 +2309,8 @@ function _cfRenderAnalisis(X, isGuardado){
     `;
 }
 
-let _cfCogsUsar='orden';
+// _cfCogsUsar se declara arriba, con el resto del estado del módulo, para que
+// _cfResetMes pueda reiniciarlo al cambiar de mes o de tienda.
 function _cfSetCogsUsar(fuente){
   _cfCogsUsar=fuente;
   const bo=document.getElementById('cf-cogs-btn-ord');

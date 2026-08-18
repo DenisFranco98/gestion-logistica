@@ -17,30 +17,52 @@ let _gdMes='', _gdData={}, _gdSaveTimer=null, _gdActiveTab='gestion', _gdNotas={
 // aunque se declaren más abajo en el archivo.
 //
 // Al agregar cualquier estado de módulo que dependa de la tienda, sumarlo acá.
-function _gdResetEstado(){
-  // Timers pendientes: cancelar, no soltar.
+// Lo que pertenece AL MES. Se rehace tanto al cambiar de mes como al cambiar de
+// tienda: todo esto cuelga de rutas .../{tienda}/{mes}/...
+//
+// Lo primero son los TIMERS, y son lo más grave: los guardados con debounce arman
+// la ruta DENTRO del setTimeout (_gdBasePath, _roPath, _antPath), o sea que leen
+// el mes Y la tienda del momento en que disparan. Editar un campo y moverse antes
+// de esos 700–900 ms escribía el dato donde no iba. Cancelarlos es la parte que
+// evita corromper; el resto solo evita mostrar datos de otro sitio.
+function _gdResetMes(){
   if(_gdSaveTimer){ clearTimeout(_gdSaveTimer); _gdSaveTimer=null; }
   if(_gdResumenTimer){ clearTimeout(_gdResumenTimer); _gdResumenTimer=null; }
   if(_consoSaveTimer){ clearTimeout(_consoSaveTimer); _consoSaveTimer=null; }
   [_roST,_antST].forEach(o=>{ Object.keys(o||{}).forEach(k=>clearTimeout(o[k])); });
   _roST={}; _antST={};
-  [_roSearchTimer,_antSearchTimer,_novSearchTimer,_vbSearchTimer].forEach(t=>{ if(t) clearTimeout(t); });
-  _roSearchTimer=null; _antSearchTimer=null; _novSearchTimer=null; _vbSearchTimer=null;
 
-  // Datos de la tienda anterior.
   _gdData={}; _gdNotas={}; _gdNotaEditando=null;
   _consoData={}; _consoTotales={}; _consoPend={}; _consoDia=0;
   _novData={}; _repData={}; _roData={}; _antData={con:{},sin:{}};
-  _catProductos={};
   _vbData={}; _vbAds={}; _vbDiasConVenta=new Set(); _vbUltima=0;
+  _vbPag.pagina=1;
+}
+
+// Y lo que pertenece A LA TIENDA, que además incluye todo lo del mes.
+// Se ejecuta siempre desde _gdInit, que lo llama el bootstrap del HTML —después
+// del <script src>—, así que para entonces todas estas variables ya existen
+// aunque se declaren más abajo en el archivo.
+//
+// Al agregar cualquier estado de módulo que dependa de la tienda o del mes,
+// sumarlo a la función que corresponda.
+function _gdResetEstado(){
+  _gdResetMes();
+  [_roSearchTimer,_antSearchTimer,_novSearchTimer,_vbSearchTimer].forEach(t=>{ if(t) clearTimeout(t); });
+  _roSearchTimer=null; _antSearchTimer=null; _novSearchTimer=null; _vbSearchTimer=null;
+
+  // El catálogo se arma por TIENDA, no por mes: sobrevive a un cambio de mes y
+  // solo se tira al cambiar de tienda.
+  _catProductos={};
 
   // Filtros: un producto o un estado de otra tienda no significan nada acá, y
-  // dejarlos puestos esconde filas sin que se entienda por qué.
+  // dejarlos puestos esconde filas sin que se entienda por qué. Al mover el mes
+  // en cambio se conservan, que es lo que uno espera al comparar dos meses con
+  // la misma búsqueda puesta.
   _roFilter={q:'',estado:''};
   _novFilter={q:'',sol:''};
   _antFilter={con:{q:'',transport:'',entrega:'',estado:''},sin:{q:'',transport:'',entrega:'',estado:''}};
   _vbFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
-  _vbPag.pagina=1;
 }
 
 function _gdInit(){
@@ -639,18 +661,21 @@ function _gdAgregarNota(){
     .then(()=>{ if(btn){btn.disabled=false;btn.textContent='Agregar nota';} });
 }
 
+// Los dos limpiaban solo _gdData y dejaban en pie el consolidado, las novedades,
+// R.O., los anticipos, las ventas del bot y —lo que importa— los guardados
+// pendientes, que terminaban escribiendo en el mes nuevo.
 function _gdPrevMes(){
   const [y,m]=_gdMes.split('-').map(Number);
   const dt=new Date(y,m-2,1);
   _gdMes=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
-  _gdData={};_gdCargar(); _gdVerBarra();
+  _gdResetMes(); _gdCargar(); _gdVerBarra();
   _gdRefreshActiveTab();
 }
 function _gdNextMes(){
   const [y,m]=_gdMes.split('-').map(Number);
   const dt=new Date(y,m,1);
   _gdMes=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
-  _gdData={};_gdCargar(); _gdVerBarra();
+  _gdResetMes(); _gdCargar(); _gdVerBarra();
   _gdRefreshActiveTab();
 }
 function _gdRefreshActiveTab(){
