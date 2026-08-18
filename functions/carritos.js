@@ -20,7 +20,7 @@
 // El payload de recuperación puede traer su propio estado y se respeta, así que
 // mañana pueden aparecer otros sin tocar esto.
 const {
-  db, cors, body, autenticar, fbKey,
+  db, cors, body, autenticar, fbKey, tomar,
   claveCarrito, normIdCarrito, normTelefono, normFecha, mesDe, hoyColombia,
   aNumero, aEntero
 } = require('./lib');
@@ -28,15 +28,9 @@ const {
 const EST_COMPLETOS = 'DATOS COMPLETOS';
 const EST_RECUPERADO = 'CARRITO RECUPERADO';
 
-// Igual que en ventas: se aceptan varias formas de nombrar cada campo, incluidos
-// los títulos tal como salen del Excel, para que el flujo del bot mande lo que le
-// quede cómodo sin tocar este código.
-function tomar(d, ...nombres) {
-  for (const n of nombres) {
-    if (d[n] !== undefined && d[n] !== null && String(d[n]).trim() !== '') return d[n];
-  }
-  return '';
-}
+// `tomar` vive en lib.js y NO distingue mayúsculas: se aceptan varias formas de
+// nombrar cada campo, incluidos los títulos tal como salen del Excel, escritos
+// como quiera el flujo del bot.
 
 // El nombre puede llegar partido en dos columnas (NOMBRES / APELLIDOS) o entero
 // en una sola ("Nombre del usuario"). Se guardan las partes por separado cuando

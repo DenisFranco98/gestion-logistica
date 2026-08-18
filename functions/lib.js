@@ -159,6 +159,35 @@ function igualSeguro(a, b) {
 // Firebase no admite . # $ [ ] / en las claves de un nodo.
 function fbKey(s) { return String(s == null ? '' : s).replace(/[.#$[\]/]/g, '_'); }
 
+// ── Leer un campo del payload ────────────────────────────────────────────
+// Busca el primer nombre que venga con algo, SIN distinguir mayúsculas.
+//
+// Lo de ignorar mayúsculas no es comodidad: es lo que evita el bug que ya pasó.
+// El flujo mandaba "Ciudad", "Departamento" y "Cantidad" capitalizados; la lista
+// tenía 'ciudad' y 'CIUDAD' pero no 'Ciudad', y esos tres campos se perdieron en
+// silencio —el carrito se guardaba igual, solo que sin ciudad—. Con una
+// comparación exacta hay que acertar la variante de cada campo, y la primera vez
+// que no se acierta el dato desaparece sin que nada avise.
+//
+// Se ignoran también los espacios de sobra, porque un título copiado de un Excel
+// suele traerlos.
+function tomar(d, ...nombres) {
+  if (!d || typeof d !== 'object') return '';
+  // Índice minúsculas → valor, armado una sola vez por llamada.
+  const idx = {};
+  for (const k of Object.keys(d)) {
+    const norm = String(k).trim().toLowerCase();
+    // El primero gana: si el payload trae "ciudad" y "CIUDAD", se respeta el orden
+    // en que llegaron en vez de que dependa de cuál se recorra último.
+    if (!(norm in idx)) idx[norm] = d[k];
+  }
+  for (const n of nombres) {
+    const v = idx[String(n).trim().toLowerCase()];
+    if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+  }
+  return '';
+}
+
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -218,7 +247,7 @@ function aNumero(v) {
 }
 
 module.exports = {
-  db, cors, body, autenticar, fbKey,
+  db, cors, body, autenticar, fbKey, tomar,
   normTelefono, normFecha, claveVenta, mesDe, aNumero, aEntero,
   normIdCarrito, claveCarrito, hoyColombia
 };

@@ -17,7 +17,7 @@
 // una intención— y mezclarlos acá habría hecho este archivo el doble de largo.
 const { onRequest } = require('firebase-functions/v2/https');
 const {
-  db, cors, body, autenticar, fbKey,
+  db, cors, body, autenticar, fbKey, tomar,
   claveVenta, mesDe, normTelefono, normFecha, aNumero, aEntero
 } = require('./lib');
 const {
@@ -29,15 +29,9 @@ const {
 // conversación del bot.
 const REGION = 'us-central1';
 
-// Se aceptan varias formas de nombrar cada campo: los nombres del usuario
-// ("Numero de telefono"), su versión en snake_case y algún alias obvio. Así el
-// flujo del bot puede mandar lo que le quede cómodo sin tocar esto.
-function tomar(d, ...nombres) {
-  for (const n of nombres) {
-    if (d[n] !== undefined && d[n] !== null && String(d[n]).trim() !== '') return d[n];
-  }
-  return '';
-}
+// `tomar` vive en lib.js. Acepta varias formas de nombrar cada campo —los nombres
+// del usuario ("Numero de telefono"), snake_case y algún alias obvio— y NO
+// distingue mayúsculas, así que el flujo del bot puede escribirlos como quiera.
 
 // ── POST /ventas ──────────────────────────────────────────────────────────
 // Escribe en dos lugares, siempre juntos:

@@ -174,7 +174,40 @@ const CLAVE = '3001112233_' + ID;
   const solo = await llamar(postRecuperado, { body: recuperado, headers: HDR });
   eq(solo.json.duplicado, false, 'entra como nuevo');
   eq(solo.json.estado, 'CARRITO RECUPERADO', 'y queda como recuperado');
-  eq(get('carritos_bot/-Oz9bT/2026-08/' + CLAVE).nombre, 'María Gómez', 'con el nombre del payload');
+  const cs = get('carritos_bot/-Oz9bT/2026-08/' + CLAVE);
+  eq(cs.nombre, 'María Gómez', 'con el nombre del payload');
+  // Estos cuatro faltaban en el test y por eso pasó a producción un fallo real:
+  // el flujo mandaba "Ciudad"/"Departamento"/"Cantidad" capitalizados, la lista
+  // solo tenía 'ciudad' y 'CIUDAD', y esos campos se perdían sin que nada avisara.
+  eq(cs.ciudad, 'Medellín', 'CIUDAD guardada');
+  eq(cs.departamento, 'Antioquia', 'DEPARTAMENTO guardado');
+  eq(cs.cantidad, 2, 'CANTIDAD guardada');
+  eq(cs.valor, 89000, 'VALOR guardado');
+
+  console.log('\nLOS NOMBRES DE CAMPO NO DISTINGUEN MAYÚSCULAS');
+  // El payload EXACTO que mandó ChateaPro en la prueba de Frankaro, sacado del
+  // _raw del carrito que quedó mal guardado.
+  limpiar();
+  const real = {
+    workspace: 'WS-3D-001',
+    'Cantidad': 2, 'Ciudad': 'Medellín', 'Departamento': 'Antioquia',
+    'ESTADO DE LA ORDEN': '', 'Fecha': '2026-08-18',
+    'Nombre del usuario': 'María Gómez', 'Numero de telefono': '3001112233',
+    'Producto': 'CEPILLO BAMBU', 'Valor': '89000', id_carrito: ID
+  };
+  await llamar(postRecuperado, { body: real, headers: HDR });
+  const cr = get('carritos_bot/-Oz9bT/2026-08/' + CLAVE);
+  eq(cr.ciudad, 'Medellín', 'con el payload REAL: ciudad');
+  eq(cr.departamento, 'Antioquia', 'con el payload REAL: departamento');
+  eq(cr.cantidad, 2, 'con el payload REAL: cantidad');
+  eq(cr.producto, 'CEPILLO BAMBU', 'con el payload REAL: producto');
+  eq(cr.valor, 89000, 'con el payload REAL: valor');
+  eq(cr.telefono, '3001112233', 'con el payload REAL: teléfono');
+  // Y da igual cómo se escriban: tres variantes del mismo campo dan lo mismo.
+  limpiar();
+  await llamar(postCarrito, { body: { workspace:'WS-3D-001', id_carrito:'A1', 'TELÉFONO':'3001112233', 'ciudad':'Cali', 'DePaRtAmEnTo':'Valle', 'Cantidad':'5' }, headers: HDR });
+  const cm = get('carritos_bot/-Oz9bT/' + Object.keys(get('carritos_bot/-Oz9bT'))[0] + '/3001112233_A1');
+  eq([cm.ciudad, cm.departamento, cm.cantidad], ['Cali', 'Valle', 5], 'minúsculas, MAYÚSCULAS y MeZcLaDo dan lo mismo');
 
   console.log('\nEL ESTADO QUE MANDA EL BOT SE RESPETA');
   limpiar();
