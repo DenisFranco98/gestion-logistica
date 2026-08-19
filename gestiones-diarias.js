@@ -2538,12 +2538,8 @@ async function _vbRecargar(btn){
 function _vbFiltroSet(campo,valor){ _vbFiltro[campo]=valor; _vbPagReset(); _vbRender(); }
 
 function _vbSearch(q){ _vbFiltro.q=q; if(_vbSearchTimer)clearTimeout(_vbSearchTimer); _vbSearchTimer=setTimeout(()=>{_vbPagReset();_vbRender();},200); }
-function _vbEstChip(e,btn){
-  _vbFiltro.estado=e; _vbPagReset();
-  const cont=document.getElementById('vb-chips');
-  if(cont) cont.querySelectorAll('.tab-chip').forEach(b=>b.classList.toggle('on',b===btn));
-  _vbRender();
-}
+// _vbEstChip se borró: el filtro de estado pasó de chips a un <select>, que llama
+// directo a _vbFiltroSet('estado', ...) desde el onchange del HTML.
 
 // ── CALENDARIO DE RANGO ──────────────────────────────────────────────────
 // Reemplaza al <select> de "Día 05": con un mes entero en la lista había que
@@ -2760,16 +2756,23 @@ function _vbRender(){
   // cambiado, que es lo que pasa al soltar el producto por lo de arriba.
   if(selP) selP.value=_vbFiltro.producto||'';
 
-  // Los chips de estado se arman con los estados que REALMENTE llegaron: los
-  // define el bot, no esta app, así que una lista fija quedaría desactualizada
-  // en cuanto cambien el flujo en ChateaPro.
+  // El filtro de estado es un DESPLEGABLE y no chips: desde que el asesor puede
+  // elegir entre seis estados, la fila de chips se comía media barra y costaba
+  // encontrar el resto de los filtros. Mismo trato que el de productos.
+  //
+  // La lista sale de los estados que REALMENTE llegaron —los define el bot, no
+  // esta app— así que no ofrece opciones que devolverían cero resultados.
   const estados=[...new Set(todas.map(([,v])=>String(v.estado_orden||'').trim()).filter(Boolean))].sort();
-  const chips=document.getElementById('vb-chips');
-  if(chips && chips.dataset.estados!==estados.join('|')){
-    chips.dataset.estados=estados.join('|');
-    chips.innerHTML='<button class="tab-chip on" onclick="_vbEstChip(\'\',this)">Todos</button>'+
-      estados.map(e=>`<button class="tab-chip" onclick="_vbEstChip('${esc(e)}',this)">${esc(e)}</button>`).join('');
+  const selE=document.getElementById('vb-estado');
+  if(selE && selE.dataset.vals!==estados.join('|')){
+    selE.dataset.vals=estados.join('|');
+    selE.innerHTML='<option value="">Todos los estados</option>'+
+      estados.map(e=>`<option value="${esc(e)}">${esc(e)}</option>`).join('');
   }
+  // Si el estado elegido ya no existe entre los datos del mes, se suelta el
+  // filtro: si no, el desplegable diría "Todos" mientras la tabla sigue filtrada.
+  if(_vbFiltro.estado && estados.indexOf(_vbFiltro.estado)<0) _vbFiltro.estado='';
+  if(selE) selE.value=_vbFiltro.estado||'';
 
   const q=(_vbFiltro.q||'').toLowerCase();
   const filas=todas.filter(([,v])=>{
@@ -3138,12 +3141,8 @@ function _carSearch(q){
   _carSearchTimer=setTimeout(function(){_carPagReset();_carRender();},200);
 }
 function _carFiltroSet(campo,valor){ _carFiltro[campo]=valor; _carPagReset(); _carRender(); }
-function _carEstChip(e,btn){
-  _carFiltro.estado=e; _carPagReset();
-  const cont=btn?btn.parentElement:document.getElementById('car-chips');
-  if(cont) [...cont.querySelectorAll('.tab-chip')].forEach(b=>b.classList.toggle('on', b===btn));
-  _carRender();
-}
+// _carEstChip se borró por lo mismo que _vbEstChip: el filtro de estado es ahora
+// un <select> que llama a _carFiltroSet('estado', ...) desde el onchange.
 
 // El rango de días reutiliza _vbAtajos(), que devuelve números de día del mes
 // visible y ya resuelve lo difícil: que los atajos relativos a hoy solo existan en
@@ -3209,20 +3208,21 @@ function _carRender(){
   }
   if(selP) selP.value=_carFiltro.producto||'';
 
-  // Chips de estado. Los dos que genera la API van fijos —son los que dan sentido
-  // a la pestaña— y si aparece otro se agrega solo, porque el estado lo define el
-  // bot y una lista cerrada quedaría vieja en cuanto cambien el flujo.
-  const estados=[...new Set(todos.map(function(par){ return String(par[1].estado||'').trim(); }).filter(Boolean))];
-  [CAR_EST_COMPLETOS,CAR_EST_RECUPERADO].forEach(function(e){ if(estados.indexOf(e)<0) estados.push(e); });
-  estados.sort();
-  const chips=document.getElementById('car-chips');
-  if(chips && chips.dataset.estados!==estados.join('|')){
-    chips.dataset.estados=estados.join('|');
-    chips.innerHTML='<button class="tab-chip'+(_carFiltro.estado?'':' on')+'" onclick="_carEstChip(\'\',this)">Todos</button>'+
-      estados.map(function(e){
-        return '<button class="tab-chip'+(_carFiltro.estado===e?' on':'')+'" onclick="_carEstChip(\''+esc(e)+'\',this)">'+esc(e)+'</button>';
-      }).join('');
+  // Filtro de estado como DESPLEGABLE, igual que en Ventas Bot y por lo mismo: en
+  // chips ocupa media barra en cuanto hay varios estados.
+  //
+  // Solo los estados que REALMENTE hay. Antes se forzaban los dos de la API
+  // aunque no hubiera ninguno, y eso ofrecía opciones que devolvían cero
+  // resultados sin explicar por qué.
+  const estados=[...new Set(todos.map(function(par){ return String(par[1].estado||'').trim(); }).filter(Boolean))].sort();
+  const selE=document.getElementById('car-estado');
+  if(selE && selE.dataset.vals!==estados.join('|')){
+    selE.dataset.vals=estados.join('|');
+    selE.innerHTML='<option value="">Todos los estados</option>'+
+      estados.map(function(e){ return '<option value="'+esc(e)+'">'+esc(e)+'</option>'; }).join('');
   }
+  if(_carFiltro.estado && estados.indexOf(_carFiltro.estado)<0) _carFiltro.estado='';
+  if(selE) selE.value=_carFiltro.estado||'';
 
   const q=(_carFiltro.q||'').toLowerCase();
   const filas=todos.filter(function(par){
