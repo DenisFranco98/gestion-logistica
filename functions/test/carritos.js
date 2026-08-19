@@ -11,22 +11,37 @@
 const Module = require('module');
 
 let store = {};
-const get = p => p.split('/').reduce((o, k) => (o == null ? undefined : o[k]), store);
+const partes = p => String(p || '').split('/').filter(Boolean);
+const get = p => partes(p).reduce((o, k) => (o == null ? undefined : o[k]), store);
 const set = (p, v) => {
-  const ks = p.split('/');
+  const ks = partes(p);
+  if (!ks.length) { store = v == null ? {} : v; return; }
   let o = store;
   ks.slice(0, -1).forEach(k => { if (typeof o[k] !== 'object' || o[k] === null) o[k] = {}; o = o[k]; });
-  o[ks[ks.length - 1]] = v;
+  // null borra, como en Firebase de verdad: dejarlo puesto haría que un borrado
+  // pareciera funcionar en las pruebas y no funcionara en producción.
+  if (v === null) delete o[ks[ks.length - 1]];
+  else o[ks[ks.length - 1]] = v;
 };
 const fakeAdmin = {
   apps: [{}],
   credential: { cert: () => ({}) },
   initializeApp: () => {},
   database: () => ({
-    ref: p => ({
+    // ref() sin argumento es la RAÍZ, que es desde donde se hacen los updates
+    // multi-ruta.
+    ref: (p = '') => ({
       once: async () => ({ val: () => { const v = get(p); return v === undefined ? null : v; } }),
       set: async v => set(p, v),
-      update: async v => set(p, Object.assign({}, get(p) || {}, v))
+      // update() de RTDB tiene DOS comportamientos, y el mock necesita los dos o
+      // las pruebas dirían que algo funciona cuando no: si las claves llevan "/"
+      // son RUTAS —cada una se escribe en su sitio, y null borra—; si no, son
+      // campos que se mezclan con lo que ya hay.
+      update: async v => {
+        const multi = Object.keys(v || {}).some(k => k.indexOf('/') >= 0);
+        if (multi) Object.keys(v).forEach(k => set(p ? p + '/' + k : k, v[k]));
+        else set(p, Object.assign({}, get(p) || {}, v));
+      }
     })
   })
 };
@@ -158,7 +173,9 @@ const CLAVE = '3001112233_' + ID;
   eq(r1.json.id, CLAVE, 'misma clave');
   eq(r1.json.estado_actualizado, true, 'cambió el estado');
   eq(r1.json.estado, 'CARRITO RECUPERADO', 'a CARRITO RECUPERADO');
-  eq(r1.json.mes, a1.json.mes, 'NO cambió de mes');
+  // Los dos payloads traen la MISMA fecha, así que no hay motivo para moverlo. Que
+  // el mes lo mande la fecha se prueba aparte, más abajo.
+  eq(r1.json.mes, a1.json.mes, 'no cambió de mes: la fecha es la misma');
   eq(Object.keys(get('carritos_bot/-Oz9bT/' + a1.json.mes)).length, 1, 'sigue habiendo UN solo carrito');
   const c2 = get('carritos_bot/-Oz9bT/' + a1.json.mes + '/' + CLAVE);
   eq(c2.estado, 'CARRITO RECUPERADO', 'el estado se actualizó');
@@ -168,6 +185,55 @@ const CLAVE = '3001112233_' + ID;
   eq(c2.apellidos, 'Gómez Ruiz', 'los apellidos tampoco');
   eq(c2.fecha, '20260818', 'la fecha del payload de recuperación sí se guardó');
   eq(get('carritos_bot_idx/-Oz9bT/' + CLAVE).estado, 'CARRITO RECUPERADO', 'el índice también');
+
+  // ── EL MES LO MANDA LA FECHA ───────────────────────────────────────────
+  // El bug que se vio en producción: 110 carritos de 171 estaban en agosto con la
+  // Fecha de junio o julio. Se habían creado sin fecha —y cayeron en el mes de
+  // recepción— y al reenviarlos YA con `Fecha`, el campo se actualizaba pero el
+  // registro se quedaba donde estaba.
+  console.log('\nEL MES LO MANDA LA FECHA, también al actualizar');
+  limpiar();
+  // Se crea sin fecha: cae en el mes de recepción (agosto, el reloj está fijado).
+  const sinFecha = Object.assign({}, completos); delete sinFecha.FECHA;
+  const n1 = await llamar(postCarrito, { body: sinFecha, headers: HDR });
+  eq(n1.json.mes, '2026-08', 'sin fecha en el payload, queda en el mes de recepción');
+
+  // Y ahora llega el MISMO carrito con la fecha de verdad, en el formato que manda
+  // ChateaPro: ISO con hora y huso.
+  const conFecha = Object.assign({}, completos, { FECHA: '2026-06-26T22:17:30-05' });
+  const n2 = await llamar(postCarrito, { body: conFecha, headers: HDR });
+  eq(n2.json.duplicado, true, 'lo reconoce como el mismo carrito');
+  eq(n2.json.mes, '2026-06', 'se MUEVE al mes de la fecha');
+  eq(n2.json.movido_desde, '2026-08', 'y dice de dónde vino');
+  eq(get('carritos_bot/-Oz9bT/2026-06/' + CLAVE).fecha, '20260626', 'está en junio con su fecha');
+  // Lo que se quería evitar cuando se decidió que el mes saliera del índice: que
+  // quedara una copia en cada mes.
+  eq(get('carritos_bot/-Oz9bT/2026-08/' + CLAVE), undefined, 'NO quedó copia en agosto');
+  eq(get('carritos_bot_idx/-Oz9bT/' + CLAVE).mes, '2026-06', 'el índice apunta a junio');
+  // Mover no puede ser una excusa para perder lo que ya estaba guardado.
+  eq(get('carritos_bot/-Oz9bT/2026-06/' + CLAVE).direccion, 'Cra 45 #12-30, Laureles', 'se llevó la dirección');
+  eq(get('carritos_bot/-Oz9bT/2026-06/' + CLAVE).ts, get('carritos_bot_idx/-Oz9bT/' + CLAVE).ts, 'y el ts de cuando se registró');
+
+  // Reenviarlo otra vez igual no lo mueve de nuevo ni lo duplica.
+  const n3 = await llamar(postCarrito, { body: conFecha, headers: HDR });
+  eq(n3.json.mes, '2026-06', 'reenviarlo lo deja en junio');
+  eq(n3.json.movido_desde, undefined, 'y ya no informa movimiento');
+  eq(Object.keys(get('carritos_bot/-Oz9bT/2026-06')).length, 1, 'sigue habiendo UNO solo');
+
+  // Recuperarlo con la misma fecha tampoco lo saca de su mes. Ojo: se pisa
+  // 'Fecha', que es la clave que trae ESTE payload — agregar 'FECHA' además
+  // dejaría dos variantes del mismo campo y ganaría cualquiera de las dos.
+  const n4 = await llamar(postRecuperado, { body: Object.assign({}, recuperado, { 'Fecha': '2026-06-26T22:17:30-05' }), headers: HDR });
+  eq(n4.json.mes, '2026-06', 'al recuperarse se queda en junio');
+  eq(get('carritos_bot/-Oz9bT/2026-06/' + CLAVE).estado, 'CARRITO RECUPERADO', 'con el estado nuevo');
+  eq(get('carritos_bot/-Oz9bT/2026-06/' + CLAVE).historial_estado.length, 1, 'y el historial');
+
+  console.log('\nUn cambio de AÑO también mueve');
+  limpiar();
+  await llamar(postCarrito, { body: sinFecha, headers: HDR });
+  const ny = await llamar(postCarrito, { body: Object.assign({}, completos, { FECHA: '2025-12-31T23:59:00-05' }), headers: HDR });
+  eq(ny.json.mes, '2025-12', 'se va a diciembre del año anterior');
+  eq(get('carritos_bot/-Oz9bT/2026-08/' + CLAVE), undefined, 'sin dejar copia');
 
   console.log('\nRECUPERACIÓN DE UN CARRITO QUE NUNCA SE VIO ANTES');
   limpiar();

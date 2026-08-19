@@ -21,7 +21,7 @@
 // mañana pueden aparecer otros sin tocar esto.
 const {
   db, cors, body, autenticar, fbKey, tomar,
-  claveCarrito, normIdCarrito, normTelefono, normFecha, mesDe, hoyColombia,
+  claveCarrito, normIdCarrito, normTelefono, normFecha, hoyColombia,
   aNumero, aEntero
 } = require('./lib');
 
@@ -97,12 +97,23 @@ function camposComunes(d) {
   return out;
 }
 
-// Lee dónde está el carrito. Devuelve { mes, datos } o null.
+// YYYYMMDD → YYYY-MM. Es el único sitio donde se decide en qué mes vive un
+// carrito, y lo usan tanto la creación como el movimiento: con dos cuentas por
+// separado, un arreglo entraría en una sola y volverían a discrepar.
+function mesDeFecha(yyyymmdd) {
+  const f = String(yyyymmdd || '');
+  return f.length === 8 ? f.slice(0, 4) + '-' + f.slice(4, 6) : '';
+}
+
+// Lee DÓNDE ESTÁ HOY el carrito. Devuelve { mes, datos } o null.
 //
-// El mes sale del ÍNDICE y no del payload a propósito: como la clave NO lleva la
-// fecha, un carrito creado en agosto y recuperado en septiembre tendría dos meses
-// candidatos, y escribirlo en el nuevo lo dejaría duplicado —una copia en cada
-// mes— sin que nada avise. El índice dice dónde vive, y ahí se queda.
+// El mes sale del ÍNDICE y no del payload: como la clave NO lleva la fecha, hay
+// que preguntarle a alguien dónde vive el registro antes de tocarlo. Escribir a
+// ciegas en el mes que sugiera el payload dejaría el carrito duplicado —una copia
+// en cada mes— sin que nada avise.
+//
+// Eso es para ENCONTRARLO. En qué mes debe QUEDAR lo decide la fecha, y si no
+// coinciden el carrito se mueve — ver la rama `mesDestino` en registrar().
 async function buscarCarrito(empresaId, clave) {
   const idx = (await db().ref('carritos_bot_idx/' + empresaId + '/' + clave).once('value')).val();
   if (!idx || !idx.mes) return null;
@@ -152,8 +163,7 @@ async function registrar(req, res, estadoPorDefecto) {
   const previo = await buscarCarrito(empresaId, clave);
 
   if (previo) {
-    // Existe: se actualiza la información que venga con algo y el estado. No se
-    // recrea el registro ni se cambia de mes.
+    // Existe: se actualiza la información que venga con algo y el estado.
     // _raw se REGRABA con el último envío. Antes solo se guardaba al crear, así que
     // al depurar mostraba el primer payload mientras los campos venían de otro
     // posterior — y eso hizo perder tiempo persiguiendo un importe que "el mismo
@@ -163,6 +173,36 @@ async function registrar(req, res, estadoPorDefecto) {
     if (fechaPayload) cambios.fecha = fechaPayload;
     const hist = conHistorial(previo.datos, estado, ahora);
     if (hist) Object.assign(cambios, hist);
+
+    // EL MES LO MANDA LA FECHA, también al actualizar. Antes el registro se
+    // quedaba donde estaba: se guardaba la fecha nueva pero no se movía, y un
+    // carrito con Fecha de junio aparecía en la pestaña de agosto. Pasó de verdad
+    // —110 carritos de 171— cuando el flujo empezó a mandar `Fecha` y se
+    // reenviaron carritos creados antes sin ella, que habían caído en el mes de
+    // recepción.
+    const mesDestino = fechaPayload ? mesDeFecha(fechaPayload) : '';
+
+    if (mesDestino && mesDestino !== previo.mes) {
+      // Mover, no copiar. Las tres escrituras van en UN update multi-ruta desde la
+      // raíz: RTDB lo aplica entero o nada, así que el carrito no puede quedar
+      // duplicado en los dos meses ni desaparecer entre medio — que es justo lo
+      // que se quería evitar cuando se decidió que el mes saliera del índice.
+      const upd = {};
+      upd['carritos_bot/' + empresaId + '/' + mesDestino + '/' + clave] =
+        Object.assign({}, previo.datos, cambios);
+      upd['carritos_bot/' + empresaId + '/' + previo.mes + '/' + clave] = null;
+      upd['carritos_bot_idx/' + empresaId + '/' + clave + '/mes'] = mesDestino;
+      upd['carritos_bot_idx/' + empresaId + '/' + clave + '/ts_actualizado'] = ahora;
+      if (hist) upd['carritos_bot_idx/' + empresaId + '/' + clave + '/estado'] = estado;
+      await db().ref().update(upd);
+
+      return res.status(200).json({
+        ok: true, duplicado: true, id: clave, mes: mesDestino,
+        movido_desde: previo.mes,
+        estado_actualizado: !!hist,
+        estado: hist ? estado : String(previo.datos.estado || '')
+      });
+    }
 
     await db().ref('carritos_bot/' + empresaId + '/' + previo.mes + '/' + clave).update(cambios);
     if (hist) {
@@ -179,7 +219,7 @@ async function registrar(req, res, estadoPorDefecto) {
   // Nuevo. Un carrito recuperado que nunca pasó por "datos completos" se registra
   // igual: es lo que pidió el usuario, y perderlo por no haberlo visto antes
   // dejaría el conteo de recuperados por debajo de la realidad.
-  const mes = mesDe(fecha.slice(0, 4) + '-' + fecha.slice(4, 6) + '-' + fecha.slice(6, 8));
+  const mes = mesDeFecha(fecha);
   const carrito = Object.assign({
     telefono: normTelefono(ids.telefono),
     id_carrito: normIdCarrito(ids.idCarrito),
