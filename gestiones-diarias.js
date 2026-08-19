@@ -3127,6 +3127,10 @@ let _carPag={ tam: 50, pagina: 1 };
 
 const CAR_EST_COMPLETOS='DATOS COMPLETOS';
 const CAR_EST_RECUPERADO='CARRITO RECUPERADO';
+// CANCELADO no lo manda la API: solo lo pone el asesor desde la tabla. Es el
+// carrito que ya se sabe que no va a entrar, y por eso NO suma al valor potencial.
+const CAR_EST_CANCELADO='CANCELADO';
+const _CAR_ESTADOS=[CAR_EST_COMPLETOS, CAR_EST_RECUPERADO, CAR_EST_CANCELADO];
 
 function _carPagReset(){ _carPag.pagina=1; }
 function _carPagTam(v){
@@ -3260,13 +3264,22 @@ function _carRender(){
   // propósito — no es facturación, es lo que entraría si todos se confirmaran.
   const porConfirmar=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_COMPLETOS; }).length;
   const recuperados=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_RECUPERADO; }).length;
-  const total=filas.reduce(function(s,par){ return s+(parseInt(par[1].valor,10)||0); },0);
+  const cancelados=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_CANCELADO; }).length;
+  // Los CANCELADOS no suman al valor potencial: el KPI es "lo que entraría si
+  // todos se confirmaran", y de un carrito cancelado ya se sabe que no va a
+  // entrar. Contarlo inflaría el número justo con la plata que se perdió.
+  const total=filas.reduce(function(s,par){
+    return String(par[1].estado||'')===CAR_EST_CANCELADO ? s : s+(parseInt(par[1].valor,10)||0);
+  },0);
   const res=document.getElementById('car-resumen');
   if(res){
     res.innerHTML = todos.length
       ? '<div class="vb-kpi"><b>'+filas.length+'</b><span>carritos'+(filas.length<todos.length?' (de '+todos.length+')':'')+'</span></div>'+
         '<div class="vb-kpi"><b>'+porConfirmar+'</b><span>por confirmar</span></div>'+
         '<div class="vb-kpi"><b>'+recuperados+'</b><span>recuperados</span></div>'+
+        // El de cancelados solo aparece si hay alguno: si no, sería una columna de
+        // ceros en todas las tiendas que todavía no usan ese estado.
+        (cancelados?'<div class="vb-kpi"><b>'+cancelados+'</b><span>cancelados</span></div>':'')+
         '<div class="vb-kpi"><b>'+_carMonto(total)+'</b><span>valor potencial</span></div>'+
         (_carUltima?'<div class="vb-actualizado">Datos al '+new Date(_carUltima).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+'</div>':'')
       : '';
@@ -3293,11 +3306,9 @@ function _carRender(){
   const desde=(_carPag.pagina-1)*tam;
   const pagina=filas.slice(desde,desde+tam);
 
-  const pill=function(e){
-    const est=String(e||'');
-    const color = est===CAR_EST_RECUPERADO ? 'var(--success)' : (est===CAR_EST_COMPLETOS ? 'var(--warning)' : 'var(--text-3)');
-    return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;border:1.5px solid '+color+';color:'+color+';font-size:.6rem;font-weight:800;white-space:nowrap;">'+esc(est||'—')+'</span>';
-  };
+  // El estado se edita desde la tabla, salvo en auditoría —que es solo mirar— y
+  // entonces se muestra como píldora. Mismo criterio que en Ventas Bot.
+  const puedeGestionar = !(typeof _esAuditoria==='function' && _esAuditoria());
 
   wrap.innerHTML=
     // ant-tbl es la que trae padding, bordes y encabezado; vb-tbl solo suma los
@@ -3321,7 +3332,7 @@ function _carRender(){
         '<td>'+esc(v.producto||'—')+'</td>'+
         '<td style="text-align:center;">'+(parseInt(v.cantidad,10)||0)+'</td>'+
         '<td style="text-align:right;font-family:var(--f-mono);">'+_carMonto(v.valor)+'</td>'+
-        '<td>'+pill(v.estado)+'</td>'+
+        '<td>'+_carEstadoCelda(par[0], v, puedeGestionar)+'</td>'+
       '</tr>';
     }).join('')+
     '</tbody></table></div>';
@@ -3450,3 +3461,101 @@ async function _vbCambiarEstado(clave, sel){
 // Guard mínimo: _vbData puede no tener la clave si la tabla se repintó entre el
 // clic y el guardado (un ↻ o un cambio de mes justo en medio).
 function _carSafe(x){ return x && typeof x==='object' ? x : null; }
+
+// ── GESTIÓN DEL ESTADO DE UN CARRITO ─────────────────────────────────────
+// Mismo trato que el estado de una venta, y por lo mismo: el bot registra en
+// DATOS COMPLETOS y desde acá el asesor marca lo que fue pasando. Los cambios del
+// bot llegan por POST /carritos y /carritosRecuperado; los de acá se escriben
+// directo, y las reglas solo dejan tocar estado, historial_estado y actualizado —
+// nunca el importe ni el teléfono, que son la base de los totales.
+//
+// OJO: si después de un cambio manual llega otro payload para el mismo carrito, el
+// endpoint respeta el estado que traiga y pisa el de acá, dejando el rastro en
+// historial_estado. Es lo mismo que pasa en ventas y es lo que se decidió: la API
+// manda. Un CANCELADO puesto a mano se pierde si ChateaPro vuelve a mandar ese
+// carrito con otro estado.
+function _carEstadoColor(e){
+  const s=String(e||'');
+  if(s===CAR_EST_RECUPERADO) return 'var(--success)';
+  if(s===CAR_EST_COMPLETOS)  return 'var(--warning)';
+  if(s===CAR_EST_CANCELADO)  return 'var(--danger)';
+  return 'var(--text-3)';
+}
+
+function _carEstadoCelda(clave, v, puedeGestionar){
+  const actual=String(v.estado||'');
+  const hist=Array.isArray(v.historial_estado)?v.historial_estado:[];
+  // El historial se muestra como pista: cuántas veces cambió y, al pasar el
+  // cursor, el recorrido completo con quién lo hizo.
+  const pista=hist.length
+    ? '<div class="vb-sub" title="'+esc(hist.map(function(h){ return (h.de||'—')+' → '+h.a+(h.por?' ('+h.por+')':''); }).join(' · '))+'">cambió '+hist.length+'×</div>'
+    : '';
+
+  if(!puedeGestionar){
+    return (actual
+      ? '<span class="vb-est" style="border-color:'+_carEstadoColor(actual)+';color:'+_carEstadoColor(actual)+';">'+esc(actual)+'</span>'
+      : '—')+pista;
+  }
+
+  // El estado que ya tiene se incluye aunque no esté en la lista: el payload puede
+  // traer cualquiera —se respeta a propósito— y si no estuviera como opción el
+  // <select> mostraría otro valor y el asesor creería que es ese.
+  const opciones=_CAR_ESTADOS.slice();
+  if(actual && opciones.indexOf(actual)<0) opciones.unshift(actual);
+
+  return '<select class="vb-est-sel" style="border-color:'+_carEstadoColor(actual)+';color:'+_carEstadoColor(actual)+';"'+
+    ' onchange="_carCambiarEstado(\''+esc(clave)+'\',this)">'+
+    (actual?'':'<option value="">—</option>')+
+    opciones.map(function(o){
+      return '<option value="'+esc(o)+'"'+(o===actual?' selected':'')+'>'+esc(o)+'</option>';
+    }).join('')+
+    '</select>'+pista;
+}
+
+// Guarda el estado nuevo. Escribe el carrito y el índice, y deja el cambio en
+// historial_estado con quién lo hizo — el bot marca 'bot', acá va el nombre del
+// asesor, así el recorrido se lee sin ambigüedad.
+async function _carCambiarEstado(clave, sel){
+  const nuevo=sel.value;
+  const v=_carSafe(_carData[clave]);
+  if(!v) return;
+  const anterior=String(v.estado||'');
+  if(nuevo===anterior) return;
+
+  if(typeof _db==='undefined'){ toast('⚠️ Sin conexión'); sel.value=anterior; return; }
+  if(typeof _tiendaLista==='function' && !_tiendaLista('el estado del carrito')){ sel.value=anterior; return; }
+
+  const quien=(window.getLoginAsesor?window.getLoginAsesor():'') || window._currentUsername || 'asesor';
+  const ahora=Date.now();
+  const hist=Array.isArray(v.historial_estado)?v.historial_estado.slice():[];
+  hist.push({ de:anterior, a:nuevo, ts:ahora, por:quien });
+
+  sel.disabled=true;
+  const tk=_gdTK();
+  try{
+    // Las dos escrituras van juntas en un update multi-ruta: si el índice quedara
+    // con el estado viejo, /carritosExiste le daría al bot información
+    // desactualizada. `mes` y `ts` no se tocan: son los que dicen dónde vive el
+    // carrito y cuándo se registró.
+    const upd={};
+    upd['carritos_bot/'+tk+'/'+_gdMes+'/'+clave+'/estado']=nuevo;
+    upd['carritos_bot/'+tk+'/'+_gdMes+'/'+clave+'/historial_estado']=hist;
+    upd['carritos_bot/'+tk+'/'+_gdMes+'/'+clave+'/actualizado']=ahora;
+    upd['carritos_bot_idx/'+tk+'/'+clave+'/estado']=nuevo;
+    upd['carritos_bot_idx/'+tk+'/'+clave+'/ts_actualizado']=ahora;
+    await _db.ref().update(upd);
+
+    // La copia en memoria se actualiza a mano en vez de releer el mes entero: el
+    // tab se lee con .once y no está suscrito, así que sin esto la tabla mostraría
+    // el estado viejo hasta el próximo ↻.
+    v.estado=nuevo; v.historial_estado=hist; v.actualizado=ahora;
+    toast('✓ '+nuevo);
+    _carRender();
+  }catch(e){
+    // Se devuelve el <select> a donde estaba: dejarlo en el valor nuevo haría creer
+    // que se guardó.
+    sel.value=anterior;
+    sel.disabled=false;
+    toast('⚠️ No se pudo cambiar el estado: '+(e&&e.message||e), 4000);
+  }
+}
