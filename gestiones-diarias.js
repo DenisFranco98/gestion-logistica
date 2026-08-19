@@ -3126,11 +3126,26 @@ let _carDiasConCarrito=new Set();
 let _carPag={ tam: 50, pagina: 1 };
 
 const CAR_EST_COMPLETOS='DATOS COMPLETOS';
+// CARRITO RECUPERADO lo pone SOLO ChateaPro, nunca el asesor: es lo que hace que
+// "recuperados" signifique algo. Si se pudiera marcar a mano, el número dejaría de
+// medir cuántos recuperó el bot y pasaría a medir cuántos alguien creyó que sí.
 const CAR_EST_RECUPERADO='CARRITO RECUPERADO';
-// CANCELADO no lo manda la API: solo lo pone el asesor desde la tabla. Es el
-// carrito que ya se sabe que no va a entrar, y por eso NO suma al valor potencial.
+// Estos dos son al revés: solo los pone el asesor, la API no los manda.
+const CAR_EST_DROPI='SUBIDO A DROPI';
+// CANCELADO es el carrito que ya se sabe que no va a entrar, y por eso NO suma al
+// valor potencial. SUBIDO A DROPI sí suma: ese va en camino.
 const CAR_EST_CANCELADO='CANCELADO';
-const _CAR_ESTADOS=[CAR_EST_COMPLETOS, CAR_EST_RECUPERADO, CAR_EST_CANCELADO];
+
+// Lo que el asesor puede elegir depende de DÓNDE ESTÁ el carrito:
+//  · Si ChateaPro ya lo dio por recuperado, lo único que queda por decidir es si se
+//    cancela. Volver atrás desde ahí sería contradecir al bot desde la tabla.
+//  · En cualquier otro estado se puede marcar que se subió a Dropi o cancelarlo,
+//    pero NO ponerlo en recuperado: ese estado no se alcanza a mano por diseño.
+function _carOpciones(actual){
+  return actual===CAR_EST_RECUPERADO
+    ? [CAR_EST_RECUPERADO, CAR_EST_CANCELADO]
+    : [CAR_EST_COMPLETOS, CAR_EST_DROPI, CAR_EST_CANCELADO];
+}
 
 function _carPagReset(){ _carPag.pagina=1; }
 function _carPagTam(v){
@@ -3265,6 +3280,7 @@ function _carRender(){
   const porConfirmar=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_COMPLETOS; }).length;
   const recuperados=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_RECUPERADO; }).length;
   const cancelados=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_CANCELADO; }).length;
+  const dropi=filas.filter(function(par){ return String(par[1].estado||'')===CAR_EST_DROPI; }).length;
   // Los CANCELADOS no suman al valor potencial: el KPI es "lo que entraría si
   // todos se confirmaran", y de un carrito cancelado ya se sabe que no va a
   // entrar. Contarlo inflaría el número justo con la plata que se perdió.
@@ -3277,8 +3293,9 @@ function _carRender(){
       ? '<div class="vb-kpi"><b>'+filas.length+'</b><span>carritos'+(filas.length<todos.length?' (de '+todos.length+')':'')+'</span></div>'+
         '<div class="vb-kpi"><b>'+porConfirmar+'</b><span>por confirmar</span></div>'+
         '<div class="vb-kpi"><b>'+recuperados+'</b><span>recuperados</span></div>'+
-        // El de cancelados solo aparece si hay alguno: si no, sería una columna de
-        // ceros en todas las tiendas que todavía no usan ese estado.
+        // Estos dos solo aparecen si hay alguno: si no, serían dos columnas de
+        // ceros en todas las tiendas que todavía no usan esos estados.
+        (dropi?'<div class="vb-kpi"><b>'+dropi+'</b><span>subidos a Dropi</span></div>':'')+
         (cancelados?'<div class="vb-kpi"><b>'+cancelados+'</b><span>cancelados</span></div>':'')+
         '<div class="vb-kpi"><b>'+_carMonto(total)+'</b><span>valor potencial</span></div>'+
         (_carUltima?'<div class="vb-actualizado">Datos al '+new Date(_carUltima).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})+'</div>':'')
@@ -3475,6 +3492,7 @@ function _carSafe(x){ return x && typeof x==='object' ? x : null; }
 function _carEstadoColor(e){
   const s=String(e||'');
   if(s===CAR_EST_RECUPERADO) return 'var(--success)';
+  if(s===CAR_EST_DROPI)      return 'var(--info-strong)';
   if(s===CAR_EST_COMPLETOS)  return 'var(--warning)';
   if(s===CAR_EST_CANCELADO)  return 'var(--danger)';
   return 'var(--text-3)';
@@ -3494,7 +3512,7 @@ function _carEstadoCelda(clave, v, puedeGestionar){
   // El estado que ya tiene se incluye aunque no esté en la lista: el payload puede
   // traer cualquiera —se respeta a propósito— y si no estuviera como opción el
   // <select> mostraría otro valor y el asesor creería que es ese.
-  const opciones=_CAR_ESTADOS.slice();
+  const opciones=_carOpciones(actual);
   if(actual && opciones.indexOf(actual)<0) opciones.unshift(actual);
 
   return '<select class="vb-est-sel" style="border-color:'+_carEstadoColor(actual)+';color:'+_carEstadoColor(actual)+';"'+
@@ -3515,6 +3533,17 @@ async function _carCambiarEstado(clave, sel){
   if(!v) return;
   const anterior=String(v.estado||'');
   if(nuevo===anterior) return;
+
+  // La lista del <select> ya no ofrece lo que no corresponde, pero la regla se
+  // comprueba también acá: es donde de verdad se decide qué se guarda, y así
+  // CARRITO RECUPERADO no entra por la tabla ni tocando el DOM.
+  if(_carOpciones(anterior).indexOf(nuevo)<0){
+    sel.value=anterior;
+    toast(nuevo===CAR_EST_RECUPERADO
+      ? '⚠️ "'+CAR_EST_RECUPERADO+'" solo lo pone el bot'
+      : '⚠️ Ese estado no se puede poner desde acá', 4000);
+    return;
+  }
 
   if(typeof _db==='undefined'){ toast('⚠️ Sin conexión'); sel.value=anterior; return; }
   if(typeof _tiendaLista==='function' && !_tiendaLista('el estado del carrito')){ sel.value=anterior; return; }
