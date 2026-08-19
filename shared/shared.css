@@ -1555,6 +1555,12 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-btn-ref:hover{color:var(--text-1);border-color:var(--border-strong);}
 .vb-btn-ref:disabled{opacity:.5;cursor:default;}
 .vb-btn-ref.girando{animation:vb-giro .7s linear infinite;}
+/* Exportar a Excel. Mismo alto que el resto de la barra para que no la desalinee,
+   y con el verde de Excel apenas insinuado en el borde: es una acción que se busca
+   a propósito, no un filtro, así que conviene que se distinga sin gritar. */
+.vb-btn-exp{height:34px;flex-shrink:0;padding:0 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-2);font-size:.72rem;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;line-height:1;}
+.vb-btn-exp:hover:not(:disabled){color:#16A34A;border-color:#16A34A;}
+.vb-btn-exp:disabled{opacity:.6;cursor:default;}
 @keyframes vb-giro{to{transform:rotate(360deg);}}
 .vb-actualizado{align-self:center;font-size:.62rem;color:var(--text-3);font-weight:600;}
 /* Cabecera fija al desplazarse: con más de cien ventas, sin esto se pierde de

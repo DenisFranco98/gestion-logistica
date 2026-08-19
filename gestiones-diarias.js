@@ -2753,6 +2753,25 @@ function _vbEnRangoDias(v){
   return !!d && d>=_vbFiltro.d1 && d<=(_vbFiltro.d2||_vbFiltro.d1);
 }
 
+// Las ventas que pasan los filtros, en el mismo orden que la tabla. Está aparte
+// porque lo usan la tabla, la analítica Y la exportación a Excel: si cada uno
+// filtrara por su cuenta, el archivo acabaría teniendo algo distinto de lo que la
+// persona está mirando, que es justo lo que no puede pasar.
+function _vbFiltradas(){
+  const todas=Object.entries(_vbData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+  const q=(_vbFiltro.q||'').toLowerCase();
+  return todas.filter(([,v])=>{
+    if(_vbFiltro.estado && String(v.estado_orden||'')!==_vbFiltro.estado) return false;
+    if(!_vbEnRangoDias(v)) return false;
+    if(_vbFiltro.producto && String(v.producto||'')!==_vbFiltro.producto) return false;
+    // id_anuncio entra en la búsqueda porque es el paso natural después de ver
+    // en la analítica cuál anuncio vende más: se copia y se filtra por él.
+    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.order,v.departamento,v.id_anuncio]
+      .some(x=>String(x||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
 function _vbRender(){
   const wrap=document.getElementById('vb-table-wrap');
   if(!wrap) return;
@@ -2804,17 +2823,7 @@ function _vbRender(){
   if(_vbFiltro.estado && estados.indexOf(_vbFiltro.estado)<0) _vbFiltro.estado='';
   if(selE) selE.value=_vbFiltro.estado||'';
 
-  const q=(_vbFiltro.q||'').toLowerCase();
-  const filas=todas.filter(([,v])=>{
-    if(_vbFiltro.estado && String(v.estado_orden||'')!==_vbFiltro.estado) return false;
-    if(!_vbEnRangoDias(v)) return false;
-    if(_vbFiltro.producto && String(v.producto||'')!==_vbFiltro.producto) return false;
-    // id_anuncio entra en la búsqueda porque es el paso natural después de ver
-    // en la analítica cuál anuncio vende más: se copia y se filtra por él.
-    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.order,v.departamento,v.id_anuncio]
-      .some(x=>String(x||'').toLowerCase().includes(q))) return false;
-    return true;
-  });
+  const filas=_vbFiltradas();
 
   const total=filas.reduce((s,[,v])=>s+(parseInt(v.valor,10)||0),0);
   const unidades=filas.reduce((s,[,v])=>s+(parseInt(v.cantidad,10)||0),0);
@@ -3219,6 +3228,22 @@ function _carFecha(v){
 }
 function _carMonto(n){ const v=parseInt(n,10)||0; return v?'$ '+v.toLocaleString('es-CO'):'—'; }
 
+// Los carritos que pasan los filtros, por lo mismo que _vbFiltradas: la tabla y la
+// exportación tienen que mirar la misma lista.
+function _carFiltrados(){
+  const todos=Object.entries(_carData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+  const q=(_carFiltro.q||'').toLowerCase();
+  return todos.filter(function(par){
+    const v=par[1];
+    if(_carFiltro.estado && String(v.estado||'')!==_carFiltro.estado) return false;
+    if(!_carEnRangoDias(v)) return false;
+    if(_carFiltro.producto && String(v.producto||'')!==_carFiltro.producto) return false;
+    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.departamento,v.direccion,v.id_carrito]
+      .some(function(x){ return String(x||'').toLowerCase().includes(q); })) return false;
+    return true;
+  });
+}
+
 function _carRender(){
   const wrap=document.getElementById('car-table-wrap');
   if(!wrap) return;
@@ -3263,16 +3288,7 @@ function _carRender(){
   if(_carFiltro.estado && estados.indexOf(_carFiltro.estado)<0) _carFiltro.estado='';
   if(selE) selE.value=_carFiltro.estado||'';
 
-  const q=(_carFiltro.q||'').toLowerCase();
-  const filas=todos.filter(function(par){
-    const v=par[1];
-    if(_carFiltro.estado && String(v.estado||'')!==_carFiltro.estado) return false;
-    if(!_carEnRangoDias(v)) return false;
-    if(_carFiltro.producto && String(v.producto||'')!==_carFiltro.producto) return false;
-    if(q && ![v.nombre,v.telefono,v.producto,v.ciudad,v.departamento,v.direccion,v.id_carrito]
-      .some(function(x){ return String(x||'').toLowerCase().includes(q); })) return false;
-    return true;
-  });
+  const filas=_carFiltrados();
 
   // Los KPIs de esta pestaña no son los de ventas: acá importa cuántos esperan
   // confirmación y cuántos se recuperaron. El importe se llama "valor potencial" a
@@ -3476,6 +3492,135 @@ async function _vbCambiarEstado(clave, sel){
 // Guard mínimo: _vbData puede no tener la clave si la tabla se repintó entre el
 // clic y el guardado (un ↻ o un cambio de mes justo en medio).
 function _carSafe(x){ return x && typeof x==='object' ? x : null; }
+
+// ── EXPORTAR A EXCEL ─────────────────────────────────────────────────────
+// Lo exportado es SIEMPRE lo que se está mirando: sale de _vbFiltradas() /
+// _carFiltrados(), las mismas funciones que alimentan la tabla. Y son todas las
+// filas filtradas, no la página abierta — paginar es una forma de mirar, no un
+// filtro más, igual que en los totales de arriba.
+//
+// SheetJS se carga SOLO al pulsar el botón. Pesa cerca de un mega y esta es la
+// página que los asesores tienen abierta todo el día: traerlo en cada arranque
+// para una exportación ocasional sería cobrarles siempre algo que usan de vez en
+// cuando. Control Financiero y Gestión Logística sí lo cargan de entrada, porque
+// ahí leer Excel ES la función principal.
+let _xlsxPromesa=null;
+function _xlsxCargar(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(_xlsxPromesa) return _xlsxPromesa;
+  _xlsxPromesa=new Promise(function(ok,mal){
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=function(){ ok(window.XLSX); };
+    // Se suelta la promesa al fallar para que el siguiente clic vuelva a
+    // intentarlo: si no, una caída momentánea de la red dejaría el botón muerto
+    // hasta recargar la página.
+    s.onerror=function(){ _xlsxPromesa=null; mal(new Error('no se pudo cargar la librería')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxPromesa;
+}
+
+// Trozo del nombre del archivo que describe los filtros puestos, para que dos
+// exportaciones del mismo mes no se llamen igual y se pisen en Descargas.
+function _expSufijo(f){
+  const p=[];
+  const dd=function(n){ return String(n).padStart(2,'0'); };
+  if(f.d1) p.push(f.d2 && f.d2!==f.d1 ? 'dias-'+dd(f.d1)+'-'+dd(f.d2) : 'dia-'+dd(f.d1));
+  if(f.estado)   p.push(f.estado.toLowerCase().replace(/\s+/g,'-'));
+  if(f.producto) p.push(f.producto.toLowerCase().replace(/[^\wáéíóúñ]+/gi,'-').slice(0,24).replace(/-+$/,''));
+  if(f.q)        p.push('busqueda');
+  return p.length ? '_'+p.join('_') : '';
+}
+
+// El teléfono y los ids van como TEXTO a propósito. Un teléfono de 10 dígitos
+// Excel lo trata como número y lo puede mostrar en notación científica; un id de
+// carrito de 13 dígitos pierde precisión, que es el mismo motivo por el que se
+// guarda como texto en la base. Los importes y las cantidades sí van como número,
+// para que sumen al seleccionarlos.
+function _expTexto(v){ return { t:'s', v:String(v==null?'':v) }; }
+function _expNum(v){ return { t:'n', v:parseInt(v,10)||0 }; }
+
+// La fecha va CON AÑO, al revés que en la tabla. Ahí basta dd/mm porque el mes lo
+// dice la barra de arriba, pero el archivo se abre suelto meses después y "18/08"
+// no dice de qué año es. Se corta el YYYYMMDD sin construir un Date, que en UTC
+// correría el día.
+function _expFecha(v){
+  const s=String(v||'');
+  return _expTexto(s.length===8 ? s.slice(6,8)+'/'+s.slice(4,6)+'/'+s.slice(0,4) : s);
+}
+
+async function _botExportar(cfg, btn){
+  const filas=cfg.filas();
+  if(!filas.length){ toast('No hay nada que exportar con este filtro'); return; }
+
+  const txtOriginal=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Generando...'; }
+  try{
+    const XLSX=await _xlsxCargar();
+    const aoa=[cfg.columnas.map(function(c){ return c.t; })];
+    filas.forEach(function(par){
+      aoa.push(cfg.columnas.map(function(c){ return c.v(par[1], par[0]); }));
+    });
+    const hoja=XLSX.utils.aoa_to_sheet(aoa);
+    hoja['!cols']=cfg.columnas.map(function(c){ return { wch: c.w||14 }; });
+    const libro=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, cfg.hoja);
+
+    const tienda=((window.getLoginTienda?window.getLoginTienda():'')||'REDKING')
+      .replace(/[^\wáéíóúñ ]+/gi,'').trim().replace(/\s+/g,'-');
+    XLSX.writeFile(libro, cfg.prefijo+'_'+tienda+'_'+_gdMes+cfg.sufijo()+'.xlsx');
+    toast('✓ '+filas.length+(filas.length===1?' registro exportado':' registros exportados'));
+  }catch(e){
+    toast('⚠️ No se pudo exportar: '+(e&&e.message||e), 4000);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent=txtOriginal; }
+  }
+}
+
+// Se exportan más columnas de las que muestra la tabla —departamento, dirección,
+// la orden— porque en un Excel no estorban y ahorran tener que volver a la app.
+function _vbExportar(btn){
+  _botExportar({
+    prefijo:'ventas-bot', hoja:'Ventas',
+    filas:_vbFiltradas,
+    sufijo:function(){ return _expSufijo(_vbFiltro); },
+    columnas:[
+      { t:'FECHA',        w:12, v:function(v){ return _expFecha(v.fecha_compra); } },
+      { t:'CLIENTE',      w:26, v:function(v){ return _expTexto(v.nombre); } },
+      { t:'TELÉFONO',     w:14, v:function(v){ return _expTexto(v.telefono); } },
+      { t:'CIUDAD',       w:18, v:function(v){ return _expTexto(v.ciudad); } },
+      { t:'DEPARTAMENTO', w:18, v:function(v){ return _expTexto(v.departamento); } },
+      { t:'PRODUCTO',     w:38, v:function(v){ return _expTexto(v.producto); } },
+      { t:'CANTIDAD',     w:10, v:function(v){ return _expNum(v.cantidad); } },
+      { t:'VALOR',        w:13, v:function(v){ return _expNum(v.valor); } },
+      { t:'ESTADO',       w:24, v:function(v){ return _expTexto(v.estado_orden); } },
+      { t:'ID ANUNCIO',   w:20, v:function(v){ return _expTexto(v.id_anuncio); } },
+      { t:'ORDEN',        w:20, v:function(v){ return _expTexto(v.order); } }
+    ]
+  }, btn);
+}
+
+function _carExportar(btn){
+  _botExportar({
+    prefijo:'carritos-bot', hoja:'Carritos',
+    filas:_carFiltrados,
+    sufijo:function(){ return _expSufijo(_carFiltro); },
+    columnas:[
+      { t:'FECHA',        w:12, v:function(v){ return _expFecha(v.fecha); } },
+      { t:'CLIENTE',      w:26, v:function(v){ return _expTexto(v.nombre); } },
+      { t:'TELÉFONO',     w:14, v:function(v){ return _expTexto(v.telefono); } },
+      { t:'DIRECCIÓN',    w:38, v:function(v){ return _expTexto(v.direccion); } },
+      { t:'CIUDAD',       w:18, v:function(v){ return _expTexto(v.ciudad); } },
+      { t:'DEPARTAMENTO', w:18, v:function(v){ return _expTexto(v.departamento); } },
+      { t:'PRODUCTO',     w:38, v:function(v){ return _expTexto(v.producto); } },
+      { t:'CANTIDAD',     w:10, v:function(v){ return _expNum(v.cantidad); } },
+      { t:'VALOR',        w:13, v:function(v){ return _expNum(v.valor); } },
+      { t:'ESTADO',       w:22, v:function(v){ return _expTexto(v.estado); } },
+      { t:'ID CARRITO',   w:20, v:function(v){ return _expTexto(v.id_carrito); } }
+    ]
+  }, btn);
+}
 
 // ── GESTIÓN DEL ESTADO DE UN CARRITO ─────────────────────────────────────
 // Mismo trato que el estado de una venta, y por lo mismo: el bot registra en
