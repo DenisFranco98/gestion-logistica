@@ -2999,9 +2999,21 @@ function _initLogin(){
   // Cuenta solo la interacción de la persona (mouse, teclado, toque, scroll), no
   // el latido ni los refrescos automáticos: si contaran, el temporizador no
   // llegaría nunca a cero, que es justamente lo que pasaba.
+  //
+  // LA MARCA VIVE EN localStorage, NO EN MEMORIA, y esa es la parte importante.
+  // La app son cuatro páginas distintas y la gente trabaja con varias pestañas
+  // abiertas. Con la marca en memoria, cada pestaña contaba SU propio tiempo
+  // quieto: la que quedaba de fondo llegaba a las 2 horas y cerraba la sesión
+  // —borrando LOGIN_KEY, que es compartido— mientras la persona estaba
+  // trabajando en otra. Desde afuera parecía que se cerraba sola sin motivo.
+  // En localStorage la marca es una sola para todas las pestañas y todas las
+  // páginas: cualquier actividad, en cualquier lado, cuenta para todas.
   const _INAC_LIMITE = 2*60*60*1000;   // 2 horas sin tocar nada
   const _INAC_AVISO  = 60*1000;        // el aviso sale 1 minuto antes
-  let _inacUltima = Date.now();
+  const _INAC_KEY    = 'lgs_ult_actividad';
+  const _INAC_GRABA  = 10*1000;        // cada cuánto se refresca la marca, como mucho
+  let _inacUltima = Date.now();        // respaldo si localStorage no está disponible
+  let _inacGrabada = 0;
   let _inacTick = null;
   let _inacAvisoEl = null;
 
@@ -3009,12 +3021,23 @@ function _initLogin(){
     try{ return !!localStorage.getItem(LOGIN_KEY); }catch(e){ return false; }
   }
 
+  function _inacLeer(){
+    try{ return parseInt(localStorage.getItem(_INAC_KEY),10) || 0; }catch(e){ return 0; }
+  }
+  function _inacGrabar(t){
+    _inacUltima = t; _inacGrabada = t;
+    try{ localStorage.setItem(_INAC_KEY, String(t)); }catch(e){}
+  }
+  // La compartida manda. La de memoria es el respaldo para navegadores con el
+  // almacenamiento bloqueado, donde el comportamiento vuelve a ser el de antes.
+  function _inacMarca(){ return _inacLeer() || _inacUltima; }
+
   function _inacQuitarAviso(){
     if(_inacAvisoEl){ _inacAvisoEl.remove(); _inacAvisoEl = null; }
   }
 
   window._inacSeguir = function(){
-    _inacUltima = Date.now();
+    _inacGrabar(Date.now());
     _inacQuitarAviso();
   };
 
@@ -3049,6 +3072,8 @@ function _initLogin(){
   function _inacCerrar(){
     _inacQuitarAviso();
     if(_inacTick){ clearInterval(_inacTick); _inacTick = null; }
+    // Marca fresca para el próximo que entre: la vieja ya cumplió su función.
+    _inacGrabar(Date.now());
     try{ sessionStorage.setItem('lgs_cerro_por_inactividad','1'); }catch(e){}
     // Se reusa el cierre normal para no dejar a medias la presencia ni las claves
     // guardadas. Según el perfil abierto, el logout que corresponda.
@@ -3065,22 +3090,57 @@ function _initLogin(){
     }catch(e){ location.reload(); }
   }
 
+  // Llegar a esta página NAVEGANDO es actividad de la persona: hizo clic en algo,
+  // escribió la URL o usó atrás/adelante. Una RECARGA no lo es —la app se recarga
+  // sola cuando detecta una versión nueva— y no tiene por qué regalar dos horas.
+  function _inacFueNavegacion(){
+    try{
+      const n = performance.getEntriesByType('navigation')[0];
+      return !n || n.type !== 'reload';
+    }catch(e){ return true; }
+  }
+
   function _inacIniciar(){
     if(_inacTick) return;
-    _inacUltima = Date.now();
+    const c = _inacLeer();
+    // Se siembra la marca en tres casos: no hay ninguna; la que hay ya venció
+    // —quedó de una sesión anterior, y sin esto quien acaba de entrar se
+    // encontraría la sesión cerrada en el acto—; o se llegó acá navegando.
+    // Fuera de eso NO se toca: que la marca sobreviva a la navegación es
+    // justamente lo que hace que las pestañas de fondo dejen de cerrar la sesión.
+    if(!c || (Date.now()-c) >= _INAC_LIMITE || _inacFueNavegacion()) _inacGrabar(Date.now());
+    else _inacUltima = c;
+
     const marcar = ()=>{
       // Con el aviso en pantalla no se reinicia solo por mover el mouse: hay que
       // apretar el botón. Si no, basta con rozar el teclado sin mirar para que la
       // sesión siga abierta indefinidamente.
       if(_inacAvisoEl) return;
-      _inacUltima = Date.now();
+      const t = Date.now();
+      _inacUltima = t;
+      // Escribir en localStorage en cada scroll sería un disparate: alcanza con
+      // refrescar la marca cada 10 segundos, que al lado de un límite de dos
+      // horas es más precisión de la que hace falta.
+      if(t - _inacGrabada >= _INAC_GRABA) _inacGrabar(t);
     };
     ['mousedown','keydown','touchstart','scroll','click'].forEach(ev=>
       document.addEventListener(ev, marcar, {passive:true, capture:true}));
 
     _inacTick = setInterval(()=>{
-      if(!_inacHaySesion()){ _inacQuitarAviso(); return; }
-      const quieto = Date.now() - _inacUltima;
+      if(!_inacHaySesion()){
+        _inacQuitarAviso();
+        // Sin sesión el reloj no corre, pero la marca se mantiene al día. Así,
+        // cuando alguien entra, arranca con las dos horas enteras y no con lo que
+        // le quedaba a quien usó la pestaña antes —que si no, al relevarse dos
+        // asesores en el mismo equipo, al segundo se le cerraría a los minutos.
+        // LOGIN_KEY es compartido, así que esta rama solo se da cuando NADIE
+        // tiene la sesión abierta: una pestaña en el login no le estira el
+        // tiempo a otra que sí está trabajando.
+        const t = Date.now();
+        if(t - _inacGrabada >= _INAC_GRABA) _inacGrabar(t);
+        return;
+      }
+      const quieto = Date.now() - _inacMarca();
       const restante = _INAC_LIMITE - quieto;
       if(restante <= 0) return _inacCerrar();
       if(restante <= _INAC_AVISO) _inacMostrarAviso(Math.ceil(restante/1000));
