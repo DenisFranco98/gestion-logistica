@@ -3384,17 +3384,15 @@ function _vbEstadoColor(e){
   return 'var(--text-3)';
 }
 
+// El "cambió 3×" que iba debajo del estado se quitó a pedido: llenaba la columna
+// de una fila más en cada venta gestionada y no era lo que se venía a mirar.
+// historial_estado SE SIGUE GUARDANDO igual —el recorrido y quién lo hizo— solo
+// que no se pinta; nada de lo que ya está registrado se pierde.
 function _vbEstadoCelda(clave, v, puedeGestionar){
   const actual = String(v.estado_orden||'');
-  const hist = Array.isArray(v.historial_estado) ? v.historial_estado : [];
-  // El historial se muestra como pista: dice cuántas veces cambió y, al pasar el
-  // cursor, el recorrido completo con quién lo hizo.
-  const pista = hist.length
-    ? '<div class="vb-sub" title="'+esc(hist.map(h=>(h.de||'—')+' → '+h.a+(h.por?' ('+h.por+')':'')).join(' · '))+'">cambió '+hist.length+'×</div>'
-    : '';
 
   if(!puedeGestionar){
-    return (actual?'<span class="vb-est" style="border-color:'+_vbEstadoColor(actual)+';color:'+_vbEstadoColor(actual)+';">'+esc(actual)+'</span>':'—')+pista;
+    return actual?'<span class="vb-est" style="border-color:'+_vbEstadoColor(actual)+';color:'+_vbEstadoColor(actual)+';">'+esc(actual)+'</span>':'—';
   }
 
   // El estado que ya tiene se incluye aunque no esté en la lista: el bot puede
@@ -3409,7 +3407,7 @@ function _vbEstadoCelda(clave, v, puedeGestionar){
     opciones.map(function(o){
       return '<option value="'+esc(o)+'"'+(o===actual?' selected':'')+'>'+esc(o)+'</option>';
     }).join('')+
-    '</select>'+pista;
+    '</select>';
 }
 
 // Guarda el estado nuevo. Escribe la venta y el índice, y deja el cambio en
@@ -3482,19 +3480,15 @@ function _carEstadoColor(e){
   return 'var(--text-3)';
 }
 
+// Sin el "cambió 3×", por lo mismo que en Ventas Bot. historial_estado se sigue
+// guardando: lo escriben tanto el asesor como los endpoints del bot.
 function _carEstadoCelda(clave, v, puedeGestionar){
   const actual=String(v.estado||'');
-  const hist=Array.isArray(v.historial_estado)?v.historial_estado:[];
-  // El historial se muestra como pista: cuántas veces cambió y, al pasar el
-  // cursor, el recorrido completo con quién lo hizo.
-  const pista=hist.length
-    ? '<div class="vb-sub" title="'+esc(hist.map(function(h){ return (h.de||'—')+' → '+h.a+(h.por?' ('+h.por+')':''); }).join(' · '))+'">cambió '+hist.length+'×</div>'
-    : '';
 
   if(!puedeGestionar){
-    return (actual
+    return actual
       ? '<span class="vb-est" style="border-color:'+_carEstadoColor(actual)+';color:'+_carEstadoColor(actual)+';">'+esc(actual)+'</span>'
-      : '—')+pista;
+      : '—';
   }
 
   // El estado que ya tiene se incluye aunque no esté en la lista: el payload puede
@@ -3509,7 +3503,7 @@ function _carEstadoCelda(clave, v, puedeGestionar){
     opciones.map(function(o){
       return '<option value="'+esc(o)+'"'+(o===actual?' selected':'')+'>'+esc(o)+'</option>';
     }).join('')+
-    '</select>'+pista;
+    '</select>';
 }
 
 // Guarda el estado nuevo. Escribe el carrito y el índice, y deja el cambio en
