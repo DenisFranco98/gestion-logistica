@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/shared/shared.css?v=20260818h">
+<link rel="stylesheet" href="/shared/shared.css?v=20260818i">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1087,7 +1087,7 @@ window._sbEstadosToggle=function(){
            ventas se pintan apagados —no se ocultan: que un día esté vacío es un
            dato, y esconderlo haría creer que el mes no tiene ese día—. -->
       <div class="vb-cal-wrap">
-        <button type="button" id="vb-dia-btn" class="vb-cal-btn" onclick="_vbCalToggle(event)">
+        <button type="button" id="vb-dia-btn" class="vb-cal-btn" onclick="_calToggle('vb',event)">
           <span>📅</span><span id="vb-dia-lbl">Todos los días</span>
         </button>
         <div id="vb-cal" class="vb-cal" style="display:none;"></div>
@@ -1129,8 +1129,18 @@ window._sbEstadosToggle=function(){
     <div class="vb-bar">
       <input type="text" id="car-buscar" placeholder="Buscar por cliente, teléfono, producto, ciudad o ID de carrito..." oninput="_carSearch(this.value)">
       <!-- Rango de días dentro del mes que manda la barra de arriba (◀ mes ▶),
-           igual que en Ventas Bot: el nodo se lee por mes. -->
-      <div class="tab-chips" id="car-dia-chips"></div>
+           igual que en Ventas Bot: el nodo se lee por mes. Es EL MISMO
+           calendario, no una copia — lo dibujan las funciones _cal* con la
+           clave 'car'; de ahí que los ids sigan el patrón car-dia-btn /
+           car-dia-lbl / car-cal. Los días sin carritos se pintan apagados: que
+           un día esté vacío es un dato, esconderlo haría creer que el mes no
+           tiene ese día. -->
+      <div class="vb-cal-wrap">
+        <button type="button" id="car-dia-btn" class="vb-cal-btn" onclick="_calToggle('car',event)">
+          <span>📅</span><span id="car-dia-lbl">Todos los días</span>
+        </button>
+        <div id="car-cal" class="vb-cal" style="display:none;"></div>
+      </div>
       <!-- Los productos se llenan con lo que hay en los días filtrados, no con
            una lista fija: los define el bot. -->
       <select id="car-producto" onchange="_carFiltroSet('producto',this.value)"><option value="">Todos los productos</option></select>
@@ -1508,8 +1518,8 @@ window._sbEstadosToggle=function(){
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="/shared/app-shared.js?v=20260818h"></script>
-<script src="/gestiones-diarias.js?v=20260818h"></script>
+<script src="/shared/app-shared.js?v=20260818i"></script>
+<script src="/gestiones-diarias.js?v=20260818i"></script>
 <script>
 // Bootstrap propio de esta página: en vez de mostrar el selector de módulo,
 // entra directo a Gestiones Diarias tras un login/restauración de sesión

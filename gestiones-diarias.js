@@ -37,7 +37,7 @@ function _gdResetMes(){
   _novData={}; _repData={}; _roData={}; _antData={con:{},sin:{}};
   _vbData={}; _vbAds={}; _vbDiasConVenta=new Set(); _vbUltima=0;
   _vbPag.pagina=1;
-  _carData={}; _carUltima=0; _carPag.pagina=1;
+  _carData={}; _carUltima=0; _carPag.pagina=1; _carDiasConCarrito=new Set();
 }
 
 // Y lo que pertenece A LA TIENDA, que además incluye todo lo del mes.
@@ -747,10 +747,10 @@ window.addEventListener('popstate', function(){
 function _gdTab(tab, _desdeLaRuta){
   _gdActiveTab=tab;
   if(!_desdeLaRuta) _gdRutaEscribir(tab);
-  // El calendario de Ventas Bot es un popover con un listener en el documento:
-  // si se cambia de tab con él abierto, queda escuchando clics para un panel
-  // que ya nadie ve.
-  _vbCalCerrar();
+  // Los calendarios de Ventas Bot y Carritos Bot son popovers con un listener en
+  // el documento: si se cambia de tab con uno abierto, queda escuchando clics
+  // para un panel que ya nadie ve. Sin argumento cierra el que esté abierto.
+  _calCerrar();
   _GD_TABS.forEach(t=>{
     const c=document.getElementById('gd-tab-'+t);
     const b=document.getElementById('gd-tab-btn-'+t);
@@ -2512,7 +2512,7 @@ function _vbInit(conservarFiltros){
     if(!conservarFiltros){
       _vbFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
       const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
-      _vbCalCerrar();
+      _calCerrar();
     }
     _vbUltima=Date.now();
     _vbRender();
@@ -2548,40 +2548,66 @@ function _vbSearch(q){ _vbFiltro.q=q; if(_vbSearchTimer)clearTimeout(_vbSearchTi
 // los totales, la analítica y la lectura de Firebase—, así que acá solo se
 // elige el tramo. Un rango que cruce meses es otra cosa: obligaría a leer
 // varios nodos y a que "total del mes" deje de significar algo.
-const _VB_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-function _vbMesCorto(){ return _VB_MESES[(parseInt((_gdMes||'').split('-')[1],10)||1)-1]; }
+//
+// LO USAN LOS DOS TABS DEL BOT, Ventas y Carritos, con un solo juego de
+// funciones. Carritos arrancó con una fila de chips —"Hoy", "Ayer", "Últimos
+// 7"— que era la misma idea a medias: ocupaba media barra y no dejaba pedir un
+// tramo. Tener dos calendarios distintos habría garantizado que un arreglo
+// entrara en uno solo, que es exactamente lo que ya pasó con `tomar()` en las
+// Functions.
+//
+// Cada tab dice acá dónde tiene su estado; el resto del código es común. Para
+// sumar un tercero alcanza con una fila más y que el HTML use los ids
+// `<clave>-dia-btn`, `<clave>-dia-lbl` y `<clave>-cal`.
+const _CAL={
+  vb:  { filtro:()=>_vbFiltro,  dias:()=>_vbDiasConVenta,    repintar:()=>{ _vbPagReset();  _vbRender();  } },
+  car: { filtro:()=>_carFiltro, dias:()=>_carDiasConCarrito, repintar:()=>{ _carPagReset(); _carRender(); } }
+};
+const _CAL_MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function _calMesCorto(){ return _CAL_MESES[(parseInt((_gdMes||'').split('-')[1],10)||1)-1]; }
 
-function _vbCalLabel(){
-  const lbl=document.getElementById('vb-dia-lbl'), btn=document.getElementById('vb-dia-btn');
+// Cuál está abierto, si es que hay alguno. Hace falta saberlo porque el listener
+// de "clic afuera" es uno solo para los dos: guardar la referencia de la función
+// no alcanzaría para saber qué panel cerrar.
+let _calAbierto='';
+
+function _calLabel(k){
+  const lbl=document.getElementById(k+'-dia-lbl'), btn=document.getElementById(k+'-dia-btn');
   if(!lbl) return;
-  const {d1,d2}=_vbFiltro;
+  const {d1,d2}=_CAL[k].filtro();
   const dd=n=>String(n).padStart(2,'0');
   lbl.textContent = !d1 ? 'Todos los días'
-    : (!d2||d2===d1) ? dd(d1)+' '+_vbMesCorto()
-    : dd(d1)+' – '+dd(d2)+' '+_vbMesCorto();
+    : (!d2||d2===d1) ? dd(d1)+' '+_calMesCorto()
+    : dd(d1)+' – '+dd(d2)+' '+_calMesCorto();
   if(btn) btn.classList.toggle('on', !!d1);
 }
 
-function _vbCalToggle(ev){
+function _calToggle(k,ev){
   if(ev) ev.stopPropagation();
-  const c=document.getElementById('vb-cal'); if(!c) return;
-  if(c.style.display==='block'){ _vbCalCerrar(); return; }
+  const c=document.getElementById(k+'-cal'); if(!c) return;
+  if(_calAbierto===k){ _calCerrar(); return; }
+  _calCerrar();               // nunca dos abiertos a la vez
+  _calAbierto=k;
   c.style.display='block';
-  _vbCalRender();
+  _calRender(k);
   // Un clic afuera cierra. Se puede registrar en el acto porque el clic que
   // abrió ya frenó su propagación arriba y no va a llegar al documento; con un
   // setTimeout, un clic disparado en el mismo tick no encontraba el listener.
   // El listener se quita al cerrar, así que nunca queda más de uno.
-  document.addEventListener('click',_vbCalFuera);
+  document.addEventListener('click',_calFuera);
 }
-function _vbCalFuera(ev){
+function _calFuera(ev){
   const w=ev.target.closest?ev.target.closest('.vb-cal-wrap'):null;
-  if(!w) _vbCalCerrar();
+  if(!w) _calCerrar();
 }
-function _vbCalCerrar(){
-  const c=document.getElementById('vb-cal');
+// Sin argumento: cierra el que esté abierto, sea cual sea. Así lo pueden llamar
+// el cambio de tab y la recarga, que no tienen por qué saber cuál era.
+function _calCerrar(){
+  if(!_calAbierto) return;
+  const c=document.getElementById(_calAbierto+'-cal');
   if(c) c.style.display='none';
-  document.removeEventListener('click',_vbCalFuera);
+  _calAbierto='';
+  document.removeEventListener('click',_calFuera);
 }
 
 // ── ATAJOS DE FECHA ──────────────────────────────────────────────────────
@@ -2597,7 +2623,7 @@ function _vbCalCerrar(){
 //  · Las semanas SE RECORTAN al mes. Una semana que arranca el lunes 31 y sigue
 //    en septiembre se filtra desde el día 1: mostrar los del mes anterior
 //    obligaría a leer otro nodo, que es justo lo que no hace este tab.
-function _vbAtajos(){
+function _calAtajos(){
   const hoy=new Date();
   const [y,m]=(_gdMes||'2000-01').split('-').map(Number);
   const total=_gdDiasEnMes(_gdMes||'2000-01');
@@ -2625,32 +2651,36 @@ function _vbAtajos(){
   return lista.map(a=>Object.assign(a,{motivo: a.rango?'':motivo}));
 }
 
-function _vbAtajo(id,ev){
+function _calAtajo(k,id,ev){
   if(ev) ev.stopPropagation();
-  const a=_vbAtajos().find(x=>x.id===id);
+  const a=_calAtajos().find(x=>x.id===id);
   if(!a || !a.rango) return;
-  _vbFiltro.d1=a.rango[0]; _vbFiltro.d2=a.rango[1];
-  // _vbRender vuelve a dibujar el calendario si está abierto: un solo camino.
-  _vbPagReset(); _vbRender();
+  const f=_CAL[k].filtro();
+  f.d1=a.rango[0]; f.d2=a.rango[1];
+  // El render del tab vuelve a dibujar el calendario si está abierto: un solo camino.
+  _CAL[k].repintar();
 }
 
 // Marca el atajo que coincide EXACTAMENTE con el rango elegido, para que se vea
 // cuál está puesto aunque se haya llegado tocando días sueltos en la grilla.
-function _vbAtajoActivo(){
-  const {d1,d2}=_vbFiltro;
-  const a=_vbAtajos().find(x=>x.rango && x.rango[0]===d1 && x.rango[1]===(d2||d1));
+function _calAtajoActivo(k){
+  const {d1,d2}=_CAL[k].filtro();
+  const a=_calAtajos().find(x=>x.rango && x.rango[0]===d1 && x.rango[1]===(d2||d1));
   return a?a.id:'';
 }
 
-function _vbCalRender(){
-  const c=document.getElementById('vb-cal'); if(!c) return;
+function _calRender(k){
+  const c=document.getElementById(k+'-cal'); if(!c) return;
   const total=_gdDiasEnMes(_gdMes||'2000-01');
   const [y,m]=(_gdMes||'2000-01').split('-').map(Number);
   // getDay() da 0=domingo; acá la semana arranca en lunes, como el calendario
   // que usa la gente. Este Date es solo para saber en qué columna cae el día 1
   // del mes: no se compara ni se guarda, así que el desfase de UTC no aplica.
   const primero=(new Date(y,m-1,1).getDay()+6)%7;
-  const {d1,d2}=_vbFiltro;
+  const {d1,d2}=_CAL[k].filtro();
+  // Los días que tienen algo, para pintarlos fuertes. Cada tab pone los suyos:
+  // ventas en uno, carritos en el otro.
+  const conDatos=_CAL[k].dias()||new Set();
   const hasta=d2||d1;
 
   let celdas='';
@@ -2658,17 +2688,17 @@ function _vbCalRender(){
   for(let i=0;i<primero;i++) celdas+='<button class="vb-cal-d hueco" disabled></button>';
   for(let d=1;d<=total;d++){
     const cls=['vb-cal-d'];
-    if(!_vbDiasConVenta.has(d)) cls.push('vacio');
+    if(!conDatos.has(d)) cls.push('vacio');
     if(d1 && d>d1 && d<hasta) cls.push('rango');
     if(d1 && (d===d1||d===hasta)) cls.push('punta');
-    celdas+='<button class="'+cls.join(' ')+'" onclick="_vbCalDia('+d+',event)">'+d+'</button>';
+    celdas+='<button class="'+cls.join(' ')+'" onclick="_calDia(\''+k+'\','+d+',event)">'+d+'</button>';
   }
 
-  const act=_vbAtajoActivo();
-  const atajos=_vbAtajos().map(a=>
+  const act=_calAtajoActivo(k);
+  const atajos=_calAtajos().map(a=>
     '<button class="vb-cal-rap'+(a.id===act?' on':'')+'"'+
     (a.rango?'':' disabled title="'+esc(a.motivo)+'"')+
-    ' onclick="_vbAtajo(\''+a.id+'\',event)">'+esc(a.txt)+'</button>'
+    ' onclick="_calAtajo(\''+k+'\',\''+a.id+'\',event)">'+esc(a.txt)+'</button>'
   ).join('');
 
   c.innerHTML=
@@ -2677,8 +2707,8 @@ function _vbCalRender(){
     '<div class="vb-cal-grid">'+celdas+'</div>'+
     '<div class="vb-cal-ayuda">'+(d1&&!d2?'Elegí el día final del rango':'Tocá un día, y otro para el rango')+'</div>'+
     '<div class="vb-cal-pie">'+
-      '<button onclick="_vbCalLimpiar(event)">Todos los días</button>'+
-      '<button onclick="_vbCalCerrar()">Cerrar</button>'+
+      '<button onclick="_calLimpiar(\''+k+'\',event)">Todos los días</button>'+
+      '<button onclick="_calCerrar()">Cerrar</button>'+
     '</div>';
 }
 
@@ -2686,21 +2716,21 @@ function _vbCalRender(){
 // empezar, que es lo que uno espera al querer corregir el rango. Si el segundo
 // día es anterior al primero se invierten en vez de rechazarlo: la intención es
 // clarísima y hacer que el usuario adivine el orden sería gratuito.
-function _vbCalDia(d,ev){
+function _calDia(k,d,ev){
   if(ev) ev.stopPropagation();
-  if(!_vbFiltro.d1 || _vbFiltro.d2){ _vbFiltro.d1=d; _vbFiltro.d2=0; }
-  else if(d<_vbFiltro.d1){ _vbFiltro.d2=_vbFiltro.d1; _vbFiltro.d1=d; }
-  else _vbFiltro.d2=d;
-  // _vbRender repinta el calendario si está abierto, así que no hace falta
-  // llamarlo acá: un solo camino para dibujarlo.
-  _vbPagReset(); _vbRender();
+  const f=_CAL[k].filtro();
+  if(!f.d1 || f.d2){ f.d1=d; f.d2=0; }
+  else if(d<f.d1){ f.d2=f.d1; f.d1=d; }
+  else f.d2=d;
+  // El render del tab repinta el calendario si está abierto, así que no hace
+  // falta llamarlo acá: un solo camino para dibujarlo.
+  _CAL[k].repintar();
 }
-function _vbCalLimpiar(ev){
+function _calLimpiar(k,ev){
   if(ev) ev.stopPropagation();
-  _vbFiltro.d1=0; _vbFiltro.d2=0;
-  // _vbRender repinta el calendario si está abierto, así que no hace falta
-  // llamarlo acá: un solo camino para dibujarlo.
-  _vbPagReset(); _vbRender();
+  const f=_CAL[k].filtro();
+  f.d1=0; f.d2=0;
+  _CAL[k].repintar();
 }
 
 // dd/mm — la fecha se guarda como YYYYMMDD (texto), no como Date: se formatea
@@ -2731,8 +2761,8 @@ function _vbRender(){
   // Días con ventas: los usa el calendario para resaltarlos. Se recalcula en
   // cada repintado porque es barato y así el ↻ los actualiza solo.
   _vbDiasConVenta=new Set(todas.map(([,v])=>parseInt(String(v.fecha_compra||'').slice(6,8),10)).filter(Boolean));
-  _vbCalLabel();
-  if(document.getElementById('vb-cal')?.style.display==='block') _vbCalRender();
+  _calLabel('vb');
+  if(_calAbierto==='vb') _calRender('vb');
 
   // Los productos que hay EN LOS DÍAS ELEGIDOS, no en todo el mes: con un rango de
   // tres días, ofrecer los 200 productos del mes es ofrecer 190 que no van a
@@ -3090,6 +3120,9 @@ function _vbRenderAnalitica(filas, totalGeneral){
 // La identidad es telefono_idCarrito (ver functions/carritos.js), lo que permite
 // que el mismo cliente tenga varios carritos abiertos sin que se pisen.
 let _carData={}, _carFiltro={q:'',estado:'',d1:0,d2:0,producto:''}, _carSearchTimer=null, _carUltima=0;
+// Los días del mes que tienen algún carrito. Lo lee el calendario compartido para
+// pintarlos fuertes; los vacíos se muestran apagados, no se ocultan.
+let _carDiasConCarrito=new Set();
 let _carPag={ tam: 50, pagina: 1 };
 
 const CAR_EST_COMPLETOS='DATOS COMPLETOS';
@@ -3119,6 +3152,7 @@ function _carInit(conservarFiltros){
     if(!conservarFiltros){
       _carFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
       const inp=document.getElementById('car-buscar'); if(inp) inp.value='';
+      _calCerrar();
     }
     _carUltima=Date.now();
     _carRender();
@@ -3144,21 +3178,11 @@ function _carFiltroSet(campo,valor){ _carFiltro[campo]=valor; _carPagReset(); _c
 // _carEstChip se borró por lo mismo que _vbEstChip: el filtro de estado es ahora
 // un <select> que llama a _carFiltroSet('estado', ...) desde el onchange.
 
-// El rango de días reutiliza _vbAtajos(), que devuelve números de día del mes
-// visible y ya resuelve lo difícil: que los atajos relativos a hoy solo existan en
-// el mes en curso y que las semanas se recorten al mes. Duplicar esa lógica sería
-// garantizar que algún día divergiera de la otra pestaña.
-function _carDiaChip(id,btn){
-  const a=_vbAtajos().find(x=>x.id===id);
-  if(!a||!a.rango) return;
-  _carFiltro.d1=a.rango[0]; _carFiltro.d2=a.rango[1];
-  _carPagReset(); _carRender();
-}
-function _carDiaActivo(){
-  const d1=_carFiltro.d1, d2=_carFiltro.d2;
-  const a=_vbAtajos().find(x=>x.rango && x.rango[0]===d1 && x.rango[1]===(d2||d1));
-  return a?a.id:'';
-}
+// El rango de días es el MISMO calendario que Ventas Bot (ver _CAL, más arriba):
+// el tab solo aporta su filtro, sus días con datos y cómo repintarse. Antes esto
+// era una fila de chips propia, que resolvía a medias lo mismo y no dejaba pedir
+// un tramo como "del 5 al 10".
+//
 // ¿Este carrito cae en el rango de días elegido? Aparte porque lo usan la tabla y
 // la lista de productos, y si divergieran el selector ofrecería productos que la
 // tabla no muestra — el mismo problema que ya se arregló en Ventas Bot.
@@ -3181,18 +3205,14 @@ function _carRender(){
   if(!wrap) return;
   const todos=Object.entries(_carData).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
 
-  // Chips de rango de días. Se repintan siempre: cuál está activo depende del
-  // filtro, y cuáles se pueden usar depende del mes que se esté viendo.
-  const cd=document.getElementById('car-dia-chips');
-  if(cd){
-    const act=_carDiaActivo();
-    cd.innerHTML='<span class="tab-chip-lbl">Días:</span>'+
-      _vbAtajos().map(function(a){
-        return '<button class="tab-chip'+(a.id===act?' on':'')+'"'+
-          (a.rango?'':' disabled title="'+esc(a.motivo)+'"')+
-          ' onclick="_carDiaChip(\''+a.id+'\',this)">'+esc(a.txt)+'</button>';
-      }).join('');
-  }
+  // Días con carritos: los pinta el calendario para que se vea de un vistazo
+  // dónde hubo movimiento. Se recalcula en cada repintado porque es barato, y así
+  // el ↻ los actualiza solo.
+  _carDiasConCarrito=new Set(todos.map(function(par){
+    return parseInt(String(par[1].fecha||'').slice(6,8),10);
+  }).filter(Boolean));
+  _calLabel('car');
+  if(_calAbierto==='car') _calRender('car');
 
   // Productos: solo los que hay en los días filtrados, no los del mes entero.
   const enRango=todos.filter(function(par){ return _carEnRangoDias(par[1]); });
