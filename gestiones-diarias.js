@@ -3114,6 +3114,85 @@ async function _vbAdsSet(producto, valor, inp){
   }
 }
 
+// Los productos que la app YA CONOCE este mes: los que vendieron alguna vez y los
+// que tienen pauta cargada. Alimentan el <datalist> del campo de alta.
+//
+// ES LA PIEZA QUE HACE QUE LA PAUTA SE UNA CON SUS VENTAS. La clave sale del
+// nombre, así que un nombre tecleado distinto es OTRO producto: los del bot son
+// largos y con emojis —"PROMO 2x1 REESTAURADOR DENTAL DE CEELIKE🦷 (ORIGINAL)"— y
+// escribirlos a mano igual es prácticamente imposible. Eligiéndolos de la lista, el
+// nombre entra exacto.
+function _vbAdsProductosConocidos(){
+  const m={};
+  Object.values(_vbData||{}).forEach(function(v){
+    const p=String(v.producto||'').trim();
+    if(p) m[_vbAdsKey(p)]=p;
+  });
+  Object.keys(_vbAdsData||{}).forEach(function(dd){
+    Object.keys(_vbAdsData[dd]||{}).forEach(function(k){
+      const e=_vbAdsData[dd][k];
+      if(e&&e.p&&!m[k]) m[k]=e.p;
+    });
+  });
+  return Object.keys(m).map(function(k){ return m[k]; }).sort();
+}
+
+// Cambiar el nombre de una pauta cargada a mano. Es mover la entrada de una clave
+// a otra: la clave sale del nombre, así que renombrar CAMBIA dónde vive el dato.
+async function _vbAdsRenombrar(claveVieja, nombreNuevo, inp){
+  const dia=_vbAdsDiaEditable();
+  const nuevo=String(nombreNuevo||'').trim();
+  if(!dia){ toast('Elegí un solo día para editar la pauta', 4000); _vbRender(); return; }
+  if(typeof _esAuditoria==='function' && _esAuditoria()){ toast('En auditoría no se edita'); _vbRender(); return; }
+  if(!nuevo){ toast('El nombre no puede quedar vacío'); _vbRender(); return; }
+
+  const kViejo=_vbAdsKey(claveVieja), kNuevo=_vbAdsKey(nuevo);
+  if(kViejo===kNuevo){
+    // Mismo producto escrito distinto (tildes, mayúsculas). Se guarda igual, para
+    // que en la tabla se lea como lo escribieron.
+    const dd=_vbAdsDD(dia), e=(_vbAdsData[dd]||{})[kViejo];
+    if(e) await _vbAdsSet(nuevo, e.v, null);
+    return;
+  }
+
+  const dd=_vbAdsDD(dia);
+  const e=(_vbAdsData[dd]||{})[kViejo];
+  if(!e){ _vbRender(); return; }
+  // Si en ese día ya hay pauta para el nombre nuevo, renombrar la pisaría. Se
+  // avisa en vez de sumar por cuenta propia: cuál de los dos importes vale —o si
+  // van sumados— es una decisión de quien lo cargó, no de la app.
+  if((_vbAdsData[dd]||{})[kNuevo]){
+    toast('Ya hay pauta cargada para "'+nuevo+'" ese día. Sumala a mano y borrá esta.', 5000);
+    _vbRender();
+    return;
+  }
+  if(typeof _db==='undefined'){ toast('⚠️ Sin conexión'); _vbRender(); return; }
+
+  const base='ads_bot/'+_gdTK()+'/'+_gdMes+'/'+dd+'/';
+  const dato={ p:nuevo, v:parseInt(e.v,10)||0, ts:Date.now(),
+    por:(window.getLoginAsesor?window.getLoginAsesor():'')||window._currentUsername||'asesor' };
+  if(inp) inp.disabled=true;
+  try{
+    // Alta y baja juntas: si quedaran las dos claves, el mismo gasto se contaría
+    // dos veces en el CPA.
+    const upd={}; upd[base+kNuevo]=dato; upd[base+kViejo]=null;
+    await _db.ref().update(upd);
+    _vbAdsData[dd][kNuevo]=dato;
+    delete _vbAdsData[dd][kViejo];
+    toast('✓ Ahora es "'+nuevo+'"');
+    _vbRender();
+  }catch(err){
+    toast('⚠️ No se pudo renombrar: '+(err&&err.message||err), 4000);
+    _vbRender();
+  }
+}
+
+// Quitar del todo una pauta cargada a mano.
+function _vbAdsBorrar(clave){
+  if(!_vbAdsDiaEditable()){ toast('Elegí un solo día para editar la pauta', 4000); return; }
+  _vbAdsSet(clave, 0, null);
+}
+
 // Alta de un producto que gastó pauta y no vendió: es el mismo guardado, solo que
 // el nombre se teclea en vez de venir de una venta.
 function _vbAdsAgregar(){
@@ -3174,8 +3253,20 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
       <td style="text-align:right;">${celda}</td>
       <td style="text-align:right;font-family:var(--f-mono);${cpa?'':'color:var(--text-3);'}">${cpa?_vbMonto(cpa):'—'}</td>`;
     }
+    // El nombre de un producto con ventas NO se toca: viene de las ventas y
+    // cambiarlo acá no cambiaría nada. El de una pauta sin ventas sí, porque lo
+    // tecleó alguien y puede estar mal escrito — y si está mal escrito, no se une
+    // con las ventas del mismo producto en otros días.
+    const celdaNombre = (conAds && g.sinVentas && editable)
+      ? `<div class="vb-ads-fila">
+           <input class="vb-ads-nom" value="${esc(g.clave)}" list="vb-ads-lista" title="Corregí el nombre para que se una con sus ventas"
+                  onchange="_vbAdsRenombrar('${esc(g.clave).replace(/'/g,'&#39;')}',this.value,this)">
+           <button class="vb-ads-del" title="Quitar esta pauta" onclick="_vbAdsBorrar('${esc(g.clave).replace(/'/g,'&#39;')}')">🗑️</button>
+         </div><div class="vb-sub">pauta sin ventas</div>`
+      : `${esc(g.clave)}${g.sinVentas?'<div class="vb-sub">pauta sin ventas</div>':''}`;
+
     return `<tr${g.sinVentas?' class="vb-ana-sinventas"':''}>
-      <td>${esc(g.clave)}${g.sinVentas?'<div class="vb-sub">pauta sin ventas</div>':''}</td>
+      <td>${celdaNombre}</td>
       <td style="text-align:center;font-family:var(--f-mono);">${g.ventas}</td>
       <td style="text-align:center;font-family:var(--f-mono);">${g.unidades}</td>
       <td style="text-align:right;font-family:var(--f-mono);">${_vbMonto(g.facturacion)}</td>
@@ -3214,10 +3305,16 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
 function _vbAdsPie(totalAds, editable){
   const dia=_vbAdsDiaEditable();
   const auditoria=(typeof _esAuditoria==='function' && _esAuditoria());
-  const alta = editable ? `
+  // El <datalist> ofrece los productos que ya existen este mes. Es lo que hace que
+  // la pauta de un día se una con las ventas del producto en otros días: la clave
+  // sale del nombre, y los del bot son imposibles de teclear igual a mano.
+  const lista = `<datalist id="vb-ads-lista">${
+    _vbAdsProductosConocidos().map(function(p){ return '<option value="'+esc(p)+'">'; }).join('')}</datalist>`;
+
+  const alta = editable ? `${lista}
     <div class="vb-ads-alta">
       <span class="vb-ads-alta-lbl">Gastó pauta y no vendió:</span>
-      <input id="vb-ads-nuevo-prod" placeholder="Nombre del producto"
+      <input id="vb-ads-nuevo-prod" placeholder="Elegí un producto o escribí uno nuevo" list="vb-ads-lista"
              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vb-ads-nuevo-val').focus();}">
       <input id="vb-ads-nuevo-val" placeholder="Inversión" inputmode="numeric"
              onkeydown="if(event.key==='Enter'){event.preventDefault();_vbAdsAgregar();}">
@@ -3238,7 +3335,12 @@ function _vbAdsPie(totalAds, editable){
 function _vbRenderAnalitica(filas, totalGeneral){
   const cont=document.getElementById('vb-analitica');
   if(!cont) return;
-  if(!filas.length){
+  // Un día puede tener gasto en pauta y NINGUNA venta —es justamente el día que
+  // hay que registrar—, así que la analítica se dibuja igual si hay pauta cargada
+  // o si se puede cargar. Cortar por "no hay ventas" dejaba ese día sin forma de
+  // verlo ni de cargarlo: la tabla no se dibujaba y con ella se iba el campo.
+  const hayPauta=Object.keys(_vbAdsProductosEnRango()).length>0;
+  if(!filas.length && !hayPauta && !_vbAdsDiaEditable()){
     cont.innerHTML='<div class="adm-empty">Nada que analizar con este filtro.</div>';
     return;
   }

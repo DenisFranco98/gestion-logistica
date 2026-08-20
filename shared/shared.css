@@ -1611,3 +1611,9 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-ads-alta input:focus{outline:none;border-color:var(--accent);}
 .vb-ads-alta button{padding:5px 12px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-2);font-size:.66rem;font-weight:700;font-family:inherit;cursor:pointer;}
 .vb-ads-alta button:hover{color:var(--accent);border-color:var(--accent);}
+/* Nombre editable de una pauta sin ventas, con su botón de quitar al lado. */
+.vb-ads-fila{display:flex;gap:5px;align-items:center;}
+.vb-ads-nom{flex:1;min-width:120px;padding:4px 8px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.7rem;font-family:inherit;}
+.vb-ads-nom:focus{outline:none;border-color:var(--accent);}
+.vb-ads-del{flex-shrink:0;border:none;background:transparent;cursor:pointer;font-size:.8rem;line-height:1;padding:2px 4px;border-radius:6px;opacity:.6;}
+.vb-ads-del:hover{opacity:1;background:var(--bg-hover);}
