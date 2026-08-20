@@ -3207,9 +3207,26 @@ function _vbAdsAgregar(){
   _vbAdsSet(nombre, val, null);
 }
 
-// `conAds` agrega las dos columnas de pauta: la inversión, que se carga a mano,
-// y el CPA, que sale de dividirla por las ventas. Solo la tabla de productos las
-// lleva — por anuncio no tendría de dónde sacar la inversión de cada uno.
+// ROAS = facturación ÷ inversión. Se muestra como multiplicador —"3,20×"— y no en
+// pesos: dice cuántas veces volvió lo que se puso, y en pesos se confundiría con
+// la facturación de al lado.
+//
+// Por debajo de 1× se pierde plata, así que va en rojo: es el número que hay que
+// ver de un vistazo sin leer la tabla entera.
+//
+// Sin inversión cargada NO hay ROAS —dividir por cero no da infinito, da "todavía
+// no sé cuánto costó"— pero con inversión y sin facturación SÍ da 0×, y ese cero es
+// un dato de verdad: se gastó y no volvió nada.
+function _vbRoas(facturacion, ads){
+  if(!ads) return '<span style="color:var(--text-3);">—</span>';
+  const r=(parseInt(facturacion,10)||0)/ads;
+  const color = r>=1 ? 'var(--success)' : 'var(--danger)';
+  return '<span style="color:'+color+';">'+r.toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2})+'×</span>';
+}
+
+// `conAds` agrega las columnas de pauta: la inversión, que se carga a mano, el CPA
+// y el ROAS. Solo la tabla de productos las lleva — por anuncio no tendría de dónde
+// sacar la inversión de cada uno.
 function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral, conAds){
   const editable = conAds && _vbAdsDiaEditable() && !(typeof _esAuditoria==='function' && _esAuditoria());
   let totalAds = 0;
@@ -3230,10 +3247,8 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
   // El orden lo decide para qué sirve cada tabla: productos por facturación
   // (cuánto aporta cada uno) y anuncios por cantidad de ventas (cuál trae más).
   grupos.sort((a,b)=> b[ordenarPor]-a[ordenarPor] || b.facturacion-a.facturacion);
-  const maxFact = grupos.reduce((m,g)=>Math.max(m,g.facturacion),0) || 1;
 
   const filas = grupos.map(g=>{
-    const pct = totalGeneral ? (g.facturacion/totalGeneral*100) : 0;
     let colsAds = '';
     if(conAds){
       const ads = _vbAdsDe(g.clave);
@@ -3251,7 +3266,8 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
         : `<span class="vb-ads-ro" title="${esc(_vbAdsDiaEditable()?'':'Elegí un solo día en el calendario para editar')}">${ads?_vbMonto(ads):'—'}</span>`;
       colsAds = `
       <td style="text-align:right;">${celda}</td>
-      <td style="text-align:right;font-family:var(--f-mono);${cpa?'':'color:var(--text-3);'}">${cpa?_vbMonto(cpa):'—'}</td>`;
+      <td style="text-align:right;font-family:var(--f-mono);${cpa?'':'color:var(--text-3);'}">${cpa?_vbMonto(cpa):'—'}</td>
+      <td style="text-align:right;font-family:var(--f-mono);font-weight:700;">${_vbRoas(g.facturacion, ads)}</td>`;
     }
     // El nombre de un producto con ventas NO se toca: viene de las ventas y
     // cambiarlo acá no cambiaría nada. El de una pauta sin ventas sí, porque lo
@@ -3269,30 +3285,32 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
       <td>${celdaNombre}</td>
       <td style="text-align:center;font-family:var(--f-mono);">${g.ventas}</td>
       <td style="text-align:center;font-family:var(--f-mono);">${g.unidades}</td>
-      <td style="text-align:right;font-family:var(--f-mono);">${_vbMonto(g.facturacion)}</td>
-      <td class="vb-ana-barra">
-        <div class="vb-ana-track"><div class="vb-ana-fill" style="width:${(g.facturacion/maxFact*100).toFixed(1)}%"></div></div>
-        <span>${pct.toFixed(1)}%</span>
-      </td>${colsAds}
+      <td style="text-align:right;font-family:var(--f-mono);">${_vbMonto(g.facturacion)}</td>${colsAds}
     </tr>`;
   }).join('');
 
   const totalVentas = grupos.reduce((s,g)=>s+g.ventas,0);
   const cpaGlobal = (totalAds && totalVentas) ? Math.round(totalAds/totalVentas) : 0;
+  // El ROAS del pie se calcula sobre los TOTALES, no promediando los de cada fila:
+  // un promedio de porcentajes le daría el mismo peso a un producto que facturó
+  // 50.000 que a uno que facturó 5 millones.
   const pie = conAds ? `<tfoot><tr class="ant-total-row">
       <td colspan="3" style="text-align:right;font-weight:800;">TOTAL</td>
       <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${_vbMonto(totalGeneral)}</td>
-      <td></td>
       <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${totalAds?_vbMonto(totalAds):'—'}</td>
       <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${cpaGlobal?_vbMonto(cpaGlobal):'—'}</td>
+      <td style="text-align:right;font-weight:900;font-family:var(--f-mono);">${_vbRoas(totalGeneral, totalAds)}</td>
     </tr></tfoot>` : '';
 
-  const cols = conAds ? 7 : 5;
+  // 7 con pauta (producto, ventas, unid., facturación, inversión, CPA, ROAS) y 4
+  // sin ella. Es el colspan del "Sin datos": si no cuadra, esa fila no ocupa la
+  // tabla entera y se ve rota.
+  const cols = conAds ? 7 : 4;
   return `<div class="vb-ana-bloque">
     <div class="vb-ana-titulo">${titulo} <span>${grupos.length}</span></div>
     <table class="ant-tbl vb-tbl vb-ana-tbl">
-      <thead><tr><th>${encabezado}</th><th>VENTAS</th><th>UNID.</th><th>FACTURACIÓN</th><th>% DEL TOTAL</th>${
-        conAds?'<th title="Lo invertido en pauta en los días que estás viendo">INVERSIÓN ADS</th><th title="Inversión ÷ pedidos">CPA</th>':''}</tr></thead>
+      <thead><tr><th>${encabezado}</th><th>VENTAS</th><th>UNID.</th><th>FACTURACIÓN</th>${
+        conAds?'<th title="Lo invertido en pauta en los días que estás viendo">INVERSIÓN ADS</th><th title="Inversión ÷ pedidos">CPA</th><th title="Facturación ÷ inversión: cuántas veces volvió lo que se puso">ROAS</th>':''}</tr></thead>
       <tbody>${filas || `<tr><td colspan="${cols}" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Sin datos</td></tr>`}</tbody>
       ${pie}
     </table>
