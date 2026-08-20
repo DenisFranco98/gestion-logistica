@@ -77,6 +77,24 @@
         }
       }
     },
+    "ads_bot": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()",
+        "$mes": {
+          "$dia": {
+            "$producto": {
+              "v": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "p": {
+                ".validate": "newData.isString() && newData.val().length <= 200"
+              }
+            }
+          }
+        }
+      }
+    },
     "historial_diario": {
       ".read": "auth != null",
       ".write": "auth != null"

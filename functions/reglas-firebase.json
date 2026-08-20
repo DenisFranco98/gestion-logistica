@@ -220,6 +220,40 @@
       }
     },
 
+    // ── INVERSIÓN EN PAUTA (ADS) ─────────────────────────────────────────
+    // ads_bot/{tienda}/{YYYY-MM}/{DD}/{claveProducto} = { p, v, ts, por }
+    //
+    // Lo carga el asesor a mano desde la Analítica de Ventas Bot, y de ahí sale el
+    // CPA. No lo escribe ninguna Cloud Function: es el único nodo de la familia
+    // "bot" que se edita solo desde la app, así que acá SÍ hay escritura para la
+    // tienda —al revés que ventas_bot y carritos_bot, donde solo se abrieron tres
+    // campos—.
+    //
+    // El permiso es el mismo que para leer: quien tiene la tienda asignada. Es un
+    // dato de la TIENDA y no de cada asesor a propósito: si cada uno cargara el
+    // suyo, dos personas verían un CPA distinto del mismo día y ninguno sabría
+    // cuál es el bueno.
+    //
+    // No se valida el contenido más allá de la forma. Un importe mal tecleado se
+    // corrige tecleándolo otra vez, y ponerlo en cero borra la entrada — que es
+    // distinto de guardar un cero, porque "costó cero" no es "no cargué nada".
+    "ads_bot": {
+      "$empresaId": {
+        ".read": "auth != null && (root.child('user_tiendas').child(auth.uid).child($empresaId).exists() || root.child('admin_empresas').child(auth.uid).child($empresaId).exists())",
+        ".write": "auth != null && root.child('user_tiendas').child(auth.uid).child($empresaId).exists()",
+        "$mes": {
+          "$dia": {
+            "$producto": {
+              // v es el importe y tiene que ser un número: si entrara como texto,
+              // las sumas del CPA lo concatenarían en vez de sumarlo.
+              "v": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+              "p": { ".validate": "newData.isString() && newData.val().length <= 200" }
+            }
+          }
+        }
+      }
+    },
+
     // ── EL RESTO ─────────────────────────────────────────────────────────
     // Los 28 nodos que ya existían, con el mismo permiso que tienen hoy. No se
     // cambia nada de cómo venían funcionando; están listados uno por uno solo

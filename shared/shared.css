@@ -1595,5 +1595,19 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-ads-inp:focus{outline:none;border-color:var(--accent);}
 .vb-ads-ro{font-family:var(--f-mono);font-size:.68rem;color:var(--text-2);}
 .vb-ana-nota{font-size:.62rem;color:var(--text-3);margin-top:5px;font-style:italic;}
-.vb-ads-limpiar{margin-left:8px;border:1.5px solid var(--border);background:var(--bg-hover);color:var(--text-2);border-radius:6px;padding:2px 8px;font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;font-style:normal;}
-.vb-ads-limpiar:hover{color:var(--text-1);border-color:var(--border-strong);}
+.vb-ads-inp:disabled{opacity:.6;}
+/* La inversión cuando NO se puede editar: se sigue viendo el número, sin caja.
+   Poner un <input> deshabilitado invitaría a hacer clic para nada. */
+.vb-ads-ro{font-family:var(--f-mono);font-size:.68rem;color:var(--text-2);}
+/* Producto que gastó pauta y no vendió: se atenúa para que se lea distinto de los
+   que sí vendieron, pero sin esconderlo — su gasto cuenta en el CPA general. */
+.vb-ana-sinventas td{opacity:.72;}
+/* Alta de pauta sin ventas, debajo de la tabla de productos. */
+.vb-ads-alta{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);}
+.vb-ads-alta-lbl{font-size:.63rem;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px;}
+.vb-ads-alta input{padding:5px 9px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.68rem;font-family:inherit;}
+.vb-ads-alta input#vb-ads-nuevo-prod{flex:1;min-width:180px;}
+.vb-ads-alta input#vb-ads-nuevo-val{width:110px;font-family:var(--f-mono);text-align:right;}
+.vb-ads-alta input:focus{outline:none;border-color:var(--accent);}
+.vb-ads-alta button{padding:5px 12px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-2);font-size:.66rem;font-weight:700;font-family:inherit;cursor:pointer;}
+.vb-ads-alta button:hover{color:var(--accent);border-color:var(--accent);}

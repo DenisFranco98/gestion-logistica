@@ -35,7 +35,7 @@ function _gdResetMes(){
   _gdData={}; _gdNotas={}; _gdNotaEditando=null;
   _consoData={}; _consoTotales={}; _consoPend={}; _consoDia=0;
   _novData={}; _repData={}; _roData={}; _antData={con:{},sin:{}};
-  _vbData={}; _vbAds={}; _vbDiasConVenta=new Set(); _vbUltima=0;
+  _vbData={}; _vbAdsData={}; _vbDiasConVenta=new Set(); _vbUltima=0;
   _vbPag.pagina=1;
   _carData={}; _carUltima=0; _carPag.pagina=1; _carDiasConCarrito=new Set();
 }
@@ -2507,8 +2507,18 @@ function _vbInit(conservarFiltros){
   if(!wrap) return;
   if(!conservarFiltros) wrap.innerHTML='<div style="padding:14px;color:var(--text-3);font-size:.72rem;text-align:center;">Cargando...</div>';
   if(typeof _db==='undefined'){ _vbData={}; _vbRender(); return Promise.resolve(); }
-  return _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes).once('value').then(snap=>{
+  // Las ventas y la pauta se leen JUNTAS: el CPA necesita las dos, y pedirlas en
+  // serie haría que la tabla se dibujara un momento con la inversión en blanco.
+  // Si la pauta falla no se cae todo —las ventas son lo principal— pero se avisa,
+  // porque un CPA calculado sobre una inversión que no cargó sería un número
+  // creíble y equivocado.
+  return Promise.all([
+    _db.ref('ventas_bot/'+_gdTK()+'/'+_gdMes).once('value'),
+    _db.ref('ads_bot/'+_gdTK()+'/'+_gdMes).once('value')
+      .catch(e=>{ toast('⚠️ No se pudo leer la inversión en pauta', 4000); return { val:()=>null }; })
+  ]).then(([snap, snapAds])=>{
     _vbData=snap.val()||{};
+    _vbAdsData=snapAds.val()||{};
     if(!conservarFiltros){
       _vbFiltro={q:'',estado:'',d1:0,d2:0,producto:''};
       const inp=document.getElementById('vb-buscar'); if(inp) inp.value='';
@@ -3001,67 +3011,171 @@ function _vbAgrupar(filas, campoFn, vacio){
   return [...m.values()];
 }
 
-// Inversión en pauta por producto: es una CALCULADORA, no un dato de la app.
-// Se teclea para ver el CPA en el momento y se pierde al recargar la página o
-// al cambiar de mes. No se guarda en ningún lado a propósito —decisión del
-// usuario el 2026-08-13—, así que tampoco hace falta nodo en Firebase, reglas,
-// ni permisos: lo que cada uno escribe solo lo ve él, en su pantalla, hasta que
-// recargue.
+// ── INVERSIÓN EN PAUTA (ADS) Y CPA ───────────────────────────────────────
+// Hasta el 2026-08-19 esto era una calculadora: se tecleaba, se miraba el CPA y se
+// perdía al recargar. Desde el 2026-08-20 SE GUARDA, y se guarda POR DÍA, que es
+// la parte que cambia todo lo demás: la pauta de un producto el 1 de agosto no es
+// la del 2, y sumar el mes entero contra las ventas de un día daba un CPA que no
+// significaba nada.
 //
-// Si algún día hace falta que quede registrado y compartido, ese es otro
-// requisito: implicaría nodo propio, regla nueva y decidir quién lo edita.
+//   ads_bot/{tienda}/{YYYY-MM}/{DD}/{claveProducto} = { p:nombre, v:pesos, ts, por }
+//
+// Al filtrar por días se suman los de ESOS días contra las ventas de ESOS días,
+// así el CPA de "1 y 2 de agosto" es (ads del 1 + ads del 2) ÷ (ventas de los dos).
+//
+// UN PRODUCTO QUE GASTÓ PAUTA Y NO VENDIÓ es simplemente una clave que existe acá
+// y no aparece en las ventas del día. No hizo falta una estructura aparte: entra en
+// la tabla con 0 ventas, sin CPA propio —dividir por cero no es "gratis", es "no se
+// sabe"— y su gasto SÍ suma al total, que es lo que hace bajar el CPA general.
 //
 // La clave se normaliza con _gdKey, igual que el catálogo de productos: sin eso
-// "CEPILLO BAMBU" y "Cepillo Bambu" serían dos entradas y el CPA saldría mal.
-let _vbAds={};
+// "CEPILLO BAMBU" y "Cepillo Bambu" serían dos entradas y el CPA saldría mal. El
+// nombre tal como se escribió se guarda en `p`, para poder mostrarlo.
+let _vbAdsData={};
 
 function _vbAdsKey(producto){ return _gdKey(String(producto||'').trim().replace(/\s+/g,' ')); }
+function _vbAdsDD(d){ return String(d).padStart(2,'0'); }
 
-function _vbAdsSet(producto, valor, inp){
-  const k=_vbAdsKey(producto);
-  const n=parseInt(String(valor).replace(/[^\d]/g,''),10)||0;
-  if(n) _vbAds[k]=n; else delete _vbAds[k];
-  if(inp){ inp.value = n ? n.toLocaleString('es-CO') : ''; }
-  _vbRender();
+// El día que se puede EDITAR: solo cuando hay uno solo elegido en el calendario.
+// Con un rango en pantalla, "la inversión" no tiene un día al que pertenecer, y
+// repartirla entre varios sería inventar datos. Devuelve 0 si no aplica.
+function _vbAdsDiaEditable(){
+  const {d1,d2}=_vbFiltro;
+  return (d1 && (!d2 || d2===d1)) ? d1 : 0;
 }
 
-// Borra todo lo tecleado de una vez. Con varios productos, limpiar campo por
-// campo para probar otro escenario es tedioso.
-function _vbAdsLimpiar(){
-  _vbAds={};
-  _vbRender();
-  toast('Inversión borrada');
+// Los días del mes que entran en el cálculo, según el filtro. Sin filtro de día
+// son todos los del mes, que es lo que ya se venía mostrando.
+function _vbAdsDiasEnRango(){
+  const {d1,d2}=_vbFiltro;
+  if(!d1) return Object.keys(_vbAdsData);
+  const hasta=d2||d1, out=[];
+  for(let d=d1; d<=hasta; d++) out.push(_vbAdsDD(d));
+  return out;
+}
+
+// Lo invertido en un producto dentro del rango filtrado.
+function _vbAdsDe(clave){
+  const k=_vbAdsKey(clave);
+  return _vbAdsDiasEnRango().reduce(function(s,dd){
+    const e=(_vbAdsData[dd]||{})[k];
+    return s + (e ? (parseInt(e.v,10)||0) : 0);
+  },0);
+}
+
+// Todos los productos con pauta en el rango, con su nombre tal como se escribió.
+// Se usa para sumar al total y para sacar los que no tuvieron ventas.
+function _vbAdsProductosEnRango(){
+  const out={};
+  _vbAdsDiasEnRango().forEach(function(dd){
+    Object.keys(_vbAdsData[dd]||{}).forEach(function(k){
+      const e=_vbAdsData[dd][k];
+      if(!out[k]) out[k]={ clave:k, nombre:(e&&e.p)||k, ads:0 };
+      out[k].ads += parseInt(e.v,10)||0;
+      if(e&&e.p) out[k].nombre=e.p;
+    });
+  });
+  return out;
+}
+
+async function _vbAdsSet(producto, valor, inp){
+  const dia=_vbAdsDiaEditable();
+  const nombre=String(producto||'').trim();
+  if(!dia){ toast('Elegí un solo día en el calendario para cargar la inversión', 4000); _vbRender(); return; }
+  if(!nombre){ toast('Falta el nombre del producto'); return; }
+  if(typeof _esAuditoria==='function' && _esAuditoria()){ toast('En auditoría no se edita'); _vbRender(); return; }
+
+  const k=_vbAdsKey(nombre);
+  const n=parseInt(String(valor).replace(/[^\d]/g,''),10)||0;
+  if(inp){ inp.value = n ? n.toLocaleString('es-CO') : ''; inp.disabled=true; }
+
+  if(typeof _db==='undefined'){ toast('⚠️ Sin conexión'); if(inp) inp.disabled=false; return; }
+  if(typeof _tiendaLista==='function' && !_tiendaLista('la inversión en pauta')){ if(inp) inp.disabled=false; return; }
+
+  const dd=_vbAdsDD(dia);
+  const ruta='ads_bot/'+_gdTK()+'/'+_gdMes+'/'+dd+'/'+k;
+  try{
+    if(n){
+      const dato={ p:nombre, v:n, ts:Date.now(),
+        por:(window.getLoginAsesor?window.getLoginAsesor():'')||window._currentUsername||'asesor' };
+      await _db.ref(ruta).set(dato);
+      if(!_vbAdsData[dd]) _vbAdsData[dd]={};
+      _vbAdsData[dd][k]=dato;
+    }else{
+      // Poner 0 o vaciar el campo BORRA la entrada. Guardar un 0 diría "este
+      // producto tuvo pauta y costó cero", que no es lo mismo que "no cargué nada".
+      await _db.ref(ruta).remove();
+      if(_vbAdsData[dd]) delete _vbAdsData[dd][k];
+    }
+    _vbRender();
+  }catch(e){
+    toast('⚠️ No se pudo guardar la inversión: '+(e&&e.message||e), 4000);
+    _vbRender();
+  }
+}
+
+// Alta de un producto que gastó pauta y no vendió: es el mismo guardado, solo que
+// el nombre se teclea en vez de venir de una venta.
+function _vbAdsAgregar(){
+  const inpN=document.getElementById('vb-ads-nuevo-prod');
+  const inpV=document.getElementById('vb-ads-nuevo-val');
+  if(!inpN||!inpV) return;
+  const nombre=inpN.value.trim();
+  const val=inpV.value;
+  if(!nombre){ toast('Escribí el nombre del producto'); inpN.focus(); return; }
+  if(!(parseInt(String(val).replace(/[^\d]/g,''),10)||0)){ toast('Escribí cuánto se invirtió'); inpV.focus(); return; }
+  inpN.value=''; inpV.value='';
+  _vbAdsSet(nombre, val, null);
 }
 
 // `conAds` agrega las dos columnas de pauta: la inversión, que se carga a mano,
 // y el CPA, que sale de dividirla por las ventas. Solo la tabla de productos las
 // lleva — por anuncio no tendría de dónde sacar la inversión de cada uno.
 function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral, conAds){
+  const editable = conAds && _vbAdsDiaEditable() && !(typeof _esAuditoria==='function' && _esAuditoria());
+  let totalAds = 0;
+
+  if(conAds){
+    // Los productos que gastaron pauta y NO vendieron en el rango entran acá, con
+    // 0 ventas. Sin esto no aparecerían en ningún lado y su gasto se perdería del
+    // CPA general, que es justo lo que hay que evitar: esa plata se gastó.
+    const conPauta=_vbAdsProductosEnRango();
+    const yaEstan={};
+    grupos.forEach(function(g){ yaEstan[_vbAdsKey(g.clave)]=true; });
+    Object.keys(conPauta).forEach(function(k){
+      if(yaEstan[k]) return;
+      grupos.push({ clave:conPauta[k].nombre, ventas:0, unidades:0, facturacion:0, sinVentas:true });
+    });
+  }
+
   // El orden lo decide para qué sirve cada tabla: productos por facturación
   // (cuánto aporta cada uno) y anuncios por cantidad de ventas (cuál trae más).
   grupos.sort((a,b)=> b[ordenarPor]-a[ordenarPor] || b.facturacion-a.facturacion);
   const maxFact = grupos.reduce((m,g)=>Math.max(m,g.facturacion),0) || 1;
-  // Editable para cualquiera: no se guarda nada, es una cuenta que cada uno
-  // hace en su pantalla. En auditoría también, por lo mismo.
-  let totalAds = 0;
 
   const filas = grupos.map(g=>{
     const pct = totalGeneral ? (g.facturacion/totalGeneral*100) : 0;
     let colsAds = '';
     if(conAds){
-      const ads = parseInt(_vbAds[_vbAdsKey(g.clave)],10) || 0;
+      const ads = _vbAdsDe(g.clave);
       totalAds += ads;
-      // CPA = inversión ÷ ventas. Sin inversión cargada no se muestra 0: se deja
-      // el guion, porque un CPA de cero diría que no costó nada conseguir esas
-      // ventas, que es lo contrario de "todavía no sé cuánto costó".
+      // CPA = inversión ÷ ventas (ventas = PEDIDOS, no unidades: es el costo de
+      // conseguir un cliente). Sin inversión cargada no se muestra 0: se deja el
+      // guion, porque un CPA de cero diría que no costó nada conseguir esas
+      // ventas, que es lo contrario de "todavía no sé cuánto costó". Y con pauta
+      // pero sin ventas tampoco hay CPA: dividir por cero no da "gratis", da
+      // "todavía no se sabe".
       const cpa = (ads && g.ventas) ? Math.round(ads/g.ventas) : 0;
+      const celda = editable
+        ? `<input class="vb-ads-inp" value="${ads?ads.toLocaleString('es-CO'):''}" placeholder="0" inputmode="numeric"
+                  onchange="_vbAdsSet('${esc(g.clave).replace(/'/g,'&#39;')}',this.value,this)">`
+        : `<span class="vb-ads-ro" title="${esc(_vbAdsDiaEditable()?'':'Elegí un solo día en el calendario para editar')}">${ads?_vbMonto(ads):'—'}</span>`;
       colsAds = `
-      <td style="text-align:right;"><input class="vb-ads-inp" value="${ads?ads.toLocaleString('es-CO'):''}" placeholder="0" inputmode="numeric"
-                  onchange="_vbAdsSet('${esc(g.clave).replace(/'/g,'&#39;')}',this.value,this)"></td>
+      <td style="text-align:right;">${celda}</td>
       <td style="text-align:right;font-family:var(--f-mono);${cpa?'':'color:var(--text-3);'}">${cpa?_vbMonto(cpa):'—'}</td>`;
     }
-    return `<tr>
-      <td>${esc(g.clave)}</td>
+    return `<tr${g.sinVentas?' class="vb-ana-sinventas"':''}>
+      <td>${esc(g.clave)}${g.sinVentas?'<div class="vb-sub">pauta sin ventas</div>':''}</td>
       <td style="text-align:center;font-family:var(--f-mono);">${g.ventas}</td>
       <td style="text-align:center;font-family:var(--f-mono);">${g.unidades}</td>
       <td style="text-align:right;font-family:var(--f-mono);">${_vbMonto(g.facturacion)}</td>
@@ -3087,16 +3201,38 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
     <div class="vb-ana-titulo">${titulo} <span>${grupos.length}</span></div>
     <table class="ant-tbl vb-tbl vb-ana-tbl">
       <thead><tr><th>${encabezado}</th><th>VENTAS</th><th>UNID.</th><th>FACTURACIÓN</th><th>% DEL TOTAL</th>${
-        conAds?'<th title="Inversión en pauta del mes para este producto">INVERSIÓN ADS</th><th title="Inversión ÷ ventas">CPA</th>':''}</tr></thead>
+        conAds?'<th title="Lo invertido en pauta en los días que estás viendo">INVERSIÓN ADS</th><th title="Inversión ÷ pedidos">CPA</th>':''}</tr></thead>
       <tbody>${filas || `<tr><td colspan="${cols}" style="padding:14px;text-align:center;color:var(--text-3);font-size:.7rem;">Sin datos</td></tr>`}</tbody>
       ${pie}
     </table>
-    ${conAds?`<div class="vb-ana-nota">
-      🧮 La inversión es solo para calcular: <b>no se guarda</b> — al recargar la página o cambiar de mes se borra.
-      Como es del mes completo, el CPA no cambia si filtrás por día.
-      ${totalAds?'<button class="vb-ads-limpiar" onclick="_vbAdsLimpiar()">Borrar lo tecleado</button>':''}
-    </div>`:''}
+    ${conAds?_vbAdsPie(totalAds, editable):''}
   </div>`;
+}
+
+// El pie de la tabla de productos: la fila para agregar pauta sin ventas y la
+// explicación de por qué se puede editar o no.
+function _vbAdsPie(totalAds, editable){
+  const dia=_vbAdsDiaEditable();
+  const auditoria=(typeof _esAuditoria==='function' && _esAuditoria());
+  const alta = editable ? `
+    <div class="vb-ads-alta">
+      <span class="vb-ads-alta-lbl">Gastó pauta y no vendió:</span>
+      <input id="vb-ads-nuevo-prod" placeholder="Nombre del producto"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vb-ads-nuevo-val').focus();}">
+      <input id="vb-ads-nuevo-val" placeholder="Inversión" inputmode="numeric"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();_vbAdsAgregar();}">
+      <button onclick="_vbAdsAgregar()">Agregar</button>
+    </div>` : '';
+
+  // Por qué se puede o no editar. Sin esto, con un rango puesto la casilla se ve
+  // apagada y no hay forma de saber que falta elegir un día.
+  const nota = auditoria
+    ? '🔒 En auditoría la inversión es solo de lectura.'
+    : dia
+      ? '✏️ Estás cargando la inversión del <b>día '+_vbAdsDD(dia)+'</b>. Se guarda al salir de la casilla y la ve toda la tienda.'
+      : '📅 La inversión se carga <b>por día</b>. Elegí un solo día en el calendario para poder editarla; acá estás viendo la <b>suma</b> de los días filtrados.';
+
+  return `<div class="vb-ana-nota">${nota}</div>${alta}`;
 }
 
 function _vbRenderAnalitica(filas, totalGeneral){
