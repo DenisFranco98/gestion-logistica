@@ -2797,7 +2797,22 @@ function _vbRender(){
   // tres días, ofrecer los 200 productos del mes es ofrecer 190 que no van a
   // devolver nada. Sin filtro de días esto es el mes entero, como antes.
   const enRango=todas.filter(([,v])=>_vbEnRangoDias(v));
-  const prods=[...new Set(enRango.map(([,v])=>String(v.producto||'').trim()).filter(Boolean))].sort();
+  const prodsVenta=[...new Set(enRango.map(([,v])=>String(v.producto||'').trim()).filter(Boolean))].sort();
+
+  // Y los que gastaron pauta SIN vender en esos días. Se ofrecen también, porque
+  // aislar uno de esos es justo lo que se quiere para ver cuánto se le puso: antes
+  // no estaban en la lista y no había forma de mirarlos solos.
+  //
+  // Elegir uno deja el Detalle vacío —no tiene ventas, es el dato— y la Analítica
+  // muestra su inversión con ROAS 0×.
+  const conVenta={};
+  prodsVenta.forEach(function(p){ conVenta[_vbAdsKey(p)]=true; });
+  const pauta=_vbAdsProductosEnRango();
+  const prodsPauta=Object.keys(pauta)
+    .filter(function(k){ return !conVenta[k]; })
+    .map(function(k){ return pauta[k].nombre; })
+    .sort();
+  const prods=prodsVenta.concat(prodsPauta);
 
   // Si el producto que estaba elegido no existe en los días nuevos, se suelta el
   // filtro. Dejarlo puesto sería peor que inútil: el <select> mostraría "Todos
@@ -2808,8 +2823,15 @@ function _vbRender(){
   const selP=document.getElementById('vb-producto');
   if(selP && selP.dataset.vals!==prods.join('|')){
     selP.dataset.vals=prods.join('|');
+    const opt=function(p){ return '<option value="'+esc(p)+'">'+esc(p)+'</option>'; };
+    // Los dos grupos se separan solo cuando hay de los dos: con un <optgroup>
+    // suelto la lista se vería distinta sin motivo en las tiendas que no cargan
+    // pauta.
     selP.innerHTML='<option value="">Todos los productos</option>'+
-      prods.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
+      (prodsPauta.length
+        ? '<optgroup label="Con ventas">'+prodsVenta.map(opt).join('')+'</optgroup>'+
+          '<optgroup label="Solo pauta, sin ventas">'+prodsPauta.map(opt).join('')+'</optgroup>'
+        : prodsVenta.map(opt).join(''));
   }
   // Fuera del if: el <select> tiene que reflejar el filtro aunque la lista no haya
   // cambiado, que es lo que pasa al soltar el producto por lo de arriba.
@@ -2866,6 +2888,16 @@ function _vbRender(){
   wrap.style.display='';
   if(pagEl) pagEl.style.display='';
   if(anaEl) anaEl.style.display='none';
+
+  // El Detalle de un producto que SOLO tiene pauta está vacío por definición: no
+  // vendió nada. Se explica en vez de dejar la pantalla en blanco, que parecería un
+  // error, y se dice dónde sí se ve algo de él.
+  if(!filas.length && _vbFiltro.producto && prodsPauta.indexOf(_vbFiltro.producto)>=0){
+    wrap.innerHTML='<div class="adm-empty">“'+esc(_vbFiltro.producto)+'” no tuvo ventas en estos días.<br>'+
+      '<span style="font-size:.7rem;">Solo tiene inversión en pauta cargada — mirala en 📊 Analítica.</span></div>';
+    if(pagEl) pagEl.innerHTML='';
+    return;
+  }
 
   // Borrar es solo del DUEÑO, y nunca en auditoría (que es de solo lectura).
   // Esto decide si se PINTA el botón; quien de verdad autoriza es la regla de
