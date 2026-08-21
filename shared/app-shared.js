@@ -9278,7 +9278,8 @@ function _roSyncFromGestion(id, soloCrear){
       }
       if(existente){
         if(soloCrear) return;   // ya está: la carga del Excel no lo toca
-        // Gestionado desde el tablero: solo la nota y la fecha de estado.
+        // Gestionado desde el tablero: la nota, la fecha de estado y —solo desde
+        // PENDIENTE— el paso a EN PROCESO.
         const upd={fechaEstado:hoy};
         const reg=existente[1]||{};
         const notaUlt=notas.length?notas[notas.length-1].texto:'';
@@ -9288,10 +9289,29 @@ function _roSyncFromGestion(id, soloCrear){
         // seguimiento. Antes todo caía en seguimiento y la columna de primer
         // contacto quedaba vacía para siempre, incluso en registros que nacieron
         // de la carga del Excel sin ninguna nota todavía.
-        if(notaUlt){
+        //
+        // SI LA NOTA YA ESTÁ GUARDADA, NO SE VUELVE A ESCRIBIR. Esta función se
+        // llama desde siete puntos del tablero —guardar la nota, marcar la
+        // gestión, cambiar el resultado…— y todos mandan la misma última nota. Sin
+        // esta comprobación, la segunda llamada veía notaCliente ya lleno y
+        // copiaba la MISMA frase en notaSeguimiento: la nota aparecía en las dos
+        // columnas con una sola gestión, que es lo que se reportó.
+        if(notaUlt
+           && (reg.notaCliente||'').trim()!==notaUlt
+           && (reg.notaSeguimiento||'').trim()!==notaUlt){
           if(!(reg.notaCliente||'').trim()) upd.notaCliente=notaUlt;
           else upd.notaSeguimiento=notaUlt;
         }
+        // PENDIENTE → EN PROCESO. Que alguien gestionó el pedido es un hecho del
+        // tablero, no una suposición, así que este salto sí puede darlo la app.
+        //
+        // SOLO DESDE PENDIENTE: cualquier otro estado lo puso una persona —o el
+        // Excel, en ENTREGADO y DEVUELTO— y no se pisa. Es la regla que se fijó el
+        // 2026-08-04, cuando el tablero marcaba ENTREGADO por su cuenta y quedaban
+        // pedidos "entregados" cuya propia nota decía que el cliente no había
+        // reclamado. Adelantar PENDIENTE → EN PROCESO no inventa ningún desenlace.
+        const estActual=(reg.estado||'').trim();
+        if(!estActual || estActual==='PENDIENTE') upd.estado='EN PROCESO';
         // Si se adoptó por teléfono, se completan los huecos que el asesor no
         // llenó. No pisa nada —solo escribe donde estaba vacío— y evita que la
         // próxima carga vuelva a no reconocer la fila.
@@ -9299,14 +9319,21 @@ function _roSyncFromGestion(id, soloCrear){
         if(!(reg.cliente||'').trim() && p.nombre) upd.cliente=p.nombre;
         return _db.ref(base+'/'+existente[0]).update(upd);
       }
-      // Alta: nace PENDIENTE y con la primera nota como nota de cliente. El
-      // seguimiento solo se llena si YA hay más de una nota: con una sola, la
-      // misma frase aparecía repetida en las dos columnas.
+      // Alta: la primera nota va como nota de cliente. El seguimiento solo se
+      // llena si YA hay más de una nota: con una sola, la misma frase aparecía
+      // repetida en las dos columnas.
+      //
+      // Nace PENDIENTE si lo está creando la carga del Excel, y EN PROCESO si lo
+      // crea una gestión —que es el caso de una guía que se gestiona antes de que
+      // el registro exista—. Con PENDIENTE fijo, esa gestión no se veía por ningún
+      // lado en R.O.
+      const naceGestionado=!soloCrear && notas.length>0;
       return _db.ref(base+'/'+rKey).set({
         guia:p.guia, cliente:p.nombre||'', telefono:tel,
         notaCliente:notas.length?notas[0].texto:'',
         notaSeguimiento:notas.length>1?notas[notas.length-1].texto:'',
-        estado:'PENDIENTE', fechaContacto:hoy, fechaEstado:'',
+        estado:naceGestionado?'EN PROCESO':'PENDIENTE',
+        fechaContacto:hoy, fechaEstado:naceGestionado?hoy:'',
         ts:Date.now(), _fromLogistica:true
       });
     }).then(()=>{
