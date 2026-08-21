@@ -6409,6 +6409,10 @@ function _admCargarReportes(){
         const dias=_admDiasSinMov(g);
         filas.push({
           'NUMERO DE GUIA': g.guia||'',
+          // Las guías sincronizadas ANTES de que existiera este campo no lo traen:
+          // se muestra vacío hasta que esa tienda vuelva a cargar su Excel, que es
+          // preferible a inventar un valor.
+          'ID ORDEN': g.idOrden||'',
           'TRANSPORTADORA': g.transportadora||'',
           'ESTATUS': g.estatus||'',
           'FECHA ULT MOV': g.fechaMov||'',
@@ -6513,7 +6517,7 @@ function _admDescargarReporteConsolidado(){
   }
   toast('⏳ Generando Excel...');
   _cargarLib(_LIB_XLSX).then(()=>{
-    const cols=['NUMERO DE GUIA','TRANSPORTADORA','ESTATUS','FECHA ULT MOV','DIAS SIN MOV','TIENDA'];
+    const cols=['NUMERO DE GUIA','ID ORDEN','TRANSPORTADORA','ESTATUS','FECHA ULT MOV','DIAS SIN MOV','TIENDA'];
     // Del más estancado al menos, que es el orden en que se atienden.
     const ordenar=a=>a.slice().sort((x,y)=>(y._dias??-1)-(x._dias??-1));
     const recomendar=ordenar(datos.filter(f=>f._grupo==='recomendar'));
@@ -6521,7 +6525,7 @@ function _admDescargarReporteConsolidado(){
     const wb = XLSX.utils.book_new();
     const agregarHoja=(filas,nombreHoja)=>{
       const ws = XLSX.utils.json_to_sheet(filas, {header:cols});
-      ws['!cols']=[18,22,26,16,14,22].map(w=>({wch:w}));
+      ws['!cols']=[18,14,22,26,16,14,22].map(w=>({wch:w}));
       XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
     };
     agregarHoja(recomendar, 'Guías para recomendar');

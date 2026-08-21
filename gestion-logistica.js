@@ -4590,7 +4590,7 @@ function exportar(){
   const filas=pedidos.map(p=>{
     const g=gestiones[p.id]||{};
     const est=ESTADOS.find(e=>e.key===p.estadoKey);
-    return{'Guia':p.guia,'Cliente':p.nombre,'Telefono':p.telefono?p.telefono.replace(/^57/,''):'',
+    return{'Guia':p.guia,'ID Orden':p.dropiId||'','Cliente':p.nombre,'Telefono':p.telefono?p.telefono.replace(/^57/,''):'',
       'Ciudad':p.ciudad,'Transportadora':p.transportadora,'Estado':est?.label||p.estadoKey,
       'Dias':p.dias!==null?p.dias:'','Producto':getProductoSimple(p.productos),'Tienda':p.tienda,
       'Llamada':g.llamada||'Sin gestión','Intentos':g.intentos||0,
@@ -4602,7 +4602,7 @@ function exportar(){
   });
   filas.sort((a,b)=>{const pA=ESTADOS.find(e=>e.label===a['Estado'])?.p||99,pB=ESTADOS.find(e=>e.label===b['Estado'])?.p||99;return pA-pB;});
   const ws=XLSX.utils.json_to_sheet(filas);
-  ws['!cols']=[14,22,13,16,14,14,8,22,12,14,8,6,9,12,10,10,22,20].map(w=>({wch:w}));
+  ws['!cols']=[14,14,22,13,16,14,14,8,22,12,14,8,6,9,12,10,10,22,20].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Logistica '+hoy);
   XLSX.writeFile(wb,'Logistica_Dropi_'+hoy+'.xlsx');toast('\uD83D\uDCE5 Excel exportado');
 }
@@ -5408,6 +5408,11 @@ function _syncGuiasReporteAdmin(){
         if(!p.guia)return;
         guias[p.guia]={
           guia:p.guia,
+          // El ID de la orden del Excel (la columna "ID"). Se sincroniza para que
+          // el reporte consolidado del Centro de Operaciones pueda relacionarlo:
+          // ese informe se arma leyendo este nodo, no el Excel, así que si no
+          // viaja acá no hay forma de sacarlo del otro lado.
+          idOrden:p.dropiId||'',
           transportadora:p.transportadora||'',
           estatus:p.estadoRaw||'',
           fechaMov:p.fechaMov?_fmtFecha(p.fechaMov):'',
