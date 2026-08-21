@@ -172,7 +172,12 @@ body.data-loaded #sidebar-actions{display:flex;}
 .btn-nuevo:hover{background:var(--bg-inset);}
 .btn-rapid{background:#131920;color:white;border:none;padding:5px 12px;border-radius:7px;font-size:.75rem;cursor:pointer;font-weight:600;display:none;align-items:center;gap:5px;}
 .btn-rapid:hover{opacity:.9;}
-#content{display:flex;flex-direction:row;overflow-x:scroll;scroll-snap-type:x mandatory;scroll-behavior:smooth;height:calc(100vh - 52px);width:100%;-webkit-overflow-scrolling:touch;background:var(--bg-card);}#content::-webkit-scrollbar{display:none;}
+/* La altura descuenta la topbar y, si está abierta, la barra de búsqueda. Sin ese
+   descuento el buscador empuja #content hacia abajo y su parte inferior —donde vive
+   la barra de desplazamiento horizontal de .cards-cols— queda fuera de la ventana.
+   El alto real lo mide toggleBuscador y lo escribe en --gl-buscador, para no
+   codificar aquí un número que se rompe al cambiar el padding de la barra. */
+#content{display:flex;flex-direction:row;overflow-x:scroll;scroll-snap-type:x mandatory;scroll-behavior:smooth;height:calc(100vh - 52px - var(--gl-buscador, 0px));width:100%;-webkit-overflow-scrolling:touch;background:var(--bg-card);}#content::-webkit-scrollbar{display:none;}
 .status-section{flex:0 0 100%;width:100%;scroll-snap-align:start;overflow-y:auto;padding:18px 20px;box-sizing:border-box;position:relative;display:flex;flex-direction:column;}
 .status-section>*{flex-shrink:0;}
 .section-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid;}

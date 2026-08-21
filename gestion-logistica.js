@@ -4957,12 +4957,23 @@ document.addEventListener('click',function(e){
 });
 
 // ── BUSCADOR ───────────────────────────────────────────────────────────
+// #content tiene una altura calculada sobre la ventana, así que la barra de
+// búsqueda —que va encima— hay que descontarla o el contenido se sale por abajo y
+// se lleva con él la barra de desplazamiento horizontal de las columnas. Se mide en
+// vez de codificar el número: así sigue valiendo si cambia el padding o la fuente.
+function _glAltoBuscador(){
+  const bar=document.getElementById('search-bar');
+  const alto=(bar && bar.style.display==='flex') ? bar.offsetHeight : 0;
+  document.documentElement.style.setProperty('--gl-buscador', alto+'px');
+}
+
 function toggleBuscador(){
   const bar=document.getElementById('search-bar');
   const res=document.getElementById('search-results');
   const ct=document.getElementById('content');
   const visible=bar.style.display==='flex';
   bar.style.display=visible?'none':'flex';
+  _glAltoBuscador();
   // Cerrar el buscador equivale a limpiarlo: si no, la vista quedaría filtrada por
   // una búsqueda que ya no se ve en ninguna parte.
   if(visible){ limpiarBusqueda(); }
@@ -4975,7 +4986,10 @@ function limpiarBusqueda(){
   document.getElementById('search-input').value='';
   document.getElementById('search-results').style.display='none';
   document.getElementById('search-results').innerHTML='';
-  document.getElementById('content').style.display='block';
+  // Cadena vacía, NO 'block': #content es flex en la hoja de estilos y un inline
+  // con 'block' la pisaría —y se queda pegado hasta recargar la página—. Con block,
+  // .cards-cols pierde su altura y con ella la barra de desplazamiento horizontal.
+  document.getElementById('content').style.display='';
   document.getElementById('search-count').textContent='';
   if(_glBusqTxt||_glBusqDig){ _glBusqTxt=''; _glBusqDig=''; renderAll(); }
 }
@@ -5008,9 +5022,10 @@ function buscar(q){
   const ct=document.getElementById('content');
   const res=document.getElementById('search-results');
   const cnt=document.getElementById('search-count');
-  // El contenido NUNCA se oculta: es donde están las cards de verdad. El panel de
-  // resultados solo queda para avisar cuando no hay ninguna.
-  ct.style.display='block';
+  // El contenido NUNCA se oculta: es donde están las cards de verdad. Se limpia el
+  // display inline en vez de forzar 'block', que pisaría el flex de la hoja de
+  // estilos y rompería la barra de desplazamiento de las columnas.
+  ct.style.display='';
 
   if(crudo.length<3){
     _glBusqTxt=''; _glBusqDig='';
