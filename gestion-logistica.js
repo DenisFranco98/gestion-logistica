@@ -1151,10 +1151,25 @@ function estaCompleta(p){
   // La devolución sí es definitiva: el pedido se devolvió, no es algo que se
   // vuelva a hacer al día siguiente.
   if(g.devolucion)return true;
+
+  // UN RECHAZADO GESTIONADO TAMBIÉN ES DEFINITIVO. Va ANTES del corte por día, y
+  // ese orden es el arreglo: estando debajo, un rechazado gestionado ayer volvía a
+  // contarse como pendiente hoy, mientras la etiqueta de la card —que lee el flag
+  // directo, sin pasar por acá— seguía diciendo "✅ Gestionado". De ahí el reporte:
+  // pedidos con etiqueta de gestionado que no aparecían en la columna Gestionados,
+  // y que había que volver a gestionar al recargar el Excel.
+  //
+  // El flag ya sobrevivía a la carga de un Excel nuevo (se conserva a propósito, ver
+  // el reset de gestiones), así que el dato estaba: lo que fallaba era leerlo.
+  //
+  // `rechazado_sin_gestion` NO entra acá: ese es "quedó sin gestionar", y tiene que
+  // volver a la lista al día siguiente para que alguien lo gestione.
+  if(p.estadoKey==='rechazado'&&g.rechazado_gestionado)return true;
+
   if(!_gestEsDeHoy(g)) return false;
   if(p.estadoKey==='reparto'&&(g.guia_reportada||g.guia_generada_hoy))return true;
   if(p.estadoKey==='transito'){return!!(g.transito_sin_gestion)||!!(g.transito_gestionado);}
-  if(p.estadoKey==='rechazado'){return!!(g.rechazado_gestionado)||!!(g.rechazado_sin_gestion);}
+  if(p.estadoKey==='rechazado'){return!!(g.rechazado_sin_gestion);}
   if(g.gestion_final)return true; // compatibilidad con versiones anteriores
   const ll=g.llamada;
   if(!ll)return false;
