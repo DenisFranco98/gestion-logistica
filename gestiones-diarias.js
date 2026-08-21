@@ -3235,13 +3235,31 @@ function _vbTablaAnalitica(titulo, encabezado, grupos, ordenarPor, totalGeneral,
     // Los productos que gastaron pauta y NO vendieron en el rango entran acá, con
     // 0 ventas. Sin esto no aparecerían en ningún lado y su gasto se perdería del
     // CPA general, que es justo lo que hay que evitar: esa plata se gastó.
-    const conPauta=_vbAdsProductosEnRango();
-    const yaEstan={};
-    grupos.forEach(function(g){ yaEstan[_vbAdsKey(g.clave)]=true; });
-    Object.keys(conPauta).forEach(function(k){
-      if(yaEstan[k]) return;
-      grupos.push({ clave:conPauta[k].nombre, ventas:0, unidades:0, facturacion:0, sinVentas:true });
-    });
+    //
+    // PERO SOLO CUANDO SE ESTÁ MIRANDO EL PANORAMA. Estas filas no salen de las
+    // ventas, así que ningún filtro las tocaba y se colaban en cualquier vista
+    // filtrada: al elegir un producto aparecían el que se buscaba Y los nueve con
+    // pauta sin ventas, y el total de inversión sumaba la de todos.
+    //
+    //  · Con un PRODUCTO elegido, solo puede entrar ESE.
+    //  · Con un filtro de ESTADO o una BÚSQUEDA no entra ninguno: un producto que
+    //    no vendió no tiene pedido, ni estado, ni cliente que puedan coincidir.
+    //
+    // El filtro de DÍAS sí se les aplica, y desde siempre: la pauta se suma por
+    // día en _vbAdsDiasEnRango.
+    const filtraProducto=!!_vbFiltro.producto;
+    const filtraOtro=!!(_vbFiltro.estado||(_vbFiltro.q||'').trim());
+    if(!filtraOtro){
+      const conPauta=_vbAdsProductosEnRango();
+      const yaEstan={};
+      grupos.forEach(function(g){ yaEstan[_vbAdsKey(g.clave)]=true; });
+      const kElegido=filtraProducto?_vbAdsKey(_vbFiltro.producto):'';
+      Object.keys(conPauta).forEach(function(k){
+        if(yaEstan[k]) return;
+        if(filtraProducto && k!==kElegido) return;
+        grupos.push({ clave:conPauta[k].nombre, ventas:0, unidades:0, facturacion:0, sinVentas:true });
+      });
+    }
   }
 
   // El orden lo decide para qué sirve cada tabla: productos por facturación
