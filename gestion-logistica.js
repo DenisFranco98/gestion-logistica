@@ -2621,7 +2621,20 @@ function crearCardNovedad(p){
   const fechaNov=formatFechaNov(p.fechaNovedad);
   const msg=getMsgNovedad(p);
   const waUrl='https://wa.me/'+p.telefono+'?text='+encodeURIComponent(msg);
-  const esGest=!!(g.gestion_final);
+  // La MISMA verdad que usa renderCards para decidir la columna. Antes acá se
+  // miraba `g.gestion_final` a secas, sin el corte por día, y las dos cosas se
+  // contradecían: una novedad gestionada AYER caía en la columna de días —bien,
+  // hay que volver a gestionarla— pero la card se dibujaba como gestionada, con
+  // "✏️ Editar gestión" en vez de los controles para gestionarla. O sea, estaba en
+  // pendientes y no dejaba trabajarla.
+  //
+  // Es el mismo desajuste que tenían los rechazados: dos formas de leer "está
+  // gestionado", una con corte por día y otra sin él. Si aparece una tercera,
+  // que salga de estaCompleta() y no de un flag suelto.
+  //
+  // crearFilaNovedad (la vista de lista) ya usaba estaCompleta, y por eso ahí el
+  // problema no se veía.
+  const esGest=estaCompleta(p);
   const editando=_editandoGestion.has(p.id);
 
   let html='';
