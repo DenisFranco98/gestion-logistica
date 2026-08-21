@@ -1848,15 +1848,31 @@ function renderCards(){
     }
   }
 
-  (filtroActivo?ESTADOS.filter(e=>e.key===filtroActivo):ESTADOS.filter(e=>!estadosDesactivados.has(e.key))).forEach(est=>{
-    const gr=pedidos.filter(p=>p.estadoKey===est.key&&(filtroTiendas.length===0||filtroTiendas.includes(p.tienda)));if(!gr.length)return;
-    const subFiltro=filtrosSeccion[est.key]||[];
+  // BUSCANDO, la vista se FILTRA: las cards son las de siempre, en su sección, con
+  // sus ids únicos, y por eso se pueden gestionar. Dibujar copias en un panel
+  // aparte era el error de fondo — quedaban dos elementos con el mismo id="card-N"
+  // y los ocho getElementById('card-'+id) del archivo se quedaban con el primero,
+  // el del contenedor oculto, así que los botones gestionaban una card invisible.
+  //
+  // Mientras hay búsqueda se ignoran los demás filtros —sección activa, tienda,
+  // subfiltro, secciones apagadas— y también `sinAccion`: quien busca una guía
+  // concreta quiere ESA, no que se la escondan por antigüedad o por un filtro que
+  // dejó puesto hace media hora.
+  const buscando=!!(_glBusqTxt||_glBusqDig);
+  (buscando?ESTADOS
+    :filtroActivo?ESTADOS.filter(e=>e.key===filtroActivo)
+    :ESTADOS.filter(e=>!estadosDesactivados.has(e.key))).forEach(est=>{
+    const gr=pedidos.filter(p=>p.estadoKey===est.key
+      &&(buscando?_glBuscarCoincide(p,_glBusqTxt,_glBusqDig)
+        :(filtroTiendas.length===0||filtroTiendas.includes(p.tienda))));
+    if(!gr.length)return;
+    const subFiltro=buscando?[]:(filtrosSeccion[est.key]||[]);
     const grFiltrado=subFiltro.length>0?gr.filter(p=>subFiltro.includes(p.estadoRaw)):gr;
     // Los "sin acción" quedan fuera de la sección entera, no solo de las cards:
     // antes se filtraban acá y seguían contando en el progreso y en el badge,
     // así que un archivo con 10 guías de las que 5 eran de hoy mostraba 5 para
     // gestionar pero reportaba 10 pendientes.
-    const gestionables=grFiltrado.filter(p=>!sinAccion(p));
+    const gestionables=buscando?grFiltrado:grFiltrado.filter(p=>!sinAccion(p));
     const pendientes=gestionables.filter(p=>!estaCompleta(p));
     pendientes.sort((a,b)=>urgenciaScore(b)-urgenciaScore(a));
     const gestionados=gestionables.filter(p=>estaCompleta(p));
@@ -4947,24 +4963,27 @@ function toggleBuscador(){
   const ct=document.getElementById('content');
   const visible=bar.style.display==='flex';
   bar.style.display=visible?'none':'flex';
-  if(visible){res.style.display='none';ct.style.display='block';document.getElementById('search-input').value='';document.getElementById('search-count').textContent='';}
+  // Cerrar el buscador equivale a limpiarlo: si no, la vista quedaría filtrada por
+  // una búsqueda que ya no se ve en ninguna parte.
+  if(visible){ limpiarBusqueda(); }
   else{setTimeout(()=>document.getElementById('search-input').focus(),100);}
 }
 
+// Limpiar tiene que SOLTAR el filtro y repintar, o la vista se quedaría mostrando
+// solo lo que había dado la búsqueda con el buscador ya cerrado.
 function limpiarBusqueda(){
   document.getElementById('search-input').value='';
   document.getElementById('search-results').style.display='none';
+  document.getElementById('search-results').innerHTML='';
   document.getElementById('content').style.display='block';
   document.getElementById('search-count').textContent='';
+  if(_glBusqTxt||_glBusqDig){ _glBusqTxt=''; _glBusqDig=''; renderAll(); }
 }
 
-// El buscador NO dibuja cards: dibuja una LISTA y lleva a la card de verdad.
-//
-// Antes clonaba las cards en un panel aparte, y de ahí salían los tres problemas
-// que reportaron: la card aparecía fuera de su sección —a veces ni se pintaba, y
-// quedaba el "1 resultado" sin nada debajo— y los botones de gestión no servían,
-// porque la gestión se apoya en la sección donde vive la card. Duplicar la card era
-// el error; ahora se muestra dónde está y se va hasta ella.
+// El buscador FILTRA la vista; no dibuja cards en ningún panel aparte. Ver el
+// comentario de renderCards, que es donde se aplica.
+let _glBusqTxt='', _glBusqDig='';
+
 function _glBuscarCoincide(p, texto, digitos){
   // La GUÍA es lo que más se busca —es lo que se copia de Dropi o del chat— y era
   // justo lo único que no se miraba: si el término tenía 4 dígitos o más, solo se
@@ -4986,104 +5005,38 @@ function _glBuscarCoincide(p, texto, digitos){
 
 function buscar(q){
   const crudo=String(q||'').trim();
-  const texto=norm(crudo);
-  const digitos=crudo.replace(/\D/g,'');
   const ct=document.getElementById('content');
   const res=document.getElementById('search-results');
   const cnt=document.getElementById('search-count');
-  if(crudo.length<3){res.style.display='none';ct.style.display='block';cnt.textContent='';return;}
+  // El contenido NUNCA se oculta: es donde están las cards de verdad. El panel de
+  // resultados solo queda para avisar cuando no hay ninguna.
+  ct.style.display='block';
 
-  const matches=pedidos.filter(p=>_glBuscarCoincide(p, texto, digitos.length>=3?digitos:''));
-
-  ct.style.display='none';
-  res.style.display='block';
-  cnt.textContent = matches.length===0 ? 'Sin resultados'
-    : matches.length+' resultado'+(matches.length>1?'s':'');
-
-  if(!matches.length){
-    res.innerHTML='<div class="empty-s" style="padding:40px">No se encontró ningún pedido con esa guía, teléfono o nombre.</div>';
+  if(crudo.length<3){
+    _glBusqTxt=''; _glBusqDig='';
+    res.style.display='none'; res.innerHTML='';
+    cnt.textContent='';
+    renderAll();
     return;
   }
 
-  res.innerHTML='';
-  const lista=document.createElement('div');
-  lista.className='gl-busq-lista';
-  matches.forEach(p=>{
-    const est=ESTADOS.find(e=>e.key===p.estadoKey);
-    const gest=estaCompleta(p);
-    const fuera=sinAccion(p);
-    // Qué le espera al llegar: gestionada, pendiente, o todavía sin turno. Decirlo
-    // acá evita el viaje de ida y vuelta para descubrirlo.
-    const marca = fuera
-      ? '<span class="gl-busq-tag" style="background:var(--bg-hover);color:var(--text-3);">⏳ Aún no requiere gestión</span>'
-      : gest
-        ? '<span class="gl-busq-tag" style="background:var(--success-soft);color:var(--success);">✅ Ya gestionada</span>'
-        : '<span class="gl-busq-tag" style="background:var(--warning-soft);color:var(--warning);">⏱ Falta gestionar</span>';
+  _glBusqTxt=norm(crudo);
+  const dig=crudo.replace(/\D/g,'');
+  _glBusqDig=dig.length>=3?dig:'';
 
-    const it=document.createElement('button');
-    it.className='gl-busq-item';
-    it.onclick=()=>_glIrAPedido(p.id);
-    it.innerHTML=
-      '<div class="gl-busq-izq">'+
-        '<div class="gl-busq-nom">'+esc(p.nombre||'(sin nombre)')+'</div>'+
-        '<div class="gl-busq-sub">'+
-          (p.guia?'<span class="gl-busq-guia">'+esc(p.guia)+'</span>':'<span class="gl-busq-guia" style="opacity:.5">sin guía</span>')+
-          (p.telefono?'<span>· '+esc(p.telefono)+'</span>':'')+
-          (p.tienda?'<span>· '+esc(p.tienda)+'</span>':'')+
-        '</div>'+
-      '</div>'+
-      '<div class="gl-busq-der">'+
-        '<span class="gl-busq-est" style="background:'+(est?est.color:'#64748b')+'22;color:'+(est?est.color:'#64748b')+';">'+
-          (est?est.icon+' '+est.label:esc(p.estadoRaw||'sin estado'))+'</span>'+
-        marca+
-        '<span class="gl-busq-ir">Ir →</span>'+
-      '</div>';
-    lista.appendChild(it);
-  });
-  res.appendChild(lista);
-}
+  const matches=pedidos.filter(p=>_glBuscarCoincide(p,_glBusqTxt,_glBusqDig));
+  cnt.textContent = matches.length===0 ? 'Sin resultados'
+    : matches.length+' resultado'+(matches.length>1?'s':'')+' — mostrando solo '+(matches.length>1?'esos':'ese');
 
-// Lleva a la card REAL, en su sección, con todos sus botones vivos.
-function _glIrAPedido(id){
-  const p=pedidos.find(x=>String(x.id)===String(id));
-  if(!p){ toast('Ese pedido ya no está en el archivo cargado'); return; }
-
-  // Se quita todo lo que pueda estar tapándola: un filtro de tienda, un subfiltro
-  // de estado o una sección apagada dejarían la card fuera del DOM y el viaje
-  // terminaría en una pantalla vacía.
-  filtroTiendas=[];
-  filtrosSeccion={};
-  estadosDesactivados.delete(p.estadoKey);
-  filtroActivo=p.estadoKey;
-  _glRutaEscribir(filtroActivo);
-
-  limpiarBusqueda();
-  const bar=document.getElementById('search-bar');
-  if(bar) bar.style.display='none';
+  if(!matches.length){
+    res.style.display='block';
+    res.innerHTML='<div class="empty-s" style="padding:34px">No se encontró ningún pedido con esa guía, teléfono o nombre.</div>';
+  }else{
+    res.style.display='none'; res.innerHTML='';
+  }
   renderAll();
-
-  // La card todavía no existe cuando se pide el salto: renderAll() pinta dentro de
-  // un requestAnimationFrame. Se espera POR FRAMES en vez de con un setTimeout de
-  // milisegundos inventados — con un número fijo, un render que tarde un poco más
-  // haría saltar el aviso de "no se pudo mostrar" sobre una card que sí llegó.
-  let intentos=0;
-  (function irCuandoExista(){
-    const card=document.getElementById('card-'+p.id);
-    if(card){
-      card.scrollIntoView({behavior:'smooth', block:'center'});
-      card.classList.add('gl-card-resaltada');
-      setTimeout(function(){ card.classList.remove('gl-card-resaltada'); }, 2800);
-      return;
-    }
-    if(++intentos<20){ requestAnimationFrame(irCuandoExista); return; }
-    // Lo que queda son los que no se listan por antigüedad (tránsito con menos de
-    // 4 días, reparto con menos de 2). Se explica, en vez de dejar al asesor
-    // buscándola por la pantalla.
-    toast(sinAccion(p)
-      ? 'Ese pedido todavía no entra en la lista de gestión por su antigüedad'
-      : 'No se pudo mostrar ese pedido', 5000);
-  })();
 }
+
 
 // Aviso nativo de "¿seguro que quieres salir?" si hay pedidos cargados sin cerrar sesión.
 // OJO: antes esto también disparaba generarPDF() (abre un modal pesado con toda la
