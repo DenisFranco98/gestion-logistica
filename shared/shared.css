@@ -403,6 +403,27 @@ body.card-gestionando #card-float-wrap .card{opacity:1;filter:none;}
 .search-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-3);cursor:pointer;font-size:1rem;line-height:1;}
 .search-results-count{font-size:.75rem;color:var(--text-2);}
 #search-results{padding:18px 20px;display:none;}
+/* Resultados del buscador del Gestor Logístico: una LISTA, no cards. Las cards
+   clonadas quedaban fuera de su sección y sus botones de gestión no servían; acá
+   cada fila solo dice dónde está el pedido y lleva hasta él. */
+.gl-busq-lista{display:flex;flex-direction:column;gap:7px;max-width:1100px;margin:0 auto;}
+.gl-busq-item{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;text-align:left;
+  padding:11px 14px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg-card);cursor:pointer;font-family:inherit;}
+.gl-busq-item:hover{border-color:var(--accent);background:var(--bg-hover);}
+.gl-busq-izq{min-width:0;flex:1;}
+.gl-busq-nom{font-size:.84rem;font-weight:700;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gl-busq-sub{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.68rem;color:var(--text-3);margin-top:2px;}
+.gl-busq-guia{font-family:var(--f-mono);color:var(--text-2);font-weight:600;}
+.gl-busq-der{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
+.gl-busq-est,.gl-busq-tag{font-size:.64rem;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.gl-busq-ir{font-size:.7rem;font-weight:800;color:var(--accent);white-space:nowrap;}
+/* Al llegar, la card parpadea para que se encuentre sin recorrer la pantalla. */
+@keyframes gl-resalte{0%,100%{box-shadow:0 0 0 0 transparent;}30%,70%{box-shadow:0 0 0 3px var(--accent);}}
+.gl-card-resaltada{animation:gl-resalte 1.4s ease-in-out 2;border-color:var(--accent)!important;}
+@media (max-width:700px){
+  .gl-busq-item{flex-direction:column;align-items:flex-start;gap:8px;}
+  .gl-busq-der{justify-content:flex-start;}
+}
 .search-result-card{background:var(--bg-card);border-radius:11px;padding:14px;border:1px solid var(--border);border-left:4px solid #334155;margin-bottom:10px;}
 .search-hist-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .search-hist-item{font-size:.72rem;padding:4px 10px;border-radius:8px;font-weight:600;}

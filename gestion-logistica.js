@@ -4945,37 +4945,131 @@ function limpiarBusqueda(){
   document.getElementById('search-count').textContent='';
 }
 
+// El buscador NO dibuja cards: dibuja una LISTA y lleva a la card de verdad.
+//
+// Antes clonaba las cards en un panel aparte, y de ahí salían los tres problemas
+// que reportaron: la card aparecía fuera de su sección —a veces ni se pintaba, y
+// quedaba el "1 resultado" sin nada debajo— y los botones de gestión no servían,
+// porque la gestión se apoya en la sección donde vive la card. Duplicar la card era
+// el error; ahora se muestra dónde está y se va hasta ella.
+function _glBuscarCoincide(p, texto, digitos){
+  // La GUÍA es lo que más se busca —es lo que se copia de Dropi o del chat— y era
+  // justo lo único que no se miraba: si el término tenía 4 dígitos o más, solo se
+  // comparaba contra el teléfono.
+  if(digitos){
+    const g=String(p.guia||'').replace(/\D/g,'');
+    if(g && g.includes(digitos)) return true;
+    const t=String(p.telefono||'').replace(/\D/g,'').replace(/^57/,'');
+    if(t && (t.includes(digitos) || String(p.telefono)===digitos || '57'+digitos===String(p.telefono))) return true;
+    if(String(p.dropiId||'').includes(digitos)) return true;
+  }
+  // La guía puede llevar letras, así que también se compara como texto.
+  if(texto){
+    if(norm(p.nombre||'').includes(texto)) return true;
+    if(norm(p.guia||'').includes(texto)) return true;
+  }
+  return false;
+}
+
 function buscar(q){
-  const query=q.trim().replace(/\D/g,'').length>=4?q.trim().replace(/\D/g,''):q.trim().toLowerCase();
+  const crudo=String(q||'').trim();
+  const texto=norm(crudo);
+  const digitos=crudo.replace(/\D/g,'');
   const ct=document.getElementById('content');
   const res=document.getElementById('search-results');
-  if(!query||query.length<3){res.style.display='none';ct.style.display='block';document.getElementById('search-count').textContent='';return;}
+  const cnt=document.getElementById('search-count');
+  if(crudo.length<3){res.style.display='none';ct.style.display='block';cnt.textContent='';return;}
 
-  const isNum=q.trim().replace(/\D/g,'').length>=4;
-  const matches=pedidos.filter(p=>{
-    if(isNum){const t=(p.telefono||'').replace(/^57/,'');return t.includes(query)||p.telefono===query||('57'+query)===p.telefono;}
-    return norm(p.nombre).includes(norm(q.trim()));
-  });
+  const matches=pedidos.filter(p=>_glBuscarCoincide(p, texto, digitos.length>=3?digitos:''));
 
   ct.style.display='none';
   res.style.display='block';
-  document.getElementById('search-count').textContent=matches.length===0?'Sin resultados':matches.length+' resultado'+(matches.length>1?'s':'');
+  cnt.textContent = matches.length===0 ? 'Sin resultados'
+    : matches.length+' resultado'+(matches.length>1?'s':'');
 
-  if(!matches.length){res.innerHTML='<div class="empty-s" style="padding:40px">No se encontraron pedidos con ese dato.</div>';return;}
+  if(!matches.length){
+    res.innerHTML='<div class="empty-s" style="padding:40px">No se encontró ningún pedido con esa guía, teléfono o nombre.</div>';
+    return;
+  }
 
   res.innerHTML='';
-  const grid=document.createElement('div');
-  grid.className='cards-grid';
-  grid.style.cssText='padding:16px;';
+  const lista=document.createElement('div');
+  lista.className='gl-busq-lista';
   matches.forEach(p=>{
     const est=ESTADOS.find(e=>e.key===p.estadoKey);
-    let card;
-    if(p.estadoKey==='novedad') card=crearCardNovedad(p);
-    else if(p.estadoKey==='pendiente_sin_guia') card=crearCardPendiente(p,est?est.color:'#dc2626');
-    else card=crearCard(p,est,false);
-    grid.appendChild(card);
+    const gest=estaCompleta(p);
+    const fuera=sinAccion(p);
+    // Qué le espera al llegar: gestionada, pendiente, o todavía sin turno. Decirlo
+    // acá evita el viaje de ida y vuelta para descubrirlo.
+    const marca = fuera
+      ? '<span class="gl-busq-tag" style="background:var(--bg-hover);color:var(--text-3);">⏳ Aún no requiere gestión</span>'
+      : gest
+        ? '<span class="gl-busq-tag" style="background:var(--success-soft);color:var(--success);">✅ Ya gestionada</span>'
+        : '<span class="gl-busq-tag" style="background:var(--warning-soft);color:var(--warning);">⏱ Falta gestionar</span>';
+
+    const it=document.createElement('button');
+    it.className='gl-busq-item';
+    it.onclick=()=>_glIrAPedido(p.id);
+    it.innerHTML=
+      '<div class="gl-busq-izq">'+
+        '<div class="gl-busq-nom">'+esc(p.nombre||'(sin nombre)')+'</div>'+
+        '<div class="gl-busq-sub">'+
+          (p.guia?'<span class="gl-busq-guia">'+esc(p.guia)+'</span>':'<span class="gl-busq-guia" style="opacity:.5">sin guía</span>')+
+          (p.telefono?'<span>· '+esc(p.telefono)+'</span>':'')+
+          (p.tienda?'<span>· '+esc(p.tienda)+'</span>':'')+
+        '</div>'+
+      '</div>'+
+      '<div class="gl-busq-der">'+
+        '<span class="gl-busq-est" style="background:'+(est?est.color:'#64748b')+'22;color:'+(est?est.color:'#64748b')+';">'+
+          (est?est.icon+' '+est.label:esc(p.estadoRaw||'sin estado'))+'</span>'+
+        marca+
+        '<span class="gl-busq-ir">Ir →</span>'+
+      '</div>';
+    lista.appendChild(it);
   });
-  res.appendChild(grid);
+  res.appendChild(lista);
+}
+
+// Lleva a la card REAL, en su sección, con todos sus botones vivos.
+function _glIrAPedido(id){
+  const p=pedidos.find(x=>String(x.id)===String(id));
+  if(!p){ toast('Ese pedido ya no está en el archivo cargado'); return; }
+
+  // Se quita todo lo que pueda estar tapándola: un filtro de tienda, un subfiltro
+  // de estado o una sección apagada dejarían la card fuera del DOM y el viaje
+  // terminaría en una pantalla vacía.
+  filtroTiendas=[];
+  filtrosSeccion={};
+  estadosDesactivados.delete(p.estadoKey);
+  filtroActivo=p.estadoKey;
+  _glRutaEscribir(filtroActivo);
+
+  limpiarBusqueda();
+  const bar=document.getElementById('search-bar');
+  if(bar) bar.style.display='none';
+  renderAll();
+
+  // La card todavía no existe cuando se pide el salto: renderAll() pinta dentro de
+  // un requestAnimationFrame. Se espera POR FRAMES en vez de con un setTimeout de
+  // milisegundos inventados — con un número fijo, un render que tarde un poco más
+  // haría saltar el aviso de "no se pudo mostrar" sobre una card que sí llegó.
+  let intentos=0;
+  (function irCuandoExista(){
+    const card=document.getElementById('card-'+p.id);
+    if(card){
+      card.scrollIntoView({behavior:'smooth', block:'center'});
+      card.classList.add('gl-card-resaltada');
+      setTimeout(function(){ card.classList.remove('gl-card-resaltada'); }, 2800);
+      return;
+    }
+    if(++intentos<20){ requestAnimationFrame(irCuandoExista); return; }
+    // Lo que queda son los que no se listan por antigüedad (tránsito con menos de
+    // 4 días, reparto con menos de 2). Se explica, en vez de dejar al asesor
+    // buscándola por la pantalla.
+    toast(sinAccion(p)
+      ? 'Ese pedido todavía no entra en la lista de gestión por su antigüedad'
+      : 'No se pudo mostrar ese pedido', 5000);
+  })();
 }
 
 // Aviso nativo de "¿seguro que quieres salir?" si hay pedidos cargados sin cerrar sesión.
