@@ -3710,15 +3710,25 @@ function _carRender(){
 // pasando. Los cambios del bot llegan por POST /ventasEstado; los de acá se
 // escriben directo, y las reglas solo dejan tocar estado_orden, historial_estado y
 // actualizado — nunca el importe ni el teléfono, que son la base de los totales.
-const _VB_ESTADOS = ['PENDIENTE','CONFIRMADO','CANCELADO','LLAMADO','GESTIONADO MAL HISTORIAL','GESTIONADO FLETE ALTO'];
+// Los nuevos van en MAYÚSCULAS como el resto: el estado se guarda tal cual se
+// escribe acá, y mezclando capitalizaciones el filtro de arriba mostraría
+// "Oficina" y "OFICINA" como dos opciones distintas.
+const _VB_ESTADOS = ['PENDIENTE','CONFIRMADO','CANCELADO','LLAMADO','OFICINA','PENDIENTE ANTICIPO','GESTIONADO MAL HISTORIAL','GESTIONADO FLETE ALTO'];
 
 // Color por estado, para que la columna se lea de un vistazo sin leerla.
 function _vbEstadoColor(e){
   const s=String(e||'').toUpperCase();
   if(s==='CONFIRMADO') return 'var(--success)';
   if(s==='CANCELADO') return 'var(--danger)';
+  // PENDIENTE ANTICIPO va ANTES que PENDIENTE aunque la comparación sea exacta:
+  // así queda claro al leer que son dos estados distintos y no una variante.
+  if(s==='PENDIENTE ANTICIPO') return '#0891b2';
   if(s==='PENDIENTE') return 'var(--warning)';
   if(s==='LLAMADO') return 'var(--info-strong)';
+  // El mismo violeta que "En oficina" en Gestión Logística: es el mismo hecho
+  // —el paquete está en la oficina de la transportadora— y viéndolo en los dos
+  // módulos conviene que sea el mismo color.
+  if(s==='OFICINA') return '#7c3aed';
   if(s.indexOf('GESTIONADO')===0) return 'var(--accent)';
   return 'var(--text-3)';
 }
