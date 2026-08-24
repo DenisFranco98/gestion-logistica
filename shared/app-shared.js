@@ -6912,12 +6912,19 @@ async function _botwCargar(){
   cont.innerHTML = '<div class="adm-empty">Cargando...</div>';
   const adminId = localStorage.getItem('lgs_admin_id');
   try{
-    const [snapAE, snapEmp] = await Promise.all([
+    const [snapAE, snapEmp, snapSA] = await Promise.all([
       _db.ref('admin_empresas/'+adminId).once('value'),
-      _db.ref('empresas').once('value')
+      _db.ref('empresas').once('value'),
+      // Para la ficha del MCP de Dropi, que por ahora es solo del super admin. Se
+      // consulta acá en vez de guardar una bandera al entrar: así no depende de que
+      // alguien la mantenga en los dos caminos de login que hay.
+      _db.ref('config/superAdminUid').once('value').catch(()=>({val:()=>null}))
     ]);
     const misIds = Object.keys(snapAE.val()||{});
     const empresas = snapEmp.val()||{};
+    const uid = (typeof firebase!=='undefined' && firebase.auth().currentUser)
+      ? firebase.auth().currentUser.uid : null;
+    window._esSuperAdminActual = !!(uid && snapSA.val() === uid);
     // UNA CONSULTA POR EMPRESA, en vez del nodo entero. Antes esto era
     // _db.ref('bot_workspaces').once('value'): se descargaban los workspaces de
     // TODAS las tiendas y recién después _botwRender filtraba por misIds. O sea
@@ -6948,16 +6955,114 @@ async function _botwCargar(){
   }
 }
 
+// ── MCP DE DROPI (en prueba) ─────────────────────────────────────────────
+// Esto NO es una integración de la plataforma: es la ficha para conectar Claude
+// —o cualquier cliente MCP— al servidor de Dropi. La plataforma no participa en la
+// conexión y no guarda ningún token.
+//
+// POR QUÉ NO HAY UN BOTÓN QUE "CONECTE": el navegador no es un cliente MCP, y el
+// servidor de Dropi pide OAuth 2.0. Aunque hiciéramos el flujo desde acá,
+// tendríamos un token guardado sin nada que lo use, y las llamadas se caerían por
+// CORS igual. Quien se conecta es el cliente MCP, y lo hace solo: el servidor
+// soporta registro dinámico, así que basta con darle la URL.
+//
+// Va SOLO para el super admin mientras sea una prueba — lo pidió el usuario así.
+// Para quitarlo, se borra esta función y su llamada en _botwRender.
+const _MCP_DROPI = {
+  url:  'https://mcp.dropi.co/mcp',
+  auth: 'https://oauth.dropi.co/oauth/authorize',
+  token:'https://integrations.dropi.co/oauth/token'
+};
+
+function _mcpDropiCard(){
+  return `<div class="botw-card mcp-card">
+    <div class="botw-card-top">
+      <div>
+        <div class="botw-code">MCP · DROPI</div>
+        <div class="botw-tienda">Conectar Claude al servidor de Dropi</div>
+      </div>
+      <span class="mcp-tag">EN PRUEBA</span>
+    </div>
+    <div class="botw-acciones">
+      <button onclick="_mcpDropiDocs(this)">🔌 Cómo conectarlo</button>
+      <button onclick="_mcpDropiProbar(this)">📡 Probar si responde</button>
+    </div>
+    <div class="botw-docs" id="mcp-dropi-docs" style="display:none;"></div>
+  </div>`;
+}
+
+window._mcpDropiDocs = function(btn){
+  const c = document.getElementById('mcp-dropi-docs');
+  if(!c) return;
+  if(c.style.display !== 'none'){ c.style.display='none'; btn.textContent='🔌 Cómo conectarlo'; return; }
+  btn.textContent='✕ Ocultar';
+  const bloque = (tit, val, id) =>
+    `<div class="botw-doc-b"><div class="botw-doc-h"><span>${tit}</span>
+      <button onclick="_botwCopiarTxt('${id}')">Copiar</button></div>
+      <pre id="${id}">${esc(val)}</pre></div>`;
+
+  c.innerHTML = `
+    <div class="botw-doc-nota">
+      Esto conecta <b>Claude con Dropi</b>, no con esta plataforma. Sirve para preguntarle a Claude
+      por tus pedidos de Dropi directamente; REDKING no interviene ni guarda nada de esa conexión.
+    </div>
+
+    <div class="botw-doc-paso"><b>1</b> Agregar el servidor en Claude</div>
+    ${bloque('URL del servidor MCP', _MCP_DROPI.url, 'mcp-dropi-url')}
+    <div class="botw-doc-nota">
+      En Claude: <b>Configuración → Conectores → Agregar conector personalizado</b>, y pegar esa URL.
+      En Claude Code: <code>claude mcp add --transport http dropi ${_MCP_DROPI.url}</code>
+    </div>
+
+    <div class="botw-doc-paso"><b>2</b> Autorizar con tu cuenta de Dropi</div>
+    <div class="botw-doc-nota">
+      Al conectarlo se abre el login de Dropi para que autorices el acceso. <b>No hay API key que
+      pegar</b>: usa OAuth, y el cliente se registra solo contra el servidor.<br>
+      Los permisos que pidas ahí son los que Claude va a tener sobre tu cuenta de Dropi.
+    </div>
+
+    <div class="botw-doc-nota warn">
+      <b>Está en prueba.</b> El servidor es de Dropi, no nuestro: lo que exponga, cuánto dure y qué
+      permita depende de ellos. Si algo no cuadra, se desconecta desde Claude y listo — no hay nada
+      que desinstalar de este lado.<br>
+      <b>Lo que autorices queda fuera de esta plataforma.</b> Las reglas de acceso por tienda de
+      REDKING no aplican a esa conexión: aplica lo que permita tu usuario de Dropi.
+    </div>`;
+  c.style.display='block';
+};
+
+// Comprueba que el servidor esté vivo. Se espera un 401 con la cabecera de OAuth:
+// eso significa "estoy acá y pido autorización", que es exactamente lo correcto.
+window._mcpDropiProbar = async function(btn){
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Probando...';
+  try{
+    // no-cors devuelve una respuesta opaca —no se puede leer el estado— pero
+    // distingue "el servidor contestó" de "no existe", que es lo que se quiere
+    // saber. Leer el 401 de verdad no se puede desde el navegador: es otro
+    // dominio y no manda cabeceras de CORS para esta ruta.
+    await fetch(_MCP_DROPI.url, { method:'GET', mode:'no-cors', cache:'no-store' });
+    toast('✓ El servidor de Dropi responde. Conectalo desde Claude con la URL de la ficha.', 6000);
+  }catch(e){
+    toast('⚠️ No hubo respuesta de mcp.dropi.co — revisá la conexión o si el servicio está caído', 6000);
+  }finally{
+    btn.disabled = false; btn.textContent = orig;
+  }
+};
+
 function _botwRender(empresas, misIds){
   const cont = document.getElementById('botw-list');
   if(!cont) return;
+  // La ficha del MCP va arriba y solo para el super admin, porque es una prueba y
+  // no una integración de las tiendas.
+  const mcp = (window._esSuperAdminActual === true) ? _mcpDropiCard() : '';
   // Solo los workspaces de las tiendas de este admin.
   const filas = Object.entries(_botwData).filter(([,w])=>!misIds || misIds.indexOf(w.empresaId)>=0);
   if(!filas.length){
-    cont.innerHTML = '<div class="adm-empty">Todavía no hay ninguna tienda conectada al bot.</div>';
+    cont.innerHTML = mcp + '<div class="adm-empty">Todavía no hay ninguna tienda conectada al bot.</div>';
     return;
   }
-  cont.innerHTML = filas.map(([code,w])=>{
+  cont.innerHTML = mcp + filas.map(([code,w])=>{
     const nom = (empresas && empresas[w.empresaId] && empresas[w.empresaId].nombre) || w.nombre || w.empresaId;
     const activo = w.activo !== false;
     return `<div class="botw-card">
