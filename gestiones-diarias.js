@@ -3710,10 +3710,12 @@ function _carRender(){
 // pasando. Los cambios del bot llegan por POST /ventasEstado; los de acá se
 // escriben directo, y las reglas solo dejan tocar estado_orden, historial_estado y
 // actualizado — nunca el importe ni el teléfono, que son la base de los totales.
-// Los nuevos van en MAYÚSCULAS como el resto: el estado se guarda tal cual se
-// escribe acá, y mezclando capitalizaciones el filtro de arriba mostraría
-// "Oficina" y "OFICINA" como dos opciones distintas.
-const _VB_ESTADOS = ['PENDIENTE','CONFIRMADO','CANCELADO','LLAMADO','OFICINA','PENDIENTE ANTICIPO','GESTIONADO MAL HISTORIAL','GESTIONADO FLETE ALTO'];
+// _VB_ESTADOS vive en shared/app-shared.js: lo usan este desplegable y la
+// documentación del panel de Integraciones, que está en las cuatro páginas. Con una
+// copia acá, agregar un estado lo dejaría fuera de la documentación.
+//
+// Van en MAYÚSCULAS: el estado se guarda tal cual, y mezclando capitalizaciones el
+// filtro de arriba mostraría "Oficina" y "OFICINA" como dos opciones distintas.
 
 // Color por estado, para que la columna se lea de un vistazo sin leerla.
 function _vbEstadoColor(e){

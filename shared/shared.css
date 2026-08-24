@@ -1511,6 +1511,11 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .botw-doc-h button:hover{color:var(--text-1);border-color:var(--border-strong);}
 .botw-doc-b pre{margin:0;padding:10px;background:var(--bg-inset);font-family:var(--f-mono);font-size:.68rem;line-height:1.55;color:var(--text-1);overflow-x:auto;white-space:pre;}
 .botw-doc-nota{font-size:.7rem;color:var(--text-2);line-height:1.6;background:var(--bg-hover);border-radius:8px;padding:9px 11px;margin-bottom:8px;}
+/* La lista de estados que acepta la API: en su propia fila para poder copiarlos de
+   un vistazo, y con hueco entre ellos porque varios llevan espacios y pegados se
+   leerían como uno solo. */
+.botw-doc-estados{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0;}
+.botw-doc-estados code{background:var(--bg-inset);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:.66rem;color:var(--text-1);white-space:nowrap;}
 .botw-doc-nota.warn{background:var(--warning-soft);}
 .botw-doc-nota code{font-family:var(--f-mono);font-size:.66rem;background:var(--bg-inset);padding:1px 5px;border-radius:4px;color:var(--text-1);}
 .botw-nuevo input{flex:1;min-width:180px;padding:9px 11px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.78rem;font-family:var(--f-mono);}

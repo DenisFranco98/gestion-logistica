@@ -7009,6 +7009,17 @@ function _botwBaseUrl(){
 // Los dos botones comparten el mismo contenedor, así que abrir uno cierra el otro.
 // Se recuerda cuál está abierto en un data- para que volver a pulsar el mismo lo
 // cierre y pulsar el otro lo cambie, en vez de tener que cerrar y abrir.
+// Los estados que puede tener una venta del bot. Vive ACÁ y no en
+// gestiones-diarias.js porque lo usan dos cosas que están en páginas distintas: el
+// desplegable de la tabla (solo en Gestiones Diarias) y esta documentación (en el
+// panel admin, que está en las cuatro). Con una copia en cada lado, agregar un
+// estado se haría en uno solo y la documentación empezaría a mentir.
+//
+// El orden es el del desplegable. No hay validación contra esta lista en ningún
+// lado —ni el endpoint ni la tabla la exigen—: es lo que se OFRECE, no lo que se
+// permite. Un estado que llegue por API y no esté acá se guarda igual y se muestra.
+const _VB_ESTADOS = ['PENDIENTE','CONFIRMADO','CANCELADO','LLAMADO','OFICINA','PENDIENTE ANTICIPO','GESTIONADO MAL HISTORIAL','GESTIONADO FLETE ALTO'];
+
 window._botwDocs = function(code, btn, tipo){
   tipo = tipo || 'ventas';
   const cont = document.getElementById('botw-docs-'+code);
@@ -7101,6 +7112,18 @@ window._botwDocs = function(code, btn, tipo){
       'botw-d6-'+code)}
     <div class="botw-doc-nota">Encabezados iguales al paso 2. Si esa venta no está registrada
     responde <code>404</code> y no crea nada: primero hay que registrarla con el paso 2.</div>
+
+    <div class="botw-doc-nota">
+      <b>Estados que entiende la plataforma</b> — los mismos que ve el asesor en el desplegable:
+      <div class="botw-doc-estados">
+        ${_VB_ESTADOS.map(e=>'<code>'+esc(e)+'</code>').join('')}
+      </div>
+      Se manda el texto <b>tal cual</b>, en mayúsculas. Cualquier otro valor también se guarda y se
+      muestra —no hay lista cerrada—, pero queda fuera del desplegable y con el color gris de
+      "estado desconocido", así que conviene usar uno de estos.<br>
+      El cambio queda registrado en el historial de la venta con quién lo hizo: <code>bot</code>
+      cuando llega por acá, y el nombre del asesor cuando se cambia desde la tabla.
+    </div>
 
     <div class="botw-doc-nota warn">
       Si el mismo pedido llega dos veces, <b>no se duplica</b> y responde <code>{"duplicado": true}</code>.
