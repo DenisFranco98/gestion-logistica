@@ -95,6 +95,10 @@
         }
       }
     },
+    "dropi_oauth": {
+      ".read": false,
+      ".write": false
+    },
     "historial_diario": {
       ".read": "auth != null",
       ".write": "auth != null"

@@ -254,6 +254,17 @@
       }
     },
 
+    // ── TOKENS DE DROPI ──────────────────────────────────────────────────
+    // CERRADO A TODO EL MUNDO, a propósito. Acá viven el refresh_token y el
+    // access_token de la conexión con Dropi: quien los lea puede consultar esa
+    // cuenta sin pasar por nosotros.
+    //
+    // false/false NO significa que nadie pueda tocarlo: el Admin SDK de las Cloud
+    // Functions no pasa por estas reglas, y es el único que escribe acá. Lo que
+    // esto impide es que el nodo se pueda leer desde el navegador, que es
+    // exactamente lo que se quiere: el token nunca sale al cliente.
+    "dropi_oauth": { ".read": false, ".write": false },
+
     // ── EL RESTO ─────────────────────────────────────────────────────────
     // Los 28 nodos que ya existían, con el mismo permiso que tienen hoy. No se
     // cambia nada de cómo venían funcionando; están listados uno por uno solo

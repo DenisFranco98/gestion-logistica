@@ -1460,6 +1460,11 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
    de una tienda como las de abajo, es una prueba y se tiene que ver distinta. */
 .mcp-card{border-style:dashed;border-color:var(--accent);}
 .mcp-tag{font-size:.6rem;font-weight:800;letter-spacing:.5px;padding:3px 9px;border-radius:20px;background:var(--warning-soft);color:var(--warning);white-space:nowrap;align-self:flex-start;}
+/* Las herramientas que declara el servidor de Dropi. */
+.mcp-tools{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.mcp-tool{background:var(--bg-inset);border:1px solid var(--border);border-radius:8px;padding:8px 11px;}
+.mcp-tool-n{font-family:var(--f-mono);font-size:.72rem;font-weight:700;color:var(--accent);}
+.mcp-tool-d{font-size:.68rem;color:var(--text-2);line-height:1.5;margin-top:2px;}
 .botw-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;}
 .botw-code{font-family:var(--f-mono);font-size:.86rem;font-weight:800;color:var(--text-1);letter-spacing:-.3px;}
 .botw-tienda{font-size:.72rem;color:var(--text-3);margin-top:2px;}

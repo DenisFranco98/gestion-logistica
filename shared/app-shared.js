@@ -6955,99 +6955,106 @@ async function _botwCargar(){
   }
 }
 
-// ── MCP DE DROPI (en prueba) ─────────────────────────────────────────────
-// Esto NO es una integración de la plataforma: es la ficha para conectar Claude
-// —o cualquier cliente MCP— al servidor de Dropi. La plataforma no participa en la
-// conexión y no guarda ningún token.
+// ── CONEXIÓN DIRECTA CON DROPI (en prueba) ───────────────────────────────
+// La PLATAFORMA es el cliente del MCP de Dropi. No interviene Claude ni ningún
+// cliente de IA: las llamadas salen de nuestras Cloud Functions (functions/dropi.js).
 //
-// POR QUÉ NO HAY UN BOTÓN QUE "CONECTE": el navegador no es un cliente MCP, y el
-// servidor de Dropi pide OAuth 2.0. Aunque hiciéramos el flujo desde acá,
-// tendríamos un token guardado sin nada que lo use, y las llamadas se caerían por
-// CORS igual. Quien se conecta es el cliente MCP, y lo hace solo: el servidor
-// soporta registro dinámico, así que basta con darle la URL.
+// El navegador nunca ve el token ni habla con Dropi —sería CORS y además dejaría el
+// token a la vista—: le pide una acción a /dropiMcp y recibe el resultado.
 //
-// Va SOLO para el super admin mientras sea una prueba — lo pidió el usuario así.
-// Para quitarlo, se borra esta función y su llamada en _botwRender.
-const _MCP_DROPI = {
-  url:  'https://mcp.dropi.co/mcp',
-  auth: 'https://oauth.dropi.co/oauth/authorize',
-  token:'https://integrations.dropi.co/oauth/token'
-};
-
+// HAY QUE AUTORIZAR UNA VEZ, y no es evitable: se consultó el servidor de Dropi y
+// no soporta client_credentials, solo authorization_code + refresh_token. Después
+// de esa vez, el refresh_token mantiene la conexión sin que nadie intervenga.
+//
+// Va SOLO para el super admin mientras sea una prueba. Para quitarlo: borrar estas
+// funciones, su llamada en _botwRender, y las tres exports de functions/index.js.
 function _mcpDropiCard(){
   return `<div class="botw-card mcp-card">
     <div class="botw-card-top">
       <div>
-        <div class="botw-code">MCP · DROPI</div>
-        <div class="botw-tienda">Conectar Claude al servidor de Dropi</div>
+        <div class="botw-code">DROPI · MCP</div>
+        <div class="botw-tienda">Conexión directa de la plataforma con Dropi</div>
       </div>
       <span class="mcp-tag">EN PRUEBA</span>
     </div>
     <div class="botw-acciones">
-      <button onclick="_mcpDropiDocs(this)">🔌 Cómo conectarlo</button>
-      <button onclick="_mcpDropiProbar(this)">📡 Probar si responde</button>
+      <button onclick="_dropiConectar()">🔗 Conectar con Dropi</button>
+      <button onclick="_dropiEstado(this)">📡 Ver estado</button>
+      <button onclick="_dropiHerramientas(this)">🧰 Qué expone Dropi</button>
     </div>
     <div class="botw-docs" id="mcp-dropi-docs" style="display:none;"></div>
   </div>`;
 }
 
-window._mcpDropiDocs = function(btn){
-  const c = document.getElementById('mcp-dropi-docs');
-  if(!c) return;
-  if(c.style.display !== 'none'){ c.style.display='none'; btn.textContent='🔌 Cómo conectarlo'; return; }
-  btn.textContent='✕ Ocultar';
-  const bloque = (tit, val, id) =>
-    `<div class="botw-doc-b"><div class="botw-doc-h"><span>${tit}</span>
-      <button onclick="_botwCopiarTxt('${id}')">Copiar</button></div>
-      <pre id="${id}">${esc(val)}</pre></div>`;
+function _dropiFnUrl(nombre){
+  let pid='';
+  try{ pid=(firebase.app().options.projectId)||''; }catch(e){}
+  return 'https://us-central1-'+pid+'.cloudfunctions.net/'+nombre;
+}
 
-  c.innerHTML = `
-    <div class="botw-doc-nota">
-      Esto conecta <b>Claude con Dropi</b>, no con esta plataforma. Sirve para preguntarle a Claude
-      por tus pedidos de Dropi directamente; REDKING no interviene ni guarda nada de esa conexión.
-    </div>
-
-    <div class="botw-doc-paso"><b>1</b> Agregar el servidor en Claude</div>
-    ${bloque('URL del servidor MCP', _MCP_DROPI.url, 'mcp-dropi-url')}
-    <div class="botw-doc-nota">
-      En Claude: <b>Configuración → Conectores → Agregar conector personalizado</b>, y pegar esa URL.
-      En Claude Code: <code>claude mcp add --transport http dropi ${_MCP_DROPI.url}</code>
-    </div>
-
-    <div class="botw-doc-paso"><b>2</b> Autorizar con tu cuenta de Dropi</div>
-    <div class="botw-doc-nota">
-      Al conectarlo se abre el login de Dropi para que autorices el acceso. <b>No hay API key que
-      pegar</b>: usa OAuth, y el cliente se registra solo contra el servidor.<br>
-      Los permisos que pidas ahí son los que Claude va a tener sobre tu cuenta de Dropi.
-    </div>
-
-    <div class="botw-doc-nota warn">
-      <b>Está en prueba.</b> El servidor es de Dropi, no nuestro: lo que exponga, cuánto dure y qué
-      permita depende de ellos. Si algo no cuadra, se desconecta desde Claude y listo — no hay nada
-      que desinstalar de este lado.<br>
-      <b>Lo que autorices queda fuera de esta plataforma.</b> Las reglas de acceso por tienda de
-      REDKING no aplican a esa conexión: aplica lo que permita tu usuario de Dropi.
-    </div>`;
-  c.style.display='block';
+// Abre la autorización de Dropi en otra pestaña. Es lo ÚNICO que necesita una
+// persona, y una sola vez.
+window._dropiConectar = function(){
+  window.open(_dropiFnUrl('dropiConectar'), '_blank', 'noopener');
+  toast('Autorizá en la pestaña que se abrió. Al volver, tocá "Ver estado".', 7000);
 };
 
-// Comprueba que el servidor esté vivo. Se espera un 401 con la cabecera de OAuth:
-// eso significa "estoy acá y pido autorización", que es exactamente lo correcto.
-window._mcpDropiProbar = async function(btn){
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Probando...';
+function _dropiPanel(){
+  const c=document.getElementById('mcp-dropi-docs');
+  if(c) c.style.display='block';
+  return c;
+}
+
+// Pregunta a Dropi por sus herramientas. Sirve de prueba de la conexión entera
+// —token, renovación y llamada— y de paso dice qué se le puede pedir.
+async function _dropiLlamar(metodo, params){
+  const r = await fetch(_dropiFnUrl('dropiMcp'), {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ metodo, params: params||{} })
+  });
+  return r.json();
+}
+
+window._dropiEstado = async function(btn){
+  const c=_dropiPanel(); if(!c) return;
+  const orig=btn.textContent; btn.disabled=true; btn.textContent='Consultando...';
+  c.innerHTML='<div class="botw-doc-nota">Consultando a Dropi...</div>';
   try{
-    // no-cors devuelve una respuesta opaca —no se puede leer el estado— pero
-    // distingue "el servidor contestó" de "no existe", que es lo que se quiere
-    // saber. Leer el 401 de verdad no se puede desde el navegador: es otro
-    // dominio y no manda cabeceras de CORS para esta ruta.
-    await fetch(_MCP_DROPI.url, { method:'GET', mode:'no-cors', cache:'no-store' });
-    toast('✓ El servidor de Dropi responde. Conectalo desde Claude con la URL de la ficha.', 6000);
+    const j = await _dropiLlamar('tools/list');
+    c.innerHTML = j.ok
+      ? `<div class="botw-doc-nota"><b>✅ Conectado.</b> La plataforma está hablando con Dropi por su
+         cuenta — el token se renueva solo, no hay que volver a autorizar.</div>`
+      : `<div class="botw-doc-nota warn"><b>Sin conexión todavía.</b> ${esc(j.error||'')}<br>
+         Tocá <b>Conectar con Dropi</b> y autorizá una vez.</div>`;
   }catch(e){
-    toast('⚠️ No hubo respuesta de mcp.dropi.co — revisá la conexión o si el servicio está caído', 6000);
-  }finally{
-    btn.disabled = false; btn.textContent = orig;
-  }
+    c.innerHTML='<div class="botw-doc-nota warn">No se pudo consultar: '+esc(e.message)+'</div>';
+  }finally{ btn.disabled=false; btn.textContent=orig; }
+};
+
+window._dropiHerramientas = async function(btn){
+  const c=_dropiPanel(); if(!c) return;
+  const orig=btn.textContent; btn.disabled=true; btn.textContent='Consultando...';
+  c.innerHTML='<div class="botw-doc-nota">Preguntándole a Dropi qué sabe hacer...</div>';
+  try{
+    const j = await _dropiLlamar('tools/list');
+    if(!j.ok){
+      c.innerHTML=`<div class="botw-doc-nota warn"><b>No se pudo.</b> ${esc(j.error||'')}<br>
+        Si dice que no hay conexión, tocá <b>Conectar con Dropi</b> primero.</div>`;
+      return;
+    }
+    const tools=(j.resultado && j.resultado.tools) || [];
+    c.innerHTML = `
+      <div class="botw-doc-nota"><b>${tools.length}</b> herramienta${tools.length===1?'':'s'} disponible${tools.length===1?'':'s'}.
+        Esto es lo que la plataforma le puede pedir a Dropi.</div>
+      ${tools.length ? '<div class="mcp-tools">'+tools.map(t=>`
+        <div class="mcp-tool">
+          <div class="mcp-tool-n">${esc(t.name||'')}</div>
+          <div class="mcp-tool-d">${esc(t.description||'(sin descripción)')}</div>
+        </div>`).join('')+'</div>'
+        : '<div class="botw-doc-nota warn">Dropi no declaró ninguna herramienta.</div>'}`;
+  }catch(e){
+    c.innerHTML='<div class="botw-doc-nota warn">No se pudo consultar: '+esc(e.message)+'</div>';
+  }finally{ btn.disabled=false; btn.textContent=orig; }
 };
 
 function _botwRender(empresas, misIds){

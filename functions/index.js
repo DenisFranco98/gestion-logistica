@@ -274,6 +274,14 @@ exports.carritos = onRequest(OPCIONES, handlerCarritos);
 exports.carritosRecuperado = onRequest(OPCIONES, handlerCarritoRecuperado);
 exports.carritosExiste = onRequest(OPCIONES, handlerCarritoExiste);
 
+// ── CONEXIÓN DIRECTA CON DROPI (en prueba) ───────────────────────────────
+// La plataforma como cliente del MCP de Dropi. No pasa por ningún cliente de IA.
+// Ver functions/dropi.js.
+const _dropi = require('./dropi');
+exports.dropiConectar = onRequest(OPCIONES, _dropi.handlerConectar);
+exports.dropiCallback = onRequest(OPCIONES, _dropi.handlerCallback);
+exports.dropiMcp = onRequest(OPCIONES, _dropi.handlerMcp);
+
 // Se exportan también los handlers para que los tests los llamen directo, sin
 // levantar el emulador.
 exports._handlers = {
