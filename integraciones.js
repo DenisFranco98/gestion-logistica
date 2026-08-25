@@ -76,6 +76,11 @@ function _intRender(){
       integraciones. Acá podés ver lo que hay conectado.</div>`) +
     _intChateaPro(codigos, puede) +
     _intDropi(puede);
+
+  // El estado de Dropi se consulta después de pintar: hay que preguntarle a la
+  // Cloud Function y eso tarda, así que la tarjeta aparece con "Consultando..." en
+  // vez de dejar la pantalla en blanco hasta que conteste.
+  _intDropiEstado();
 }
 
 // ── ChateaPro ────────────────────────────────────────────────────────────
@@ -168,19 +173,106 @@ function _intGenerarClave(){
 }
 
 // ── Dropi ────────────────────────────────────────────────────────────────
-// Todavía no: la conexión que existe es global (dropi_oauth/cuenta) y hay que
-// pasarla a una por tienda antes de ofrecerla acá. Se muestra el bloque para que
-// se vea que viene, sin botón que haga algo a medias.
+// Una conexión por tienda: cada una tiene su cuenta de Dropi, su cliente OAuth y
+// su token. El estado no se lee de la base desde acá —el nodo dropi_oauth está
+// cerrado a todo el navegador, porque guarda los tokens—: se le pregunta a la
+// Cloud Function, que es la única que puede verlo.
 function _intDropi(puede){
-  return `<div class="int-card int-card-pronto">
+  return `<div class="int-card">
     <div class="int-card-hdr">
       <div class="int-ico">📦</div>
       <div>
-        <div class="int-nombre">Dropi <span class="int-pronto">PRÓXIMAMENTE</span></div>
+        <div class="int-nombre">Dropi <span class="int-pronto">EN PRUEBA</span></div>
         <div class="int-desc">Stock del proveedor, cotizar el flete antes de generar la guía y ciudades con código DANE</div>
       </div>
     </div>
-    <div class="int-vacio">La conexión con Dropi está en pruebas y todavía funciona con una sola
-    cuenta. Se habilita acá cuando cada tienda pueda conectar la suya.</div>
+    <div id="int-dropi-estado" class="int-vacio">Consultando...</div>
+    <div class="botw-acciones" id="int-dropi-acc"></div>
+    <div class="botw-docs" id="int-dropi-docs" style="display:none;"></div>
   </div>`;
 }
+
+function _intFnUrl(nombre){
+  let pid='';
+  try{ pid=(firebase.app().options.projectId)||''; }catch(e){}
+  return 'https://us-central1-'+pid+'.cloudfunctions.net/'+nombre;
+}
+
+// Toda llamada a las funciones de Dropi va firmada con el ID token de Firebase: es
+// lo que le permite al backend comprobar que la tienda es de quien pide. Sin esto
+// bastaría con saber la URL para consultar el Dropi de cualquier tienda.
+async function _intFetchDropi(nombre, datos){
+  const u = firebase.auth().currentUser;
+  if(!u) throw new Error('Sesión no iniciada');
+  const idToken = await u.getIdToken();
+  const r = await fetch(_intFnUrl(nombre), {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+idToken },
+    body: JSON.stringify(Object.assign({ empresaId:_intTK() }, datos||{}))
+  });
+  return r.json();
+}
+
+async function _intDropiEstado(){
+  const el=document.getElementById('int-dropi-estado');
+  const acc=document.getElementById('int-dropi-acc');
+  if(!el||!acc) return;
+  const puede=_intPuedeEditar();
+  try{
+    const j = await _intFetchDropi('dropiMcp', { metodo:'tools/list' });
+    if(j.ok){
+      const n=((j.resultado||{}).tools||[]).length;
+      el.innerHTML='<b style="color:var(--success);">● Conectada</b> — '+n+
+        ' herramientas disponibles. El acceso se renueva solo, no hay que volver a autorizar.';
+      acc.innerHTML='<button onclick="_intDropiHerramientas(this)">🧰 Qué expone Dropi</button>';
+    }else{
+      el.innerHTML='<b>○ Sin conectar.</b> '+esc(j.error||'');
+      acc.innerHTML = puede
+        ? '<button onclick="_intDropiConectar(this)">🔗 Conectar con Dropi</button>'
+        : '';
+    }
+  }catch(e){
+    el.innerHTML='No se pudo consultar el estado: '+esc(e.message);
+    acc.innerHTML='';
+  }
+}
+
+// Pide la URL de autorización —el backend la arma tras comprobar que la tienda es
+// tuya— y la abre. Es el único paso que necesita una persona, y una sola vez.
+window._intDropiConectar = async function(btn){
+  if(!_intPuedeEditar()){ toast('Solo el dueño puede conectar integraciones'); return; }
+  const orig=btn.textContent; btn.disabled=true; btn.textContent='Abriendo...';
+  try{
+    const j = await _intFetchDropi('dropiConectar');
+    if(!j.ok){ toast('⚠️ '+(j.error||'No se pudo iniciar'), 5000); return; }
+    window.open(j.url, '_blank', 'noopener');
+    toast('Autorizá en la pestaña que se abrió. Al volver, actualizá esta página.', 8000);
+  }catch(e){
+    toast('⚠️ '+e.message, 5000);
+  }finally{ btn.disabled=false; btn.textContent=orig; }
+};
+
+window._intDropiHerramientas = async function(btn){
+  const c=document.getElementById('int-dropi-docs');
+  if(!c) return;
+  if(c.style.display!=='none'){ c.style.display='none'; btn.textContent='🧰 Qué expone Dropi'; return; }
+  btn.textContent='✕ Ocultar'; c.style.display='block';
+  c.innerHTML='<div class="botw-doc-nota">Consultando...</div>';
+  try{
+    const j = await _intFetchDropi('dropiMcp', { metodo:'tools/list' });
+    if(!j.ok){ c.innerHTML='<div class="botw-doc-nota warn">'+esc(j.error||'')+'</div>'; return; }
+    const tools=(j.resultado||{}).tools||[];
+    // Primero las que traen algo que la plataforma no tiene.
+    const utiles=['list_products','quote_shipping','search_cities'];
+    const orden=t=>{ const i=utiles.indexOf(t.name); return i>=0?i:90; };
+    c.innerHTML='<div class="mcp-tools">'+tools.slice().sort((a,b)=>orden(a)-orden(b)).map(t=>{
+      const tr=(typeof _DROPI_TRAD!=='undefined') ? _DROPI_TRAD[t.name] : null;
+      return `<div class="mcp-tool${utiles.indexOf(t.name)>=0?' mcp-tool-top':''}">
+        <div class="mcp-tool-n">${esc(tr?tr.t:t.name)}<span class="mcp-tool-id">${esc(t.name)}</span></div>
+        <div class="mcp-tool-d">${esc(tr?tr.d:(t.description||''))}</div>
+      </div>`;
+    }).join('')+'</div>';
+  }catch(e){
+    c.innerHTML='<div class="botw-doc-nota warn">'+esc(e.message)+'</div>';
+  }
+};

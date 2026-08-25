@@ -6917,19 +6917,12 @@ async function _botwCargar(){
   cont.innerHTML = '<div class="adm-empty">Cargando...</div>';
   const adminId = localStorage.getItem('lgs_admin_id');
   try{
-    const [snapAE, snapEmp, snapSA] = await Promise.all([
+    const [snapAE, snapEmp] = await Promise.all([
       _db.ref('admin_empresas/'+adminId).once('value'),
-      _db.ref('empresas').once('value'),
-      // Para la ficha del MCP de Dropi, que por ahora es solo del super admin. Se
-      // consulta acá en vez de guardar una bandera al entrar: así no depende de que
-      // alguien la mantenga en los dos caminos de login que hay.
-      _db.ref('config/superAdminUid').once('value').catch(()=>({val:()=>null}))
+      _db.ref('empresas').once('value')
     ]);
     const misIds = Object.keys(snapAE.val()||{});
     const empresas = snapEmp.val()||{};
-    const uid = (typeof firebase!=='undefined' && firebase.auth().currentUser)
-      ? firebase.auth().currentUser.uid : null;
-    window._esSuperAdminActual = !!(uid && snapSA.val() === uid);
     // UNA CONSULTA POR EMPRESA, en vez del nodo entero. Antes esto era
     // _db.ref('bot_workspaces').once('value'): se descargaban los workspaces de
     // TODAS las tiendas y recién después _botwRender filtraba por misIds. O sea
@@ -6959,82 +6952,6 @@ async function _botwCargar(){
     cont.innerHTML = '<div class="adm-empty">No se pudo leer la configuración del bot: '+esc(e.message)+'</div>';
   }
 }
-
-// ── CONEXIÓN DIRECTA CON DROPI (en prueba) ───────────────────────────────
-// La PLATAFORMA es el cliente del MCP de Dropi. No interviene Claude ni ningún
-// cliente de IA: las llamadas salen de nuestras Cloud Functions (functions/dropi.js).
-//
-// El navegador nunca ve el token ni habla con Dropi —sería CORS y además dejaría el
-// token a la vista—: le pide una acción a /dropiMcp y recibe el resultado.
-//
-// HAY QUE AUTORIZAR UNA VEZ, y no es evitable: se consultó el servidor de Dropi y
-// no soporta client_credentials, solo authorization_code + refresh_token. Después
-// de esa vez, el refresh_token mantiene la conexión sin que nadie intervenga.
-//
-// Va SOLO para el super admin mientras sea una prueba. Para quitarlo: borrar estas
-// funciones, su llamada en _botwRender, y las tres exports de functions/index.js.
-function _mcpDropiCard(){
-  return `<div class="botw-card mcp-card">
-    <div class="botw-card-top">
-      <div>
-        <div class="botw-code">DROPI · MCP</div>
-        <div class="botw-tienda">Conexión directa de la plataforma con Dropi</div>
-      </div>
-      <span class="mcp-tag">EN PRUEBA</span>
-    </div>
-    <div class="botw-acciones">
-      <button onclick="_dropiConectar()">🔗 Conectar con Dropi</button>
-      <button onclick="_dropiEstado(this)">📡 Ver estado</button>
-      <button onclick="_dropiHerramientas(this)">🧰 Qué expone Dropi</button>
-    </div>
-    <div class="botw-docs" id="mcp-dropi-docs" style="display:none;"></div>
-  </div>`;
-}
-
-function _dropiFnUrl(nombre){
-  let pid='';
-  try{ pid=(firebase.app().options.projectId)||''; }catch(e){}
-  return 'https://us-central1-'+pid+'.cloudfunctions.net/'+nombre;
-}
-
-// Abre la autorización de Dropi en otra pestaña. Es lo ÚNICO que necesita una
-// persona, y una sola vez.
-window._dropiConectar = function(){
-  window.open(_dropiFnUrl('dropiConectar'), '_blank', 'noopener');
-  toast('Autorizá en la pestaña que se abrió. Al volver, tocá "Ver estado".', 7000);
-};
-
-function _dropiPanel(){
-  const c=document.getElementById('mcp-dropi-docs');
-  if(c) c.style.display='block';
-  return c;
-}
-
-// Pregunta a Dropi por sus herramientas. Sirve de prueba de la conexión entera
-// —token, renovación y llamada— y de paso dice qué se le puede pedir.
-async function _dropiLlamar(metodo, params){
-  const r = await fetch(_dropiFnUrl('dropiMcp'), {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ metodo, params: params||{} })
-  });
-  return r.json();
-}
-
-window._dropiEstado = async function(btn){
-  const c=_dropiPanel(); if(!c) return;
-  const orig=btn.textContent; btn.disabled=true; btn.textContent='Consultando...';
-  c.innerHTML='<div class="botw-doc-nota">Consultando a Dropi...</div>';
-  try{
-    const j = await _dropiLlamar('tools/list');
-    c.innerHTML = j.ok
-      ? `<div class="botw-doc-nota"><b>✅ Conectado.</b> La plataforma está hablando con Dropi por su
-         cuenta — el token se renueva solo, no hay que volver a autorizar.</div>`
-      : `<div class="botw-doc-nota warn"><b>Sin conexión todavía.</b> ${esc(j.error||'')}<br>
-         Tocá <b>Conectar con Dropi</b> y autorizá una vez.</div>`;
-  }catch(e){
-    c.innerHTML='<div class="botw-doc-nota warn">No se pudo consultar: '+esc(e.message)+'</div>';
-  }finally{ btn.disabled=false; btn.textContent=orig; }
-};
 
 // Dropi describe sus herramientas EN INGLÉS. Acá se traducen para el panel, con el
 // identificador técnico a la vista porque es lo que se le manda al servidor y lo
@@ -7110,16 +7027,13 @@ window._dropiHerramientas = async function(btn){
 function _botwRender(empresas, misIds){
   const cont = document.getElementById('botw-list');
   if(!cont) return;
-  // La ficha del MCP va arriba y solo para el super admin, porque es una prueba y
-  // no una integración de las tiendas.
-  const mcp = (window._esSuperAdminActual === true) ? _mcpDropiCard() : '';
   // Solo los workspaces de las tiendas de este admin.
   const filas = Object.entries(_botwData).filter(([,w])=>!misIds || misIds.indexOf(w.empresaId)>=0);
   if(!filas.length){
-    cont.innerHTML = mcp + '<div class="adm-empty">Todavía no hay ninguna tienda conectada al bot.</div>';
+    cont.innerHTML = '<div class="adm-empty">Todavía no hay ninguna tienda conectada al bot.</div>';
     return;
   }
-  cont.innerHTML = mcp + filas.map(([code,w])=>{
+  cont.innerHTML = filas.map(([code,w])=>{
     const nom = (empresas && empresas[w.empresaId] && empresas[w.empresaId].nombre) || w.nombre || w.empresaId;
     const activo = w.activo !== false;
     return `<div class="botw-card">

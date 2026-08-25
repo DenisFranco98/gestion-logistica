@@ -19,12 +19,48 @@ const { db, cors, body } = require('./lib');
 const AS = 'https://integrations.dropi.co';          // servidor de autorización
 const AUTORIZAR = 'https://oauth.dropi.co/oauth/authorize';
 const MCP = 'https://mcp.dropi.co/mcp';
-const NODO = 'dropi_oauth/cuenta';                   // una sola conexión, es una prueba
+
+// UNA CONEXIÓN POR TIENDA. Cada tienda tiene su propia cuenta de Dropi, así que su
+// propio cliente y su propio token. La primera versión guardaba todo en
+// dropi_oauth/cuenta y la segunda tienda en autorizar habría pisado a la primera.
+const nodo = empresaId => 'dropi_oauth/' + empresaId;
+// Los flujos a medio terminar se guardan por `state` y no bajo la tienda: cuando
+// Dropi devuelve el callback, lo único que viene es ese state — sin este índice no
+// habría forma de saber a qué tienda pertenece.
+const PENDIENTES = 'dropi_oauth/_pendientes';
+
+// QUIÉN PIDE, y esto es lo que sostiene todo el aislamiento: el empresaId NO se
+// acepta como viene. Se verifica el ID token de Firebase del usuario y se comprueba
+// que esa tienda sea suya. Sin esto, cualquiera con la URL de la función podría
+// conectar SU cuenta de Dropi a la tienda de otro y leerle los pedidos.
+async function verificarAcceso(req, empresaId) {
+  const admin = require('firebase-admin');
+  if (!admin.apps.length) admin.initializeApp();
+  const cab = String(req.get('authorization') || '');
+  const idToken = cab.startsWith('Bearer ') ? cab.slice(7) : '';
+  if (!idToken) return { ok: false, status: 401, error: 'Falta la sesión' };
+  if (!empresaId) return { ok: false, status: 400, error: 'Falta la tienda' };
+
+  let uid;
+  try { uid = (await admin.auth().verifyIdToken(idToken)).uid; }
+  catch (e) { return { ok: false, status: 401, error: 'Sesión inválida o vencida' }; }
+
+  // Vale por cualquiera de los dos caminos: el dueño la tiene en user_tiendas, el
+  // admin en admin_empresas. Es el mismo criterio que usan las reglas del nodo.
+  const [propia, admin_] = await Promise.all([
+    db().ref('user_tiendas/' + uid + '/' + empresaId).once('value'),
+    db().ref('admin_empresas/' + uid + '/' + empresaId).once('value')
+  ]);
+  if (!propia.exists() && !admin_.exists()) {
+    return { ok: false, status: 403, error: 'Esa tienda no es tuya' };
+  }
+  return { ok: true, uid };
+}
 
 // El registro del cliente lo hace el propio servidor de Dropi cuando se le pide
 // (registro dinámico, verificado el 2026-08-24). Se guarda para no repetirlo.
-async function clienteRegistrado(redirectUri) {
-  const snap = await db().ref(NODO + '/cliente').once('value');
+async function clienteRegistrado(empresaId, redirectUri) {
+  const snap = await db().ref(nodo(empresaId) + '/cliente').once('value');
   const guardado = snap.val();
   if (guardado && guardado.client_id && guardado.redirect_uri === redirectUri) return guardado;
 
@@ -43,27 +79,37 @@ async function clienteRegistrado(redirectUri) {
   if (!r.ok) throw new Error('No se pudo registrar el cliente en Dropi (HTTP ' + r.status + ')');
   const j = await r.json();
   const cli = { client_id: j.client_id, client_secret: j.client_secret || '', redirect_uri: redirectUri, ts: Date.now() };
-  await db().ref(NODO + '/cliente').set(cli);
+  await db().ref(nodo(empresaId) + '/cliente').set(cli);
   return cli;
 }
 
 const b64url = b => b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 // ── 1. Arranque de la autorización ───────────────────────────────────────
+// DEVUELVE LA URL, NO REDIRIGE. Antes esto era un redirect y el panel lo abría con
+// window.open — pero así no hay forma de mandar la sesión, y sin sesión no se puede
+// comprobar de quién es la tienda. Ahora el panel lo llama con fetch y el token, y
+// abre la URL que recibe.
 async function handlerConectar(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   try {
-    const base = 'https://' + req.get('host');
-    const redirectUri = base + '/dropiCallback';
-    const cli = await clienteRegistrado(redirectUri);
+    const d = body(req);
+    const empresaId = String(d.empresaId || req.query.empresaId || '').trim();
+    const acceso = await verificarAcceso(req, empresaId);
+    if (!acceso.ok) return res.status(acceso.status).json({ ok: false, error: acceso.error });
+
+    const redirectUri = 'https://' + req.get('host') + '/dropiCallback';
+    const cli = await clienteRegistrado(empresaId, redirectUri);
 
     // PKCE: el servidor de Dropi exige S256. El verifier se guarda para el
     // callback — sin él no se puede canjear el código.
     const verifier = b64url(crypto.randomBytes(32));
     const challenge = b64url(crypto.createHash('sha256').update(verifier).digest());
     const state = b64url(crypto.randomBytes(16));
-    await db().ref(NODO + '/pendiente').set({ verifier, state, ts: Date.now() });
+    // La tienda viaja acá, YA VERIFICADA. El callback la saca de este registro y no
+    // de la URL: lo que vuelve de Dropi no es de fiar.
+    await db().ref(PENDIENTES + '/' + state).set({ empresaId, verifier, ts: Date.now() });
 
     const url = AUTORIZAR + '?' + new URLSearchParams({
       response_type: 'code',
@@ -79,9 +125,9 @@ async function handlerConectar(req, res) {
       // acá Y al pedir el token: los dos pasos tienen que coincidir.
       resource: MCP
     });
-    res.redirect(302, url);
+    res.status(200).json({ ok: true, url });
   } catch (e) {
-    res.status(500).send('No se pudo iniciar la conexión con Dropi: ' + e.message);
+    res.status(500).json({ ok: false, error: 'No se pudo iniciar la conexión: ' + e.message });
   }
 }
 
@@ -99,14 +145,22 @@ async function handlerCallback(req, res) {
     if (error) return res.status(400).send(pagina('Dropi rechazó la conexión', String(error_description || error), false));
     if (!code) return res.status(400).send(pagina('Falta el código', 'Dropi no devolvió el código de autorización.', false));
 
-    const pend = (await db().ref(NODO + '/pendiente').once('value')).val();
-    // El state ata esta respuesta a la petición que salió de acá: sin comprobarlo,
-    // cualquiera podría mandarnos un código suyo y dejarnos conectados a su cuenta.
-    if (!pend || pend.state !== state) {
-      return res.status(400).send(pagina('La autorización no coincide', 'Volvé a empezar desde el panel.', false));
+    // El state ata esta respuesta a una petición que salió de acá, y además dice de
+    // qué tienda es. Sin esta comprobación, cualquiera podría mandarnos un código
+    // suyo y dejar una tienda conectada a su cuenta de Dropi.
+    const pend = state ? (await db().ref(PENDIENTES + '/' + state).once('value')).val() : null;
+    if (!pend || !pend.empresaId) {
+      return res.status(400).send(pagina('La autorización no coincide', 'Volvé a empezar desde el panel de la tienda.', false));
     }
+    // Media hora de margen: un flujo que quedó abierto ayer no debería poder
+    // cerrarse hoy con un código que anda dando vueltas.
+    if (Date.now() - (pend.ts || 0) > 30 * 60 * 1000) {
+      await db().ref(PENDIENTES + '/' + state).remove();
+      return res.status(400).send(pagina('La autorización venció', 'Pasó demasiado tiempo. Empezá de nuevo.', false));
+    }
+    const empresaId = pend.empresaId;
 
-    const cli = (await db().ref(NODO + '/cliente').once('value')).val();
+    const cli = (await db().ref(nodo(empresaId) + '/cliente').once('value')).val();
     const r = await fetch(AS + '/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -124,13 +178,15 @@ async function handlerCallback(req, res) {
       return res.status(400).send(pagina('Dropi no entregó el token', String(j.error_description || j.error || ('HTTP ' + r.status)), false));
     }
 
-    await db().ref(NODO + '/token').set({
+    await db().ref(nodo(empresaId) + '/token').set({
       access_token: j.access_token,
       refresh_token: j.refresh_token || '',
       expira: Date.now() + ((parseInt(j.expires_in, 10) || 3600) * 1000),
       ts: Date.now()
     });
-    await db().ref(NODO + '/pendiente').remove();
+    // El pendiente se consume: un código de autorización se canjea UNA vez, y
+    // dejarlo permitiría reintentar el canje con el mismo state.
+    await db().ref(PENDIENTES + '/' + state).remove();
 
     res.status(200).send(pagina('Conectado con Dropi',
       j.refresh_token
@@ -143,15 +199,15 @@ async function handlerCallback(req, res) {
 
 // Devuelve un access token vigente, renovándolo si hace falta. Es lo que hace que
 // la conexión funcione sola después de la única autorización.
-async function tokenVigente() {
-  const t = (await db().ref(NODO + '/token').once('value')).val();
-  if (!t || !t.access_token) throw new Error('Todavía no hay conexión con Dropi. Entrá a /dropiConectar una vez.');
+async function tokenVigente(empresaId) {
+  const t = (await db().ref(nodo(empresaId) + '/token').once('value')).val();
+  if (!t || !t.access_token) throw new Error('Esta tienda todavía no está conectada con Dropi.');
   // Un minuto de margen: renovar justo en el límite deja peticiones a medio camino
   // con un token que vence mientras viajan.
   if (Date.now() < (t.expira || 0) - 60000) return t.access_token;
   if (!t.refresh_token) throw new Error('El token venció y Dropi no dio refresh_token: hay que autorizar de nuevo.');
 
-  const cli = (await db().ref(NODO + '/cliente').once('value')).val();
+  const cli = (await db().ref(nodo(empresaId) + '/cliente').once('value')).val();
   const r = await fetch(AS + '/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -166,7 +222,7 @@ async function tokenVigente() {
   });
   const j = await r.json();
   if (!r.ok || !j.access_token) throw new Error('No se pudo renovar el token: ' + (j.error_description || j.error || r.status));
-  await db().ref(NODO + '/token').update({
+  await db().ref(nodo(empresaId) + '/token').update({
     access_token: j.access_token,
     // Dropi puede rotar el refresh_token; si manda uno nuevo, el viejo deja de
     // servir y guardar el anterior dejaría la conexión muerta al siguiente vencimiento.
@@ -223,8 +279,14 @@ async function handlerMcp(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   try {
     const d = body(req);
+    const empresaId = String(d.empresaId || '').trim();
+    // Mismo control que al conectar: sin verificar de quién es la tienda,
+    // cualquiera con la URL podría consultar el Dropi de otro.
+    const acceso = await verificarAcceso(req, empresaId);
+    if (!acceso.ok) return res.status(acceso.status).json({ ok: false, error: acceso.error });
+
     const metodo = String(d.metodo || d.method || 'tools/list');
-    const token = await tokenVigente();
+    const token = await tokenVigente(empresaId);
 
     // Handshake completo, en los tres pasos que pide el protocolo. Se rehace en
     // cada petición porque las Cloud Functions no garantizan que la siguiente caiga
