@@ -2,9 +2,9 @@
   "rules": {
     "bot_workspaces": {
       ".indexOn": "empresaId",
-      ".read": "auth != null && query.orderByChild === 'empresaId' && root.child('admin_empresas').child(auth.uid).child(query.equalTo).exists()",
+      ".read": "auth != null && query.orderByChild === 'empresaId' && (root.child('admin_empresas').child(auth.uid).child(query.equalTo).exists() || root.child('user_tiendas').child(auth.uid).child(query.equalTo).exists())",
       "$code": {
-        ".write": "auth != null && ((newData.exists() && root.child('admin_empresas').child(auth.uid).child(newData.child('empresaId').val()).exists()) || (data.exists() && root.child('admin_empresas').child(auth.uid).child(data.child('empresaId').val()).exists()) || root.child('config').child('superAdminUid').val() === auth.uid)"
+        ".write": "auth != null && ((newData.exists() && (root.child('admin_empresas').child(auth.uid).child(newData.child('empresaId').val()).exists() || root.child('user_tiendas').child(auth.uid).child(newData.child('empresaId').val()).exists())) || (data.exists() && (root.child('admin_empresas').child(auth.uid).child(data.child('empresaId').val()).exists() || root.child('user_tiendas').child(auth.uid).child(data.child('empresaId').val()).exists())) || root.child('config').child('superAdminUid').val() === auth.uid)"
       }
     },
     "ventas_bot": {

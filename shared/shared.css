@@ -1643,3 +1643,31 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 .vb-ads-nom:focus{outline:none;border-color:var(--accent);}
 .vb-ads-del{flex-shrink:0;border:none;background:transparent;cursor:pointer;font-size:.8rem;line-height:1;padding:2px 4px;border-radius:6px;opacity:.6;}
 .vb-ads-del:hover{opacity:1;background:var(--bg-hover);}
+
+/* ── MÓDULO INTEGRACIONES ───────────────────────────────────────────────
+   Las conexiones de la tienda activa. Cada servicio es una tarjeta; dentro van
+   sus conexiones, que en ChateaPro puede haber más de una si la tienda tiene
+   varios workspaces. */
+#int-panel{display:none;flex-direction:column;height:100vh;}
+.int-intro{font-size:.75rem;color:var(--text-2);background:var(--bg-hover);border-radius:10px;padding:11px 14px;margin-bottom:14px;line-height:1.6;}
+.int-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:15px;margin-bottom:12px;max-width:900px;}
+.int-card-hdr{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;}
+.int-ico{font-size:1.7rem;line-height:1;flex-shrink:0;}
+.int-nombre{font-size:.95rem;font-weight:800;color:var(--text-1);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.int-desc{font-size:.72rem;color:var(--text-3);line-height:1.5;margin-top:2px;}
+.int-vacio{font-size:.74rem;color:var(--text-3);background:var(--bg-inset);border-radius:9px;padding:11px 13px;}
+.int-nuevo{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+.int-nuevo input{flex:1;min-width:210px;padding:8px 12px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg-inset);color:var(--text-1);font-size:.76rem;font-family:inherit;}
+.int-nuevo input:focus{outline:none;border-color:var(--accent);}
+.int-nuevo button{padding:8px 16px;border-radius:9px;border:none;background:var(--accent);color:var(--accent-text);font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;}
+/* Una conexión concreta dentro del servicio. */
+.int-conn{background:var(--bg-inset);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;}
+.int-conn-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:9px;}
+.int-conn-code{font-family:var(--f-mono);font-size:.8rem;font-weight:700;color:var(--text-1);}
+.int-conn-est{font-size:.65rem;font-weight:700;margin-top:2px;}
+.int-conn-est.ok{color:var(--success);}
+.int-conn-est.off{color:var(--text-3);}
+/* Lo que todavía no se puede conectar se muestra apagado, para que se vea que
+   viene sin dar un botón que haga algo a medias. */
+.int-card-pronto{opacity:.72;border-style:dashed;}
+.int-pronto{font-size:.58rem;font-weight:800;letter-spacing:.5px;padding:2px 8px;border-radius:20px;background:var(--bg-hover);color:var(--text-3);}

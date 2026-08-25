@@ -29,11 +29,34 @@
       "*.log"
     ],
     "rewrites": [
-      { "source": "/control-financiero/**", "destination": "/control-financiero.html" },
-      { "source": "/gestiones-diarias/**", "destination": "/gestiones-diarias.html" },
-      { "source": "/gestion-logistica/**", "destination": "/gestion-logistica.html" },
-      { "source": "/admin/**", "destination": "/index.html" },
-      { "source": "**", "destination": "/index.html" }
+      {
+        "source": "/control-financiero/**",
+        "destination": "/control-financiero.html"
+      },
+      {
+        "source": "/gestiones-diarias/**",
+        "destination": "/gestiones-diarias.html"
+      },
+      {
+        "source": "/gestion-logistica/**",
+        "destination": "/gestion-logistica.html"
+      },
+      {
+        "source": "/integraciones",
+        "destination": "/integraciones.html"
+      },
+      {
+        "source": "/integraciones/**",
+        "destination": "/integraciones.html"
+      },
+      {
+        "source": "/admin/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ]
   }
 }

@@ -6907,6 +6907,11 @@ function _botwGenCodigo(nombre){
 }
 
 async function _botwCargar(){
+  // Las acciones compartidas —revocar, regenerar la clave— terminan llamando acá
+  // para repintar. En el módulo de Integraciones la lista es otra, así que se
+  // desvía a su propio repintado: sin esto, el dueño revoca una clave y la
+  // pantalla se queda mostrando la anterior.
+  if(document.getElementById('int-lista') && typeof _intInit==='function'){ _intInit(); return; }
   const cont = document.getElementById('botw-list');
   if(!cont || typeof _db==='undefined') return;
   cont.innerHTML = '<div class="adm-empty">Cargando...</div>';
@@ -9580,6 +9585,10 @@ window._gdMostrarModeSelect = function(asesor){
   const rol=window._currentRol||localStorage.getItem('lgs_rol')||'dueno';
   const btnCF=document.querySelector('#mode-select-screen .mss-btn[onclick="_modoFinanciero()"]');
   if(btnCF) btnCF.style.display=rol==='asesor'?'none':'flex';
+  // Integraciones tampoco: conectar da acceso a registrar ventas en la tienda y a
+  // la cuenta de Dropi entera. Un asesor ni la ve.
+  const btnInt=document.querySelector('#mode-select-screen .mss-btn[onclick="_modoIntegraciones()"]');
+  if(btnInt) btnInt.style.display=rol==='asesor'?'none':'flex';
   window._refrescarBtnCambiarTienda();
 };
 // Visibilidad de "🏪 Cambiar tienda". Aparte de _gdMostrarModeSelect porque la
@@ -9590,6 +9599,14 @@ window._refrescarBtnCambiarTienda = function(){
   if(!btn) return;
   btn.style.display = _getTiendaIds().length > 1 ? 'block' : 'none';
 };
+// Navegación al módulo de Integraciones. Vive acá y no en cada página como las
+// otras tres: esas están duplicadas en index.html y gestion-logistica.js, y no hay
+// razón para repetir el error una cuarta vez.
+window._modoIntegraciones = function(){
+  window._navegandoInterno = true;
+  location.href = '/integraciones';
+};
+
 window._cambiarTienda = function(){
   const uid = localStorage.getItem('lgs_user');
   const asesor = localStorage.getItem('lgs_asesor');

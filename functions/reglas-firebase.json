@@ -77,9 +77,21 @@
     // así que los endpoints del bot no se ven afectados.
     "bot_workspaces": {
       ".indexOn": "empresaId",
-      ".read": "auth != null && query.orderByChild === 'empresaId' && root.child('admin_empresas').child(auth.uid).child(query.equalTo).exists()",
+      // Se suma `user_tiendas` a lo que ya había con `admin_empresas`: desde el
+      // módulo de Integraciones, el DUEÑO gestiona las conexiones de su propia
+      // tienda sin pasar por el Centro de Operaciones, donde no entra.
+      //
+      // Sigue exigiendo la consulta FILTRADA por una empresa propia: leer el nodo
+      // entero da permission_denied a propósito, o cualquiera se llevaría las API
+      // keys de las demás tiendas —y con una de esas se inyectan ventas ajenas—.
+      //
+      // Que un dueño tenga la tienda en user_tiendas no lo hace asesor: el rol lo
+      // decide la app, y ahí el módulo ya se le oculta a los asesores. Esta regla
+      // es la red de abajo; si algún día hace falta distinguirlos también acá,
+      // hay que mirar users/{uid}/rol.
+      ".read": "auth != null && query.orderByChild === 'empresaId' && (root.child('admin_empresas').child(auth.uid).child(query.equalTo).exists() || root.child('user_tiendas').child(auth.uid).child(query.equalTo).exists())",
       "$code": {
-        ".write": "auth != null && ((newData.exists() && root.child('admin_empresas').child(auth.uid).child(newData.child('empresaId').val()).exists()) || (data.exists() && root.child('admin_empresas').child(auth.uid).child(data.child('empresaId').val()).exists()) || root.child('config').child('superAdminUid').val() === auth.uid)"
+        ".write": "auth != null && ((newData.exists() && (root.child('admin_empresas').child(auth.uid).child(newData.child('empresaId').val()).exists() || root.child('user_tiendas').child(auth.uid).child(newData.child('empresaId').val()).exists())) || (data.exists() && (root.child('admin_empresas').child(auth.uid).child(data.child('empresaId').val()).exists() || root.child('user_tiendas').child(auth.uid).child(data.child('empresaId').val()).exists())) || root.child('config').child('superAdminUid').val() === auth.uid)"
       }
     },
 
