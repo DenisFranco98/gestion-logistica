@@ -72,7 +72,12 @@ async function handlerConectar(req, res) {
       scope: 'mcp',
       state,
       code_challenge: challenge,
-      code_challenge_method: 'S256'
+      code_challenge_method: 'S256',
+      // PARA QUÉ SERVIDOR ES EL TOKEN (RFC 8707, que la especificación de MCP
+      // exige). Sin esto Dropi emite un token sin ese destinatario y el MCP lo
+      // rechaza con "token has invalid audience" — pasó en la primera prueba. Va
+      // acá Y al pedir el token: los dos pasos tienen que coincidir.
+      resource: MCP
     });
     res.redirect(302, url);
   } catch (e) {
@@ -110,7 +115,8 @@ async function handlerCallback(req, res) {
         code: String(code),
         redirect_uri: cli.redirect_uri,
         client_id: cli.client_id,
-        code_verifier: pend.verifier
+        code_verifier: pend.verifier,
+        resource: MCP            // mismo destinatario que se pidió al autorizar
       })
     });
     const j = await r.json();
@@ -152,7 +158,10 @@ async function tokenVigente() {
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: t.refresh_token,
-      client_id: cli.client_id
+      client_id: cli.client_id,
+      // También al renovar: si no, el token nuevo saldría sin destinatario y la
+      // conexión se caería sola al primer vencimiento.
+      resource: MCP
     })
   });
   const j = await r.json();
@@ -171,24 +180,40 @@ async function tokenVigente() {
 // ── 3. Llamada al MCP ────────────────────────────────────────────────────
 // Habla JSON-RPC con el servidor de Dropi. MCP está pensado para clientes de IA,
 // pero por debajo es JSON-RPC sobre HTTP y un backend lo habla igual.
-async function llamarMcp(metodo, params, token) {
-  const r = await fetch(MCP, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json',
-      // El servidor puede contestar en SSE; se aceptan las dos formas.
-      'Accept': 'application/json, text/event-stream'
-    },
-    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: metodo, params: params || {} })
-  });
+// MCP MANTIENE UNA SESIÓN, y esa es la parte que no se ve en la documentación del
+// protocolo hasta que falla: el servidor devuelve un Mcp-Session-Id en el
+// `initialize` y espera recibirlo en todo lo demás. Sin él, cada petición HTTP es
+// una sesión nueva que se quedó en la inicialización — el error literal fue
+// `method "tools/list" is invalid during session initialization`.
+//
+// Devuelve { json, sesion } en vez de solo el JSON, porque quien llama necesita
+// arrastrar la sesión a la petición siguiente.
+async function llamarMcp(metodo, params, token, sesion) {
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json',
+    // El servidor puede contestar en SSE; se aceptan las dos formas.
+    'Accept': 'application/json, text/event-stream'
+  };
+  if (sesion) headers['Mcp-Session-Id'] = sesion;
+
+  // Las notificaciones no llevan id y no esperan respuesta: mandarles uno hace que
+  // el servidor conteste a algo que nadie va a leer.
+  const esNotificacion = metodo.startsWith('notifications/');
+  const cuerpo = { jsonrpc: '2.0', method: metodo, params: params || {} };
+  if (!esNotificacion) cuerpo.id = Date.now();
+
+  const r = await fetch(MCP, { method: 'POST', headers, body: JSON.stringify(cuerpo) });
+  const nuevaSesion = r.headers.get('mcp-session-id') || sesion || '';
   const txt = await r.text();
   if (!r.ok) throw new Error('MCP respondió ' + r.status + ': ' + txt.slice(0, 300));
+  if (esNotificacion) return { json: null, sesion: nuevaSesion };
+
   // Si vino como event-stream, el JSON está en la línea que empieza con "data:".
   const crudo = txt.trim().startsWith('{') ? txt
     : (txt.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).pop() || '');
   if (!crudo) throw new Error('Respuesta vacía del MCP');
-  return JSON.parse(crudo);
+  return { json: JSON.parse(crudo), sesion: nuevaSesion };
 }
 
 // Punto de entrada del frontend. Nunca se le pasa el token al navegador: se le
@@ -201,17 +226,27 @@ async function handlerMcp(req, res) {
     const metodo = String(d.metodo || d.method || 'tools/list');
     const token = await tokenVigente();
 
-    // El handshake es obligatorio antes de cualquier otra llamada: sin él, el
-    // servidor responde que la sesión no está inicializada.
-    await llamarMcp('initialize', {
+    // Handshake completo, en los tres pasos que pide el protocolo. Se rehace en
+    // cada petición porque las Cloud Functions no garantizan que la siguiente caiga
+    // en la misma instancia: guardar la sesión en memoria funcionaría a ratos, que
+    // es peor que no guardarla.
+    const ini = await llamarMcp('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
       clientInfo: { name: 'REDKING', version: '1.0' }
-    }, token);
+    }, token, '');
+    const sesion = ini.sesion;
+    if (ini.json && ini.json.error) {
+      return res.status(200).json({ ok: false, error: ini.json.error.message || 'Falló el initialize', detalle: ini.json.error });
+    }
+    // Avisar que la inicialización terminó. Sin esto el servidor sigue
+    // considerando la sesión "en inicialización" y rechaza todo lo demás.
+    await llamarMcp('notifications/initialized', {}, token, sesion);
 
-    const out = await llamarMcp(metodo, d.params || {}, token);
-    if (out.error) return res.status(200).json({ ok: false, error: out.error.message || out.error, detalle: out.error });
-    return res.status(200).json({ ok: true, resultado: out.result });
+    const out = await llamarMcp(metodo, d.params || {}, token, sesion);
+    const j = out.json || {};
+    if (j.error) return res.status(200).json({ ok: false, error: j.error.message || j.error, detalle: j.error });
+    return res.status(200).json({ ok: true, resultado: j.result });
   } catch (e) {
     return res.status(200).json({ ok: false, error: e.message });
   }

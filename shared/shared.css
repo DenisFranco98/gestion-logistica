@@ -1463,8 +1463,15 @@ body.modo-auditoria [onclick^="_perfilQuitarFoto("]{display:none !important;}
 /* Las herramientas que declara el servidor de Dropi. */
 .mcp-tools{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
 .mcp-tool{background:var(--bg-inset);border:1px solid var(--border);border-radius:8px;padding:8px 11px;}
-.mcp-tool-n{font-family:var(--f-mono);font-size:.72rem;font-weight:700;color:var(--accent);}
-.mcp-tool-d{font-size:.68rem;color:var(--text-2);line-height:1.5;margin-top:2px;}
+.mcp-tool-n{font-size:.75rem;font-weight:700;color:var(--text-1);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+/* El identificador técnico al lado del nombre en español: es lo que se le manda al
+   servidor, así que tiene que estar a la vista aunque no sea lo que se lee primero. */
+.mcp-tool-id{font-family:var(--f-mono);font-size:.63rem;font-weight:600;color:var(--text-3);}
+.mcp-tool-d{font-size:.68rem;color:var(--text-2);line-height:1.5;margin-top:3px;}
+.mcp-tool-p{font-family:var(--f-mono);font-size:.6rem;color:var(--text-3);margin-top:4px;line-height:1.4;}
+/* Las que aportan algo que la plataforma no tiene, resaltadas. */
+.mcp-tool-top{border-color:var(--accent);}
+.mcp-tool-top .mcp-tool-n{color:var(--accent);}
 .botw-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;}
 .botw-code{font-family:var(--f-mono);font-size:.86rem;font-weight:800;color:var(--text-1);letter-spacing:-.3px;}
 .botw-tienda{font-size:.72rem;color:var(--text-3);margin-top:2px;}

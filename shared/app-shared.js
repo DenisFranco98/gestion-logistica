@@ -7031,6 +7031,36 @@ window._dropiEstado = async function(btn){
   }finally{ btn.disabled=false; btn.textContent=orig; }
 };
 
+// Dropi describe sus herramientas EN INGLÉS. Acá se traducen para el panel, con el
+// identificador técnico a la vista porque es lo que se le manda al servidor y lo
+// que hay que escribir para llamarlas.
+//
+// Si Dropi agrega una herramienta que no esté en esta tabla, se muestra con su
+// nombre y su descripción original: preferible a esconderla o a inventarle una
+// traducción.
+const _DROPI_TRAD = {
+  list_products:    { t:'Productos y stock',
+                      d:'Los productos de Dropi con sus existencias por bodega. Se filtra por búsqueda, categoría, rango de precio, proveedor y activo o archivado. ES LO QUE HOY NO TENEMOS: saber si el proveedor tiene stock.' },
+  quote_shipping:   { t:'Cotizar el flete',
+                      d:'Devuelve cuánto costaría el envío y qué transportadoras hay, ANTES de generar la guía. No reserva ni asigna nada. Necesita la ciudad de destino resuelta con "Buscar ciudades".' },
+  search_cities:    { t:'Buscar ciudades',
+                      d:'Busca ciudades de Dropi por nombre, completo o en parte. Devuelve el id, el departamento, el código DANE y el código postal.' },
+  list_orders:      { t:'Listar pedidos',
+                      d:'Los pedidos de la cuenta. Todos los filtros son opcionales: estado, fechas, texto, departamento, ciudad, facturado, transportadora. Página de hasta 100.' },
+  get_order:        { t:'Ver un pedido',
+                      d:'El detalle de un pedido por su id: estado, datos del cliente, artículos con subtotales, total, forma de pago, fechas y número de guía si ya tiene.' },
+  create_order:     { t:'Crear un pedido',
+                      d:'⚠️ CREA UNA ENTREGA REAL que le va a llegar a un cliente. Dropi mismo advierte que hay que confirmar el resumen antes de usarla.' },
+  list_carriers:    { t:'Transportadoras',
+                      d:'Las transportadoras habilitadas en la cuenta.' },
+  list_categories:  { t:'Categorías de producto',
+                      d:'Las categorías con las que Dropi clasifica los productos.' },
+  list_departments: { t:'Departamentos',
+                      d:'Los departamentos disponibles para envíos.' },
+  list_statuses:    { t:'Estados de pedido',
+                      d:'Los estados que puede tener un pedido en Dropi.' }
+};
+
 window._dropiHerramientas = async function(btn){
   const c=_dropiPanel(); if(!c) return;
   const orig=btn.textContent; btn.disabled=true; btn.textContent='Consultando...';
@@ -7043,14 +7073,29 @@ window._dropiHerramientas = async function(btn){
       return;
     }
     const tools=(j.resultado && j.resultado.tools) || [];
+    // Primero las que aportan algo que la plataforma no tiene, después el resto:
+    // con diez en una lista plana, las tres que importan se pierden entre catálogos.
+    const utiles=['list_products','quote_shipping','search_cities'];
+    const orden=t=>{ const i=utiles.indexOf(t.name); return i>=0 ? i : 90; };
+    const lista=tools.slice().sort((a,b)=>orden(a)-orden(b));
+
+    const fila=t=>{
+      const tr=_DROPI_TRAD[t.name];
+      const params=(t.inputSchema && t.inputSchema.properties)
+        ? Object.keys(t.inputSchema.properties) : [];
+      return `<div class="mcp-tool${utiles.indexOf(t.name)>=0?' mcp-tool-top':''}">
+        <div class="mcp-tool-n">${esc(tr?tr.t:(t.name||''))}
+          <span class="mcp-tool-id">${esc(t.name||'')}</span></div>
+        <div class="mcp-tool-d">${esc(tr ? tr.d : (t.description||'(sin descripción)'))}</div>
+        ${params.length?'<div class="mcp-tool-p">Parámetros: '+esc(params.join(', '))+'</div>':''}
+      </div>`;
+    };
+
     c.innerHTML = `
       <div class="botw-doc-nota"><b>${tools.length}</b> herramienta${tools.length===1?'':'s'} disponible${tools.length===1?'':'s'}.
-        Esto es lo que la plataforma le puede pedir a Dropi.</div>
-      ${tools.length ? '<div class="mcp-tools">'+tools.map(t=>`
-        <div class="mcp-tool">
-          <div class="mcp-tool-n">${esc(t.name||'')}</div>
-          <div class="mcp-tool-d">${esc(t.description||'(sin descripción)')}</div>
-        </div>`).join('')+'</div>'
+        Esto es lo que la plataforma le puede pedir a Dropi. Las primeras son las que traen
+        algo que hoy no tenemos.</div>
+      ${lista.length ? '<div class="mcp-tools">'+lista.map(fila).join('')+'</div>'
         : '<div class="botw-doc-nota warn">Dropi no declaró ninguna herramienta.</div>'}`;
   }catch(e){
     c.innerHTML='<div class="botw-doc-nota warn">No se pudo consultar: '+esc(e.message)+'</div>';
